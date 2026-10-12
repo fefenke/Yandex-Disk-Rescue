@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -64,12 +64,14 @@ namespace DiskRescue {
             DiskFile retryFile=new DiskFile{Path="disk:/retry.jpg",Modified="v",Length=10,DownloadedBytes=0};HistoryRecord retryRecord=new HistoryRecord{path=retryFile.Path,modified="v",length=10,status="cloud_error"};
             Assert(FileRules.Select(retryFile,retryRecord,RunMode.ErrorsAndZero)&&!FileRules.Select(retryFile,retryRecord,RunMode.NewFiles),"Combined retry or new-file filter selected incorrectly.");
             retryRecord.status="timeout";Assert(FileRules.Select(retryFile,retryRecord,RunMode.ErrorsAndZero)&&!FileRules.Select(retryFile,retryRecord,RunMode.CloudErrors),"Zero download missing from combined retry.");
-            retryFile.DownloadedBytes=5;Assert(!FileRules.Select(retryFile,retryRecord,RunMode.ErrorsAndZero),"Partial timeout counted as zero download.");
+            retryFile.DownloadedBytes=5;Assert(FileRules.Select(retryFile,retryRecord,RunMode.ErrorsAndZero),"Partial timeout missing from incomplete downloads.");
             Assert(FileRules.Select(retryFile,null,RunMode.NewFiles)&&!FileRules.Select(retryFile,null,RunMode.ErrorsAndZero),"New file counted as a prior failure.");
+            Assert(FileRules.Select(retryFile,null,RunMode.Remaining)&&FileRules.Select(retryFile,retryRecord,RunMode.Remaining),"All remaining skipped untested or failed files.");retryFile.Local=true;Assert(!FileRules.Select(retryFile,retryRecord,RunMode.Remaining),"All remaining included a valid local file.");retryFile.Local=false;
             retryRecord.status="failed";Assert(FileRules.Select(retryFile,retryRecord,RunMode.ProblemFiles),"Automatic retry missed an integrity failure.");retryFile.Local=true;Assert(!FileRules.Select(retryFile,retryRecord,RunMode.ProblemFiles),"Automatic retry selected a local file.");
             Snapshot repeatSnapshot=new Snapshot{Phase="completed",Finished=true,Selected=5,Downloaded=2,Available=3,Total=7,CloudErrors=1,CloudErrorsThisPass=1};
             Assert(PassHistory.ShouldRepeat(repeatSnapshot,true,false)&&!PassHistory.ShouldRepeat(repeatSnapshot,true,true)&&!PassHistory.ShouldRepeat(repeatSnapshot,false,false),"Repeat ignored Stop or the checkbox.");
-            repeatSnapshot.RecoveryRequired=true;Assert(!PassHistory.ShouldRepeat(repeatSnapshot,true,false),"Repeat ignored uncertain cancellation.");repeatSnapshot.RecoveryRequired=false;repeatSnapshot.Phase="error";Assert(!PassHistory.ShouldRepeat(repeatSnapshot,true,false),"Repeat retried a fatal error.");repeatSnapshot.Phase="completed";repeatSnapshot.Selected=0;Assert(!PassHistory.ShouldRepeat(repeatSnapshot,true,false),"Empty retry loop did not stop.");
+            repeatSnapshot.RecoveryRequired=true;Assert(!PassHistory.ShouldRepeat(repeatSnapshot,true,false),"Repeat ignored uncertain cancellation.");repeatSnapshot.RecoveryRequired=false;repeatSnapshot.Phase="error";Assert(!PassHistory.ShouldRepeat(repeatSnapshot,true,false),"Repeat retried a fatal error.");repeatSnapshot.Phase="completed";repeatSnapshot.Selected=0;Assert(PassHistory.ShouldRepeat(repeatSnapshot,true,false),"Empty initial pass failed to retry existing problem files.");
+            repeatSnapshot.Phase="error";repeatSnapshot.RetryableError=true;Assert(PassHistory.ShouldRepeat(repeatSnapshot,true,false)&&!PassHistory.ShouldRepeat(repeatSnapshot,true,true),"Transient startup error interrupted automatic retry or ignored Stop.");repeatSnapshot.RetryableError=false;Assert(!PassHistory.ShouldRepeat(repeatSnapshot,true,false),"Fatal error was retried.");repeatSnapshot.Phase="completed";
             string passHistoryPath=Path.Combine(root,"passes.jsonl");PassHistory.Append(passHistoryPath,PassResult.From(repeatSnapshot,DateTime.UtcNow,true,RunMode.ProblemFiles));PassResult passResult=PassHistory.Load(passHistoryPath).Single();Assert(passResult.Downloaded==2&&passResult.Remaining==4&&passResult.Errors==1,"Pass statistics were lost.");
             Assert(FileRules.Category("disk:/Фото/фото \"1\".jpg")=="photos"&&FileRules.Category("disk:/Фото/a|b.png")=="photos","Cloud filename rejected by category detection.");
             bool rejected=false;try{ApiEngine.LocalPath(folder,"disk:/../outside.jpg");}catch(IOException){rejected=true;}Assert(rejected,"Traversal accepted.");
@@ -85,7 +87,7 @@ namespace DiskRescue {
             verifiedRecord.localWriteTicks=verifiedInfo.LastWriteTimeUtc.Ticks+1;Assert(!ApiEngine.PreviouslyVerified(verifiedFile,verifiedRecord),"Changed local timestamp bypassed verification.");
             verifiedRecord.localWriteTicks=verifiedInfo.LastWriteTimeUtc.Ticks;verifiedRecord.modified="v2";Assert(!ApiEngine.PreviouslyVerified(verifiedFile,verifiedRecord),"Changed cloud version bypassed verification.");
             Assert(!File.ReadAllText(Path.Combine(last.Report,"summary.json")).Contains("test-secret"),"Token leaked into report.");
-            engine=new ApiEngine(data,x=>last=x,new ApiMock(),new DownloadMock());engine.Run(s,RunMode.ZeroDownload);Assert(last.Selected==1&&last.Processed==1,"Zero retry selected untested/partial/server-error files.");
+            engine=new ApiEngine(data,x=>last=x,new ApiMock(),new DownloadMock());engine.Run(s,RunMode.ZeroDownload);Assert(last.Selected==2&&last.Processed==2,"Incomplete retry did not select timeout and integrity failure.");
             engine=new ApiEngine(data,x=>last=x,new ApiMock(),new DownloadMock());engine.Run(s,RunMode.Continue);Assert(last.Skipped==7&&last.Selected==0&&last.ProgressChecked==7&&last.ProgressTotal==7,"Continue repeated previous attempts or reset cumulative progress.");
             using(HistoryStore history=new HistoryStore(data,folder,"case-test")){DiskFile a=new DiskFile{Path="disk:/A.jpg",Length=1,Modified="v"},b=new DiskFile{Path="disk:/a.jpg",Length=1,Modified="v"};history.SaveApi(a,"success","");history.SaveApi(b,"timeout","");Assert(history.Records.Count==2,"API history lost case-sensitive identity.");}
             engine=new ApiEngine(data,x=>last=x,new ApiMock{Unauthorized=true},new DownloadMock());engine.Run(s,RunMode.Continue);Assert(last.Phase=="error"&&last.Error.Contains("token"),"Invalid OAuth was not reported.");

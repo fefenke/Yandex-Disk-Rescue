@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -21,7 +21,7 @@ namespace DiskRescue {
                     Assert(FileRules.Select(second,store.Find(b),RunMode.CloudErrors),"Cloud-error retry failed.");
                     Assert(!FileRules.Select(first,store.Find(a),RunMode.CloudErrors),"Cloud-error retry includes a success.");
                     second.Local=false;Assert(!FileRules.Select(second,store.Find(b),RunMode.Continue),"Continue retried a completed cloud error.");
-                    second.Local=false;second.DownloadedBytes=0;Assert(!FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Sync error included in cancelled retry.");store.Save(second,"timeout","");Assert(!FileRules.Select(second,null,RunMode.ZeroDownload),"New file selected in cancelled retry.");Assert(FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Zero-byte retry failed.");second.DownloadedBytes=1;Assert(!FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Partial file selected.");second.DownloadedBytes=null;Assert(!FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Unknown hydration selected.");
+                    second.Local=false;second.DownloadedBytes=0;Assert(!FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Sync error included in cancelled retry.");store.Save(second,"timeout","");Assert(!FileRules.Select(second,null,RunMode.ZeroDownload),"New file selected in cancelled retry.");Assert(FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Zero-byte retry failed.");second.DownloadedBytes=1;Assert(FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Partial timeout missing from incomplete retry.");second.DownloadedBytes=null;Assert(FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Known timeout with unknown bytes missing from incomplete retry.");
                     Assert(FileRules.Select(first,null,RunMode.Continue),"New file is not selected.");
                     Assert(!FileRules.Select(second,store.Find(b),RunMode.Continue),"Continue retried a completed idle timeout.");store.Save(second,"cancelled_user","");Assert(FileRules.Select(second,store.Find(b),RunMode.Continue),"Stop-interrupted request was not resumed.");
                     first.Length++;Assert(FileRules.Select(first,store.Find(a),RunMode.Continue),"Changed file was skipped.");

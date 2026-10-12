@@ -1,146 +1,66 @@
-# Yandex Disk Rescue
-**Important: photos and videos stored through unlimited auto-upload are not counted or downloaded, in either desktop-client or API mode. Only files in the regular Files section are supported.**
+﻿# Yandex Disk Rescue
 
+**Unlimited photo/video auto-upload files are NOT counted or downloaded. Only files in the regular Files section are supported.**
 
+[Русский](README.md) · v0.2.4 · portable Windows 10 1709+ / Windows 11 app · preview release
 
-**Windows 64-bit (x64)** — for most Windows 10/11 PCs.
+**Windows 64-bit (x64)** — for most PCs.
 
-[![Download for Windows x64](https://img.shields.io/badge/Download_for_Windows_x64-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.3/YandexDiskRescue-win-x64.zip)
+[![Download Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.4/YandexDiskRescue-win-x64.zip)
 
 **Windows 32-bit (x86)** — for a 32-bit Windows installation.
 
-[![Download for Windows x86](https://img.shields.io/badge/Download_for_Windows_x86-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.3/YandexDiskRescue-win-x86.zip)
+[![Download Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.4/YandexDiskRescue-win-x86.zip)
 
-Extract the complete ZIP and run **Start Yandex Disk Rescue.cmd**.
+Extract the complete ZIP into a permanent folder and run **Start Yandex Disk Rescue.cmd**. Requires .NET Framework 4.7.1 or newer. Do not launch directly from the ZIP.
 
-## What's new in v0.2.3
+## What's new in v0.2.4
 
-- **Repeat problem files** retries errors and timeouts with a 30-second pause, skipping downloaded files.
-- **Stop** cancels active downloads and the wait before the next pass.
-- **Pass history** shows start time, duration, mode, outcome, downloads per pass and in total, remaining files, zero downloads and errors.
-- Separate modes for errors, zero downloads, both, new/changed files, resume and full verification.
-- API retries reuse cached inventory and verification of unchanged files.
+- Green **Downloaded total** card before **Downloaded this pass**.
+- Default: API, cached inventory, retry all files not downloaded, automatic retries.
+- Temporary API/network failures retry after 30 seconds; an empty initial pass still proceeds to existing problem files.
+- Zero-byte and partial downloads grouped under timeout/download failures.
+- Separate detailed guide button and simpler pass modes.
+- Persistent pass statistics.
 
-[Release notes v0.2.3](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.3)
+## Setup
 
-[Русский](README.md) · Windows x64 · portable app · version 0.2.3, preview
+**API:** obtain an OAuth token from the [Yandex Disk playground](https://yandex.ru/dev/disk/poligon/), enter it and choose a download folder. `disk:/` selects the whole Disk; `disk:/Photos` selects a folder. No desktop client or restarts are required. API can be faster, depending on service and network availability.
 
-Download accessible cloud files from a local Yandex Disk folder and its subfolders, keep results, and retry unsuccessful attempts. The app uses Windows Cloud Files directly: it does not open Explorer, launch file viewers, or send keyboard input.
+**Desktop:** install [Yandex Disk](https://disk.yandex.ru/download), sign in, wait for synchronization and select the local Disk folder. The client may restart on synchronization errors.
 
-This is an independent community project, not an official Yandex product. It cannot restore deleted files or repair server-side errors. Downloads depend on the installed Yandex Disk client and service.
+Open **Open guide** in the app for detailed instructions and combinations.
 
-![Application interface](assets/preview-en.png)
+## Inventory and modes
 
-## Two download methods
+The upper API selector chooses cached inventory or cloud refresh. Cached inventory is created once if missing; interrupted scans resume. Refresh when cloud files are added or changed. Automatic retries do not refresh inventory on every pass.
 
-API mode uses a Yandex OAuth token and downloads directly, without the desktop client or client restarts. It can therefore process files faster, particularly when desktop synchronization fails. Actual throughput depends on the connection and service.
+| Mode | Files processed |
+| --- | --- |
+| Resume unfinished pass | Unchecked files and user-interrupted attempts |
+| Retry server/sync errors | Recorded server or synchronization errors |
+| Retry timeouts and failures | Zero-byte and partial transfers and other failures |
+| Retry all files not downloaded | All files not downloaded, including unchecked files |
+| Start pass from the beginning | Entire inventory; valid local files are not downloaded again |
 
-Get an OAuth token from the [Yandex Disk API Playground](https://yandex.ru/dev/disk/poligon/). Disk read access is required.
+Normal use: cached inventory + retry all files not downloaded. After cloud changes: refresh inventory + retry all files not downloaded.
 
-Choose **Via Yandex Disk client** and the local Disk folder, or **Via API** and an OAuth token, an existing ordinary local download folder, and a cloud path. disk:/ means the whole Disk. API mode needs Disk read access, does not require the desktop client, and never restarts it. Missing required fields prevent a pass from starting.
+Automatic retries run the selected mode first, then problem files with a 30-second pause. Stop cancels requests and waiting. No remaining problems ends the loop. Invalid tokens, denied access, critical local errors or uncertain cancellation require attention.
 
-Both methods use up to five active downloads. API requests with no progress are cancelled; errors are recorded and the next files are attempted. Partials use .ydr-part and restart from the beginning on a later attempt. Success requires matching size and matching MD5 when available. A failed integrity check does not replace an existing final file.
+## Statistics and private data
 
-API history is separate and scoped to the account, cloud root and download destination. Zero-download retry selects only previously cancelled files with zero received bytes. Server-error retry selects previous HTTP 5xx failures.
+Cards show found, downloaded total, downloaded this pass, remaining and errors. Remaining covers all missing files; the pass size depends on its mode. Pass history stores start, duration, mode, outcome and file counts; detailed reports are generated automatically.
 
-Tokens are masked and stored using Windows DPAPI for the current user in data/api-token.bin. They are excluded from settings JSON, logs and reports, and never forwarded to signed download URLs. Right-click the token field and choose Clear token to remove the saved credential. It cannot be decrypted under another user's Windows profile.
+History, inventory, reports and the Windows DPAPI-encrypted token stay in local `data` beside the EXE. Preserve this folder when updating. **Never publish data.** Release ZIPs contain no private tokens, history or logs.
 
-API behavior was tested with simulated server responses, without a real account. Unlimited auto-upload is unsupported in both methods.
+Identity uses full path and version; identical names in different folders remain separate. API validates size and available MD5. `.ydr-part` partials are not completed downloads and restart from the beginning on retry. Verified unchanged files use faster reconciliation; full passes verify them again.
 
-## Before you start with the Disk client
+Independent community project, not an official Yandex product. Cannot restore deleted files or repair server errors. Unlimited auto-upload is unsupported.
 
-1. Use Windows 10 version 1709 or later (32/64-bit) or Windows 11 (64-bit). .NET Framework 4.7.1 or newer is included in supported Windows versions. Use x86 for 32-bit Windows 10 and x64 for 64-bit Windows. Windows 7/8 and native ARM64 builds are not supported.
-2. Install [Yandex Disk for Windows](https://disk.yandex.ru/download), sign in, and wait for its local folder to appear. Wait for Yandex Disk synchronization to finish before starting a pass.
-3. Files must exist in the regular **Files** section of Yandex Disk and be visible in its local folder, including cloud-only placeholders.
-4. **Unlimited photo/video auto-upload is not supported.** Items available only through the photo/auto-upload view, without corresponding regular files in the local Disk folder, cannot be discovered.
-5. Stop other download scripts and ensure adequate disk space. Close old Explorer transfer dialogs.
-6. Extract the portable ZIP to a writable folder. For the first launch use `Start Yandex Disk Rescue.cmd`, which checks Windows, architecture and .NET **before** starting the EXE. Afterwards you can run `YandexDiskRescue.exe` directly. Keep `YandexDiskRescue.exe.config` beside it.
+[Support the author](https://yoomoney.ru/fundraise/1KS67440FP0.261012) · [Release notes](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.4)
 
-The app checks Windows Cloud Files and whether the Disk client is installed/running. It offers the official download page if the client is missing, or offers to launch it if installed but stopped. It does not install software or change system settings automatically. An external launcher is necessary because a .NET-dependent EXE cannot check its own prerequisite before the runtime loads. If .NET is missing or damaged, the launcher displays the official installer link.
+## Build
 
-## Usage
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Package -Platform x64`
 
-Choose the local Disk folder and a pass mode, then click **Start pass**. Monitoring starts automatically, and the button becomes **Stop**. Stopping prevents new requests, cancels active requests, and saves results. Closing the app uses the same shutdown procedure.
-
-Switch between Russian and English with **RU / EN**. The monitor displays total downloaded files, downloads in the current pass, throughput, and approximate remaining time. Monitoring ends when the pass completes or stops.
-
-| Mode | Behavior |
-|---|---|
-| Continue | Processes new and unprocessed files. Previous completed attempts, including failures and timeouts, are skipped; Stop-interrupted requests are retried. API saved-list mode avoids cloud-folder enumeration. |
-| Recheck all files | Checks all currently discovered files. Local files remain in place and are not downloaded again. History is not deleted. |
-| Retry sync errors only | Retries unchanged files whose latest confirmed result is `0x80070185`. |
-| Only files with zero downloaded bytes | Retries only previously checked and cancelled files of the same version with zero downloaded bytes. New files, sync errors, partial downloads and unknown hydration states are skipped. |
-
-Every pass rescans the directory tree. Records use **full path, file size, and modification time**. Identical names in separate folders are independent. Moving a file creates a new identity at its new path.
-
-## Results and reports
-
-- **Available**: already local, or the full hydration request succeeded. It does not mean the contents were verified or opened in a viewer.
-- **Downloaded this pass**: successful new hydration requests in the current run.
-- **Zero download**: previously cancelled files with zero received bytes; **Remaining** includes all files not fully available locally. Timeouts do not prove permanent unavailability.
-- **Sync errors · this pass**: unique files returning 0x80070185 during this pass. This counter never decreases within a pass and resets for the next pass.
-
-Photos/images, videos, documents, archives/disk images, audio, and other files are counted separately. Unknown extensions are included. Executables are downloaded as data and are never launched.
-
-History and preferences are stored in `data` beside the executable, with separate journals for each root folder. Each result is saved immediately. Keep `data` to preserve progress between launches.
-
-Reports are saved automatically under data: files.csv, categories.csv, folders.csv and summary.json. There is no Open reports button. Folder scope direct counts immediate files; tree counts descendants. Overlapping tree rows must not be summed.
-
-Categories display downloaded total, downloaded this pass, remaining files, previously checked and cancelled files with zero downloaded bytes, and current sync errors. Current category errors can decrease when a later attempt changes the result.
-
-During a pass the app repeatedly restarts Yandex Disk whenever sync errors occur. Ten ordinary idle cancellations do not cause a restart. Restart cannot be disabled in the interface.
-
-## Settings and limitations
-
-- Up to five concurrent requests; the limit is fixed.
-- Default idle timeout: **one second without increasing hydrated byte count**, not a limit on total download duration. Increase it for slow connections.
-- Requests are cancelled through `CancelIoEx`, and completion is checked. If cancellation is not acknowledged, the pass stops and further passes in that app process are disabled. Restart Yandex Disk and the app before retrying.
-- Cancelling an app request **does not guarantee clearing autonomous tasks inside the Yandex client**. This app does not inspect or control the client's private queue.
-- Client restart is mandatory: after `0x80070185`, the app waits for its requests to finish and restarts the client. Other client synchronization can be interrupted.
-- Access errors are recorded. Ordinary directory symlinks/junctions are skipped; cloud placeholder folders are traversed.
-- This preview has offline/local-file checks and Cloud Files compatibility verification. Complete GUI download runs with different client versions still require user testing.
-- The binary is unsigned; Windows may show an unknown-publisher warning.
-
-The app does not request OAuth tokens or upload logs. Windows delegates transfers to the installed client. Logs contain local paths: **do not publish `data`**.
-
-## Build and test
-
-No NuGet packages or .NET SDK are needed. The build uses the installed .NET Framework compiler.
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Package
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\run-tests.ps1
-```
-
-Executable: `dist\YandexDiskRescue\YandexDiskRescue.exe`.
-
-Portable ZIP: `dist\YandexDiskRescue-win-x64.zip`.
-
-Offline checks cover full-path identity, file versions, pass filters, retry order, history persistence, categories, metadata probes, local execution, reports, and error handling. They do not hydrate cloud files or restart the client.
-
-GitHub Actions builds the ZIP and runs offline checks on Windows. Create a repository from this directory and attach the ZIP to a Release separately; no repository or release is published automatically. Keep personal `data` out of the repository.
-
-## Technical basis
-
-Windows [CfHydratePlaceholder](https://learn.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfhydrateplaceholder), [CfGetPlaceholderInfo](https://learn.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfgetplaceholderinfo), and [CancelIoEx](https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-cancelioex). API mode uses the Yandex Disk HTTPS REST API.
-
-License: [MIT](LICENSE).
-
-Support the author: [ЮMoney](https://yoomoney.ru/fundraise/1KS67440FP0.261012). The Support the author button opens this page in your browser; payments are made by you on the ЮMoney website.
-
-API file-list selection: Refresh list from Disk discovers new or changed files; Use saved list skips cloud-folder enumeration. A missing list triggers the first scan. Lists are scoped to the account and cloud folder and can be reused with a different destination. Partial inventories and pagination positions are checkpointed; saved-list mode resumes interrupted scans from the checkpoint; lists with folder errors are marked incomplete.
-
-The app always opens with the desktop Disk client selected. Switch to API when needed. API defaults to Continue with saved list; missing or unfinished scans are created or resumed. Choose Refresh list from Disk to discover new or changed files.
-
-API Continue processes new or unprocessed files. Previous successes, failures and idle timeouts count toward cumulative Processed progress and are not retried. Requests interrupted by Stop are retried. Use the dedicated retry modes or Recheck all files for intentional retries.
-
-The x86 build was tested in a 32-bit process on 64-bit Windows. Full testing on a separate 32-bit Windows installation and its Disk client remains necessary.
-
-Subsequent API passes reuse verification for unchanged files using history, size and modification time instead of rereading MD5. Legacy history requires one full verification. Recheck all files verifies files fully again. Extract the ZIP to a permanent folder to retain history and the cached inventory between launches.
-
-The upper API selector chooses the inventory source: cached list or cloud refresh. The lower pass selector chooses which files to process: Continue skips completed attempts; Recheck all files verifies the entire list, including downloaded files. Separate retry modes handle errors and zero-byte downloads.
-
-Pass modes: sync/server errors only; zero downloads only; errors plus zero downloads; new or changed files only; resume unfinished pass; recheck all files. Resume handles unchecked files and user-interrupted attempts, skipping completed errors and timeouts. Refresh API inventory to discover new cloud files.
-
-### Automatic retries and pass statistics
-Repeat problem files retries only errors and timeouts, including partial downloads, after the initial pass with a 30-second pause. Stop cancels active requests and the wait. No candidates, fatal errors or uncertain cancellation end the loop. API retries use cached inventory. The Pass history tab shows persisted per-pass statistics in local data/passes.jsonl. Detailed reports are generated automatically in data. Never include data in public packages.
+Use `x86` for 32-bit. Local checks: `tests/run-tests.ps1`. License: [MIT](LICENSE).

@@ -1,11 +1,10 @@
-﻿**Важно: файлы, загруженные через безлимитную автозагрузку фото и видео, не учитываются и не скачиваются — ни через клиент Диска, ни через API. Поддерживаются только файлы из обычного раздела «Файлы».**
+﻿Yandex Disk Rescue v0.2.4
 
-Yandex Disk Rescue — скачивание доступных файлов через клиент Яндекс Диска или напрямую через API.
+**Файлы безлимитной автозагрузки НЕ учитываются и НЕ скачиваются. / Unlimited auto-upload files are NOT counted or downloaded.**
 
-API использует OAuth-токен Яндекса и может быть быстрее: не требует очереди и перезапусков настольного клиента. Токен: https://yandex.ru/dev/disk/poligon/
+Зелёная карточка «Скачано всего» перед «Скачано за проход». Упрощённые режимы, API и сохранённый список по умолчанию, автоповтор временных ошибок без повторного сканирования. Нулевые и частичные загрузки объединены. Отдельная кнопка подробного гайда и статистика проходов.
 
-До пяти загрузок одновременно, отмена зависших запросов, сохранённый список и продолжение остановленного сканирования, история обработки и отдельные повторные проходы. API проверяет размер и доступный MD5. Токен шифруется Windows и не включается в релиз.
+Green Downloaded total card before Downloaded this pass. Clearer modes, API and cached inventory defaults, resilient automatic retries, grouped timeout/partial failures, separate guide and pass statistics.
 
-Проект и скачивание: https://github.com/fefenke/Yandex-Disk-Rescue
-Безлимитная автозагрузка не поддерживается. Скорость и доступность файлов зависят от Яндекса и соединения.
-Поддержать автора: https://yoomoney.ru/fundraise/1KS67440FP0.261012
+OAuth token: https://yandex.ru/dev/disk/poligon/
+API avoids desktop-client restarts and can be faster. Extract the complete ZIP. Windows x64/x86; .NET Framework 4.7.1+. Keep local data when updating. ZIPs contain no private tokens or logs.

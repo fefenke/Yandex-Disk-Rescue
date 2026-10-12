@@ -53,13 +53,13 @@ namespace DiskRescue {
         TableLayoutPanel setupGrid, pageGrid, credentials;
         bool translating;
         NumericUpDown idle;
-        FlatButton browse, start, update, support;
+        FlatButton browse, start, update, support, guideButton;
         Button language;
         Label subtitle, guideTitle, guideText, unlimitedWarning, folderCaption, modeCaption, idleCaption, phase, detail, available, footer;
         Label modeReadout, methodReadout;
         LinkLabel tokenHelp;
         Label apiListCaption, apiListReadout;
-        Label[] metricTitle = new Label[4], metricValue = new Label[4];
+        Label[] metricTitle = new Label[5], metricValue = new Label[5];
         DataGridView categories;
         TabControl tabs;
         TextBox log;
@@ -68,7 +68,7 @@ namespace DiskRescue {
         public MainForm(string data) {
             dataFolder=data; settingsPath=Path.Combine(data,"settings.json"); Directory.CreateDirectory(data);
             try { settings = File.Exists(settingsPath) ? new JavaScriptSerializer().Deserialize<Settings>(File.ReadAllText(settingsPath)) : new Settings(); } catch { settings=new Settings(); }
-            settings.UseApi=false;settings.UseCachedApiList=true;
+            settings.UseApi=true;settings.UseCachedApiList=true;
             settings.SupportUrl=new Settings().SupportUrl;
             settings.GitHubReleasesUrl=new Settings().GitHubReleasesUrl;
             ru=settings.Language!="en";
@@ -88,7 +88,7 @@ namespace DiskRescue {
         RoundPanel Card() { return new RoundPanel { Dock=DockStyle.Fill, Margin=new Padding(0,0,0,12) }; }
         void Build() {
             TableLayoutPanel page=Table(1);pageGrid=page; page.Padding=new Padding(24,14,24,12); page.RowCount=7;
-            foreach(float h in new float[]{72,156,150,90,76}) page.RowStyles.Add(new RowStyle(SizeType.Absolute,h));
+            foreach(float h in new float[]{72,76,150,90,76}) page.RowStyles.Add(new RowStyle(SizeType.Absolute,h));
             page.RowStyles.Add(new RowStyle(SizeType.Percent,100)); page.RowStyles.Add(new RowStyle(SizeType.Absolute,34)); Controls.Add(page);
             TableLayoutPanel header=Table(2); header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,100));
             header.RowCount=1;header.RowStyles.Add(new RowStyle(SizeType.Percent,100));
@@ -98,9 +98,11 @@ namespace DiskRescue {
             language.Click += delegate { ru=!ru; settings.Language=ru?"ru":"en"; SaveSettings(); Translate(); Render(engine.Latest); };
             header.Controls.Add(brand,0,0); header.Controls.Add(language,1,0); page.Controls.Add(header,0,0);
             RoundPanel guide=Card(); guide.Fill=Color.FromArgb(231,236,255); guide.Padding=new Padding(18,10,18,10);
-            TableLayoutPanel guideRows=Table(1); guideRows.RowCount=3; guideRows.RowStyles.Add(new RowStyle(SizeType.Absolute,26));guideRows.RowStyles.Add(new RowStyle(SizeType.Absolute,38)); guideRows.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-            guideTitle=Label("",11,true); guideText=Label("",9,false); guideText.ForeColor=Color.FromArgb(60,73,118);
-            unlimitedWarning=Label("",10,true);unlimitedWarning.ForeColor=Color.FromArgb(145,43,58);guideRows.Controls.Add(guideTitle,0,0);guideRows.Controls.Add(unlimitedWarning,0,1);guideRows.Controls.Add(guideText,0,2); guide.Controls.Add(guideRows); page.Controls.Add(guide,0,1);
+            TableLayoutPanel guideRows=Table(2);guideRows.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));guideRows.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,180));guideRows.RowCount=1;guideRows.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+            guideTitle=Label("",11,true);guideText=Label("",9,false);unlimitedWarning=Label("",10,true);
+            Label guidePrompt=Label("",11,true);guidePrompt.Name="guidePrompt";guideRows.Controls.Add(guidePrompt,0,0);
+            guideButton=new FlatButton{Dock=DockStyle.Fill,Fill=accent,ForeColor=Color.White,Margin=new Padding(12,2,0,2)};guideButton.Click+=delegate{ShowGuide();};guideRows.Controls.Add(guideButton,1,0);
+            guide.Controls.Add(guideRows);page.Controls.Add(guide,0,1);
             RoundPanel setup=Card(); setup.Padding=new Padding(18,10,18,10); TableLayoutPanel config=Table(3);setupGrid=config; config.RowCount=7;
             config.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); config.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,210)); config.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,170));
             config.RowStyles.Add(new RowStyle(SizeType.Absolute,21));config.RowStyles.Add(new RowStyle(SizeType.Absolute,36));config.RowStyles.Add(new RowStyle(SizeType.Absolute,60));config.RowStyles.Add(new RowStyle(SizeType.Absolute,21)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,36)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,22)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,40));
@@ -133,13 +135,13 @@ namespace DiskRescue {
             idle=new NumericUpDown { Minimum=1,Maximum=60,Value=Math.Max(1,Math.Min(60,settings.IdleSeconds)),Dock=DockStyle.Fill,Margin=new Padding(0,3,10,0) }; config.Controls.Add(idle,1,6);
             start=new FlatButton { Dock=DockStyle.Fill,Margin=new Padding(0,0,0,1) }; start.Click += StartStop; config.Controls.Add(start,2,6);
             setup.Controls.Add(config); page.Controls.Add(setup,0,2);
-            TableLayoutPanel metrics=Table(4); for(int i=0;i<4;i++) metrics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));
+            TableLayoutPanel metrics=Table(5); for(int i=0;i<5;i++) metrics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,20));
             metrics.RowCount=1;metrics.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-            for(int i=0;i<4;i++) {
-                RoundPanel card=Card(); card.Margin=new Padding(i==0?0:6,0,i==3?0:6,10); card.Padding=new Padding(16,8,16,8);
+            for(int i=0;i<5;i++) {
+                RoundPanel card=Card(); card.Margin=new Padding(i==0?0:6,0,i==4?0:6,10); card.Padding=new Padding(16,8,16,8);
                 TableLayoutPanel rows=Table(1); rows.RowCount=2;rows.RowStyles.Add(new RowStyle(SizeType.Absolute,22)); rows.RowStyles.Add(new RowStyle(SizeType.Percent,100));
                 metricTitle[i]=Label("",9,false); metricTitle[i].ForeColor=muted; metricValue[i]=Label("0",24,true);
-                metricValue[i].ForeColor=i==1?Color.FromArgb(24,142,117):i==3?Color.FromArgb(198,96,91):ink;
+                metricValue[i].ForeColor=(i==1||i==2)?Color.FromArgb(24,142,117):i==4?Color.FromArgb(198,96,91):ink;
                 rows.Controls.Add(metricTitle[i],0,0); rows.Controls.Add(metricValue[i],0,1); card.Controls.Add(rows); metrics.Controls.Add(card,i,0);
             }
             page.Controls.Add(metrics,0,3);
@@ -150,7 +152,7 @@ namespace DiskRescue {
             progress=new ProgressBar { Dock=DockStyle.Fill,Height=5,Margin=new Padding(0,5,18,10),Style=ProgressBarStyle.Continuous };
             statusLeft.Controls.Add(phase,0,0); statusLeft.Controls.Add(detail,0,1); statusLeft.Controls.Add(progress,0,2); status.Controls.Add(statusLeft,0,0);
             TableLayoutPanel options=Table(1); options.RowStyles.Add(new RowStyle(SizeType.Absolute,27)); options.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-            repeatProblems=new CheckBox{Dock=DockStyle.Fill,AutoSize=false,Font=new Font("Segoe UI",9)};options.Controls.Add(repeatProblems,0,0);
+            repeatProblems=new CheckBox{Checked=true,Dock=DockStyle.Fill,AutoSize=false,Font=new Font("Segoe UI",9)};options.Controls.Add(repeatProblems,0,0);
             available=Label("",9,false); available.TextAlign=ContentAlignment.MiddleRight; available.ForeColor=muted; options.Controls.Add(available,0,1); status.Controls.Add(options,1,0); page.Controls.Add(status,0,4);
             RoundPanel body=Card(); body.Margin=Padding.Empty; body.Padding=new Padding(12,8,12,8);
             tabs=new TabControl { Dock=DockStyle.Fill,Font=new Font("Segoe UI",10),Padding=new Point(16,6) };
@@ -180,29 +182,38 @@ namespace DiskRescue {
             translating=true;method.Items.Clear();method.Items.AddRange(new object[]{T("Через клиент Яндекс Диска","Via Yandex Disk client"),T("Через API · OAuth-токен","Via API · OAuth token")});method.SelectedIndex=settings.UseApi?1:0;translating=false;
             methodCaption.Text=T("Способ скачивания · Диск на компьютере или API","Download method · desktop Disk or API");apiCaption.Text=T("OAuth-токен · хранится зашифрованно Windows","OAuth token · encrypted by Windows");remoteCaption.Text=T("Облачная папка · disk:/ — весь Диск","Cloud folder · disk:/ — whole Disk");
             int selectedList=apiList.SelectedIndex<0?(settings.UseCachedApiList?1:0):apiList.SelectedIndex;apiList.Items.Clear();apiList.Items.AddRange(new object[]{T("Обновить список с Диска · найти новые и изменённые файлы","Refresh list from Disk · find new and changed files"),T("Продолжить по сохранённому списку · без повторного сканирования","Continue with saved list · skip rescanning")});apiList.SelectedIndex=selectedList;apiListCaption.Text=T("Список файлов · только для API","File list · API only");
-            int selectedMode=mode.SelectedIndex<0?0:mode.SelectedIndex;
+            int selectedMode=mode.SelectedIndex<0?3:mode.SelectedIndex;
             subtitle.Text=T("Скачать доступные файлы. Сохранить результат. Повторить остальные.","Download available files. Keep results. Retry the rest.");
-            language.Text=ru?"RU  /  EN":"EN  /  RU";
+            guideButton.Text=T("Открыть гайд","Open guide");Control[] prompts=Controls.Find("guidePrompt",true);if(prompts.Length>0)prompts[0].Text=T("Перед началом работы ознакомьтесь с гайдом","Before you start, please read the guide");language.Text=ru?"RU  /  EN":"EN  /  RU";
             PrerequisiteStatus environment=Prerequisites.Check();
             guideTitle.Text=environment.ClientRunning?T("Перед запуском · клиент Диска запущен","Before you start · Disk client is running"):environment.ClientInstalled?T("Перед запуском · запустите клиент Диска","Before you start · start the Disk client"):T("Перед запуском · установите клиент Диска","Before you start · install the Disk client");
             guideText.Text=T("1. Выберите способ ниже: клиент Диска на компьютере или API с токеном.\n2. Для клиента: установите Яндекс Диск, войдите в аккаунт и дождитесь окончания синхронизации.\n3. Укажите локальную папку Диска со всеми подпапками и нажмите «Начать проход». При ошибках клиент перезапускается.\nБезлимитная автозагрузка не поддерживается. «Продолжить» пропускает завершённые попытки. Ошибки повторяются отдельными режимами.","1. Choose desktop Disk client or API with an OAuth token below.\n2. For the client: install Yandex Disk, sign in and wait for synchronization to finish.\n3. Select the local Disk folder, including subfolders, then Start pass. The client restarts on sync errors.\nUnlimited auto-upload is unsupported. Continue skips completed attempts. Use retry modes for errors.");
             folderCaption.Text=T("Папка Яндекс Диска · включая все подпапки","Yandex Disk folder · including all subfolders");
             browse.Text=T("Выбрать папку","Browse folder");modeCaption.Text=T("Режим прохода","Pass mode");idleCaption.Text=T("Без прогресса, сек","Idle timeout, sec");
-            mode.Items.Clear();mode.Items.AddRange(new object[]{T("Продолжить незавершённый проход","Resume unfinished pass"),T("Перепроверить все файлы","Recheck all files"),T("Только ошибки синхронизации","Retry sync errors only"),T("Только файлы с нулевой загрузкой","Only files with zero downloaded bytes"),T("Ошибки синхронизации и нулевая загрузка","Sync errors and zero downloads"),T("Только новые или изменённые файлы","Only new or changed files")});mode.SelectedIndex=selectedMode;
+            mode.Items.Clear();mode.Items.AddRange(new object[]{T("Продолжить незавершённый проход","Resume unfinished pass"),T("Повторить ошибки синхронизации","Retry sync errors"),T("Повторить таймауты и сбои","Retry timeouts and failures"),T("Повторить все нескачанные","Retry all files not downloaded"),T("Начать проход с нуля","Start pass from the beginning")});mode.SelectedIndex=selectedMode;
             modeReadout.Text=Convert.ToString(mode.SelectedItem);
             tip.SetToolTip(mode,T("Каждый проход заново сканирует папку. Одинаковые имена в разных папках — разные файлы. «Всё заново» проверяет локальные файлы, но не удаляет их и не скачивает повторно.","Every pass rescans the folder. Same names in different folders remain separate. Recheck all files verifies local files without deleting or downloading them again."));
             start.Text=busy?T("Остановить","Stop"):T("Начать проход","Start pass");update.Text=T("Обновление","Updates");support.Text=T("Поддержать автора","Support the author");support.Enabled=!String.IsNullOrEmpty(settings.SupportUrl);
-            metricTitle[0].Text=T("Найдено файлов","Files found");metricTitle[1].Text=T("Скачано за проход","Downloaded this pass");metricTitle[2].Text=T("Осталось скачать","Remaining to download");metricTitle[3].Text=T("Ошибки синхронизации · за проход","Sync errors · this pass");
+            metricTitle[0].Text=T("Найдено файлов","Files found");metricTitle[1].Text=T("Скачано всего","Downloaded total");metricTitle[2].Text=T("Скачано за проход","Downloaded this pass");metricTitle[3].Text=T("Осталось скачать","Remaining to download");metricTitle[4].Text=T("Ошибки синхронизации · за проход","Sync errors · this pass");
             repeatProblems.Text=T("Повторять проблемные файлы","Repeat problem files");tip.SetToolTip(repeatProblems,T("Повтор ошибок и таймаутов с паузой 30 секунд. Стоп отменяет и проход, и ожидание.","Retry errors and timeouts with a 30-second pause. Stop cancels both the pass and the wait."));tabs.TabPages[2].Text=T("Проходы","Pass history");RenderPasses();
             tabs.TabPages[0].Text=T("Категории","Categories");tabs.TabPages[1].Text=T("Журнал","Activity log");
-            categories.Columns.Clear();foreach(string c in new string[]{T("Тип","Type"),T("Всего","Total"),T("Скачаны","Downloaded total"),T("Скачано за текущий проход","Downloaded this pass"),T("Осталось","Remaining"),T("Нулевая загрузка","Zero download"),T("Ошибки синхронизации","Sync errors")})categories.Columns.Add(c,c);
+            categories.Columns.Clear();foreach(string c in new string[]{T("Тип","Type"),T("Всего","Total"),T("Скачаны","Downloaded total"),T("Скачано за текущий проход","Downloaded this pass"),T("Осталось","Remaining"),T("Нет ответа / сбой загрузки","Timeout / download failure"),T("Ошибки синхронизации","Sync errors")})categories.Columns.Add(c,c);
             categories.Columns[0].FillWeight=145;categories.Columns[3].FillWeight=155;categories.Columns[5].FillWeight=110;categories.Columns[6].FillWeight=145;categories.ColumnHeadersDefaultCellStyle.WrapMode=DataGridViewTriState.True;categories.ColumnHeadersHeightSizeMode=DataGridViewColumnHeadersHeightSizeMode.EnableResizing;categories.ColumnHeadersHeight=48;
             footer.Text="";ApplyMethod();
         }
                 void ApplyMethod(){
             bool api=settings.UseApi;credentials.Visible=api;tokenHelp.Visible=api;methodReadout.Text=Convert.ToString(method.SelectedItem);setupGrid.RowStyles[2].Height=api?112:0;pageGrid.RowStyles[2].Height=api?317:205;
             folderCaption.Text=api?T("Папка для сохранения · структура облачных папок сохраняется","Download folder · preserves cloud folder structure"):T("Папка Яндекс Диска · включая все подпапки","Yandex Disk folder · including all subfolders");
-            if(api){mode.Items[0]=T("Продолжить незавершённый проход","Resume unfinished pass");metricTitle[3].Text=T("Ошибки сервера · за проход","Server errors · this pass");categories.Columns[6].HeaderText=T("Ошибки сервера","Server errors");mode.Items[2]=T("Только ошибки сервера","Retry server errors only");mode.Items[4]=T("Ошибки сервера и нулевая загрузка","Server errors and zero downloads");guideTitle.Text=T("Перед запуском · API","Before you start · API");guideText.Text=T("1. Получите токен по ссылке OAuth справа и вставьте его. Укажите локальную папку для сохранения.\n2. Облачный путь disk:/ — весь Диск; disk:/Фото — выбранная папка. Клиент Диска не нужен.\n3. «Продолжить по сохранённому списку» — без нового обхода; первый или незавершённый обход будет выполнен/продолжен.\nДля новых файлов обновите список. Проверяются размер и MD5; безлимит не поддерживается. Токен хранится зашифрованно.","1. Use the OAuth link on the right to obtain a token, then enter it and choose a local download folder.\n2. disk:/ is the whole Disk; disk:/Photos is a specific folder. The desktop client is not needed.\n3. Continue with saved list skips enumeration; a missing or unfinished scan is started or resumed.\nRefresh to find new files. Size and available MD5 are checked; unlimited auto-upload is unsupported. Tokens are encrypted.");}
+            if(api){mode.Items[0]=T("Продолжить незавершённый проход","Resume unfinished pass");metricTitle[4].Text=T("Ошибки сервера · за проход","Server errors · this pass");categories.Columns[6].HeaderText=T("Ошибки сервера","Server errors");mode.Items[1]=T("Повторить ошибки сервера","Retry server errors");mode.Items[3]=T("Повторить все нескачанные","Retry all files not downloaded");guideTitle.Text=T("Перед запуском · API","Before you start · API");guideText.Text=T("1. Получите токен по ссылке OAuth справа и вставьте его. Укажите локальную папку для сохранения.\n2. Облачный путь disk:/ — весь Диск; disk:/Фото — выбранная папка. Клиент Диска не нужен.\n3. «Продолжить по сохранённому списку» — без нового обхода; первый или незавершённый обход будет выполнен/продолжен.\nДля новых файлов обновите список. Проверяются размер и MD5; безлимит не поддерживается. Токен хранится зашифрованно.","1. Use the OAuth link on the right to obtain a token, then enter it and choose a local download folder.\n2. disk:/ is the whole Disk; disk:/Photos is a specific folder. The desktop client is not needed.\n3. Continue with saved list skips enumeration; a missing or unfinished scan is started or resumed.\nRefresh to find new files. Size and available MD5 are checked; unlimited auto-upload is unsupported. Tokens are encrypted.");}
+        }
+        void ShowGuide(){
+            using(Form window=new Form{Text=T("Как пользоваться Yandex Disk Rescue","Yandex Disk Rescue guide"),Size=new Size(820,760),MinimumSize=new Size(640,500),StartPosition=FormStartPosition.CenterParent,Font=Font,BackColor=BackColor}){
+                RichTextBox text=new RichTextBox{Dock=DockStyle.Fill,ReadOnly=true,BorderStyle=BorderStyle.None,BackColor=Color.White,Font=new Font("Segoe UI",11),ScrollBars=RichTextBoxScrollBars.Vertical};
+                text.Text=T(
+"ВАЖНО: файлы безлимитной автозагрузки НЕ учитываются и НЕ скачиваются. Только обычный раздел «Файлы».\n\nПОДГОТОВКА\nРаспакуйте ZIP целиком в постоянную папку. История и отчёты сохраняются рядом с программой в data. Не удаляйте эту папку при обновлении.\n\nЧЕРЕЗ API\nПолучите OAuth-токен по ссылке в приложении, вставьте его и выберите папку сохранения. Токен хранится зашифрованно. disk:/ означает весь Диск; disk:/Фото — конкретную папку. Клиент Яндекс Диска не нужен. Структура подпапок сохраняется.\n\nЧЕРЕЗ КЛИЕНТ ДИСКА\nУстановите клиент, войдите в аккаунт и дождитесь окончания синхронизации. Выберите локальную папку Диска. При ошибках синхронизации клиент может перезапускаться.\n\nВЕРХНИЙ ВЫБОР СПИСКА API\n«Обновить список» — найти новые и изменённые файлы в облаке.\n«Продолжить по сохранённому списку» — использовать готовый список без повторного обхода. Незавершённый скан продолжается с сохранённой позиции.\n\nРЕЖИМЫ ПРОХОДА\n• Продолжить незавершённый проход — непроверенные файлы и прерванные пользователем попытки; завершённые ошибки пропускаются.\n• Повторить ошибки сервера / синхронизации — файлы с такими записанными ошибками.\n• Повторить таймауты и сбои — нет ответа/прогресса, нулевые и частичные загрузки, другие неуспешные попытки.\n• Повторить все нескачанные — все отсутствующие или не скачанные файлы, включая непроверенные, ошибки и таймауты.\n• Начать проход с нуля — пройти весь список с начала, включая прежние попытки. Уже скачанные корректные файлы не скачиваются повторно.\n\nПОЛЕЗНЫЕ СОЧЕТАНИЯ\nПо умолчанию: сохранённый список + повторить все нескачанные + автоповтор. Если списка ещё нет, он создаётся один раз.\nПосле остановки: сохранённый список + продолжить.\nПовтор проблемных: сохранённый список + повторить все нескачанные.\nФайлы добавились или изменились на Диске: обновить список + повторить все нескачанные.\nНачать заново: сохранённый список + начать проход с нуля. Автоповтор не обновляет список заново на каждом проходе.\n\nАВТОПОВТОР\nС галкой сначала выполняется выбранный режим, затем проблемные файлы повторяются с паузой 30 секунд. Даже если «Продолжить» не нашёл непроверенных файлов, цикл перейдёт к оставшимся проблемным. Сетевые ошибки, таймауты и временные ошибки API повторяются в том же режиме. В API последующие проходы используют сохранённый список. Если проблемных файлов нет, цикл завершается. Неверный токен, отсутствие прав, критические локальные ошибки и неподтверждённая отмена требуют исправления. «Стоп» отменяет запросы и ожидание.\n\nСТАТИСТИКА\n«Осталось» — все ещё не скачанные файлы; число выбранных для прохода зависит от режима. «Скачано за проход» — новые успешные загрузки. Вкладка «Проходы» хранит итоги каждого запуска, «Категории» показывает группы файлов. Подробные отчёты сохраняются автоматически в data. Одинаковые имена в разных папках учитываются отдельно.",
+"IMPORTANT: unlimited auto-upload files are NOT counted or downloaded. Only regular Disk files are supported.\n\nSETUP\nExtract the complete ZIP to a permanent folder. Keep data beside the app when updating: it stores history and reports.\n\nAPI\nUse the OAuth link to obtain a token, enter it and choose a download folder. Tokens are encrypted. disk:/ means the whole Disk; disk:/Photos selects a folder. The desktop client is not required. Folder structure is preserved.\n\nDESKTOP CLIENT\nInstall Yandex Disk, sign in and wait for synchronization to finish. Select the local Disk folder. The client may restart on synchronization errors.\n\nUPPER API LIST SELECTOR\nRefresh list: discover new and changed cloud files.\nSaved list: reuse inventory without rescanning; unfinished scans resume from their checkpoint.\n\nPASS MODES\n• Resume unfinished pass: unchecked files and user-interrupted attempts; completed errors are skipped.\n• Retry server/sync errors: retry recorded server or synchronization failures.\n• Retry timeouts and failures: no response/progress, zero-byte and partial transfers, other failures.\n• Retry all unsuccessful downloads: every file not downloaded, including unchecked files, errors and timeouts.\n• Start pass from the beginning: process the entire list again; valid local files are not downloaded again.\n\nCOMBINATIONS\nDefault: saved list + retry all files not downloaded + automatic retry. A missing list is created once.\nAfter Stop: saved list + resume.\nRetry problems: saved list + retry all unsuccessful downloads.\nCloud files were added or changed: refresh list + retry all files not downloaded.\nStart again: saved list + start pass from the beginning. Automatic retries never refresh the inventory on every pass.\n\nAUTOMATIC RETRIES\nThe selected mode runs first, followed by problem-file passes with a 30-second pause. An empty initial Resume still proceeds to existing problem files. Temporary API/network errors retry the same mode. Later API passes use cached inventory. No remaining problems ends the loop. Invalid tokens, denied access, critical local errors or uncertain cancellation need attention. Stop cancels downloads and waiting.\n\nSTATISTICS\nRemaining means all files not yet downloaded; the pass denominator depends on its mode. Downloaded this pass counts new successful downloads. Pass history stores each run's results. Categories groups file types; detailed reports are generated in data. Identical names in different folders remain separate.");
+                int warningEnd=text.Text.IndexOf("\n\n",StringComparison.Ordinal);if(warningEnd>0){text.Select(0,warningEnd);text.SelectionColor=Color.FromArgb(145,43,58);text.SelectionFont=new Font("Segoe UI",11,FontStyle.Bold);text.Select(0,0);}window.Padding=new Padding(20);window.Controls.Add(text);window.ShowDialog(this);
+            }
         }
         void ChooseFolder(object sender,EventArgs args) {
             using(FolderBrowserDialog d=new FolderBrowserDialog()) {
@@ -225,7 +236,7 @@ namespace DiskRescue {
             }
             if(settings.UseApi){settings.UseCachedApiList=apiList.SelectedIndex==1;settings.ApiFolder=Path.GetFullPath(folder.Text);settings.ApiToken=apiToken.Text.Trim();try{settings.RemoteFolder=ApiEngine.NormalizeRemote(remoteFolder.Text);TokenVault.Save(dataFolder,settings.ApiToken);}catch(Exception){MessageBox.Show(this,T("Проверьте облачный путь и доступ к хранилищу токена.","Check the cloud path and token storage permissions."),Text);return;}}else settings.Folder=Path.GetFullPath(folder.Text);settings.Concurrency=5;settings.IdleSeconds=(int)idle.Value;settings.RestartClient=true;SaveSettings();
             busy=true;SetBusy(true);phase.Text=T("Подготовка…","Preparing…");progress.Style=ProgressBarStyle.Marquee;timer.Start();
-            RunMode runMode=(RunMode)mode.SelectedIndex;
+            RunMode runMode=new[]{RunMode.Continue,RunMode.CloudErrors,RunMode.ZeroDownload,RunMode.Remaining,RunMode.All}[mode.SelectedIndex];
             sessionStop=new System.Threading.CancellationTokenSource();work=RunSession(runMode);
             work.ContinueWith(delegate(Task completed){
                 if(!IsDisposed)BeginInvoke(new Action(delegate {
@@ -244,20 +255,20 @@ namespace DiskRescue {
                     Snapshot result=engine.Latest;
                     if(result.Finished){PassResult row=PassResult.From(result,started,settings.UseApi,runMode);PassHistory.Append(Path.Combine(dataFolder,"passes.jsonl"),row);passRows.Add(row);RenderPasses();}
                     Render(result);
-                    if(!PassHistory.ShouldRepeat(result,repeat,sessionStop.IsCancellationRequested))break;
+                    if(!PassHistory.ShouldRepeat(result,repeat,sessionStop.IsCancellationRequested)||(runMode==RunMode.ProblemFiles&&result.Phase=="completed"&&result.Selected==0))break;
                     waitingForRetry=true;
                     try{await Task.Delay(30000,sessionStop.Token);}catch(OperationCanceledException){break;}finally{waitingForRetry=false;}
-                    runMode=RunMode.ProblemFiles;if(settings.UseApi)settings.UseCachedApiList=true;
+                    if(result.Phase=="completed")runMode=RunMode.ProblemFiles;if(settings.UseApi)settings.UseCachedApiList=true;
                 }
             } finally {waitingForRetry=false;settings.UseCachedApiList=originalCache;}
         }
         void RenderPasses(){
             if(passes==null)return;passes.Columns.Clear();
-            foreach(string title in new string[]{T("Начало","Started"),T("Способ / режим","Method / mode"),T("Итог","Outcome"),T("Минут","Minutes"),T("Обработано","Processed"),T("Скачано за проход","Downloaded this pass"),T("Скачано всего","Downloaded total"),T("Осталось","Remaining"),T("Нулевая","Zero"),T("Осталось ошибок","Remaining errors")})passes.Columns.Add(title,title);
+            foreach(string title in new string[]{T("Начало","Started"),T("Способ / режим","Method / mode"),T("Итог","Outcome"),T("Минут","Minutes"),T("Обработано","Processed"),T("Скачано за проход","Downloaded this pass"),T("Скачано всего","Downloaded total"),T("Осталось","Remaining"),T("Не завершены","Incomplete"),T("Осталось ошибок","Remaining errors")})passes.Columns.Add(title,title);
             passes.Columns[0].FillWeight=160;passes.Columns[1].FillWeight=200;passes.ColumnHeadersHeight=55;
             foreach(PassResult row in passRows.AsEnumerable().Reverse())passes.Rows.Add(row.StartedUtc.ToLocalTime().ToString("dd.MM HH:mm:ss"),row.Method+" / "+PassModeName(row.Mode),Phase(row.Outcome),(row.Seconds/60).ToString("0.0"),row.Processed,row.Downloaded,row.Available,row.Remaining,row.ZeroDownload,row.Errors);
         }
-        string PassModeName(string modeName){switch(modeName){case"Continue":return T("Продолжить","Resume");case"All":return T("Все файлы","All files");case"CloudErrors":return T("Ошибки","Errors");case"ZeroDownload":return T("Нулевая загрузка","Zero downloads");case"ErrorsAndZero":return T("Ошибки + нулевая","Errors + zero");case"NewFiles":return T("Новые / изменённые","New / changed");case"ProblemFiles":return T("Автоповтор проблемных","Automatic retry");default:return modeName;}}
+        string PassModeName(string modeName){switch(modeName){case"Continue":return T("Продолжить","Resume");case"All":return T("Все файлы","All files");case"CloudErrors":return T("Ошибки","Errors");case"ZeroDownload":return T("Нет ответа / сбой загрузки","Timeout / download failures");case"ErrorsAndZero":return T("Ошибки + незавершённые","Errors + incomplete");case"NewFiles":return T("Новые / изменённые","New / changed");case"ProblemFiles":return T("Автоповтор проблемных","Automatic retry");default:return modeName;}}
         void SetBusy(bool value) {
             repeatProblems.Enabled=!value;
             folder.ReadOnly=value;apiToken.ReadOnly=remoteFolder.ReadOnly=value;browse.Enabled=mode.Enabled=method.Enabled=apiList.Enabled=idle.Enabled=!value;
@@ -273,7 +284,7 @@ namespace DiskRescue {
         static string Bytes(long value){if(value>=1073741824)return(value/1073741824.0).ToString("0.0")+" GB";if(value>=1048576)return(value/1048576.0).ToString("0.0")+" MB";return(value/1024.0).ToString("0")+" KB";}
         void Render(Snapshot s) {
             if(waitingForRetry){phase.Text=T("Пауза перед повтором · 30 секунд","Waiting to retry · 30 seconds");return;}
-            metricValue[0].Text=s.Total.ToString("N0");metricValue[1].Text=s.Downloaded.ToString("N0");metricValue[2].Text=Math.Max(0,s.Total-s.Available).ToString("N0");metricValue[3].Text=s.CloudErrorsThisPass.ToString("N0");
+            metricValue[0].Text=s.Total.ToString("N0");metricValue[1].Text=s.Available.ToString("N0");metricValue[2].Text=s.Downloaded.ToString("N0");metricValue[3].Text=Math.Max(0,s.Total-s.Available).ToString("N0");metricValue[4].Text=s.CloudErrorsThisPass.ToString("N0");
             phase.Text=Phase(s.Phase);phase.ForeColor=s.Phase=="error"?Color.FromArgb(193,75,85):ink;
             if(!String.IsNullOrEmpty(s.Error))detail.Text=s.Error;
             else if(s.Phase=="scanning"||s.Phase=="preparing"||s.Phase=="checking_local")detail.Text=s.Current;

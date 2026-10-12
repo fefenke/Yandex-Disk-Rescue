@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,7 +7,7 @@ using System.Text;
 using System.Web.Script.Serialization;
 
 namespace DiskRescue {
-    public enum RunMode { Continue, All, CloudErrors, ZeroDownload, ErrorsAndZero, NewFiles, ProblemFiles }
+    public enum RunMode { Continue, All, CloudErrors, ZeroDownload, ErrorsAndZero, NewFiles, ProblemFiles, Remaining }
     public sealed class Settings {
         public string Folder = "";
         public string Language = "ru";
@@ -46,7 +46,7 @@ namespace DiskRescue {
         public int Total, Selected, Processed, Downloaded, Available, Deferred, CloudErrors, OtherErrors, Skipped, Active, ScanErrors;
         public double Seconds, PerHour, RemainingSeconds;
         public bool Finished;
-        public bool RecoveryRequired;
+        public bool RecoveryRequired; public bool RetryableError;
         public int CloudErrorsThisPass;
         public int ProgressChecked, ProgressTotal;
         public List<CategoryStats> Categories = new List<CategoryStats>();
@@ -73,7 +73,7 @@ namespace DiskRescue {
             return "other";
         }
         public static bool Success(string status) { return status == "success" || status == "local"; }
-        public static bool CancelledZero(DiskFile file) { return !file.Local && (file.Status == "timeout" || file.Status == "cancelled_user") && file.DownloadedBytes.HasValue && file.DownloadedBytes.Value == 0; }
+        public static bool CancelledZero(DiskFile file) { return !file.Local && (file.Status == "timeout" || file.Status == "cancelled_user" || file.Status == "failed"); }
         public static bool SameVersion(DiskFile file, HistoryRecord record) {
             return record != null && String.Equals(file.Path, record.path, StringComparison.OrdinalIgnoreCase) && file.Length == record.length && file.Modified == record.modified;
         }
@@ -88,11 +88,12 @@ namespace DiskRescue {
             bool same = SameVersion(file, old);
             string status = same ? NormalizeStatus(old) : "pending";
             if (mode == RunMode.All) return true;
+            if (mode == RunMode.Remaining) return !file.Local;
             if (mode == RunMode.ProblemFiles) return same && !file.Local && (status=="cloud_error"||status=="failed"||status=="timeout");
             if (mode == RunMode.NewFiles) return !same;
             if (mode == RunMode.ErrorsAndZero) return Select(file,old,RunMode.CloudErrors)||Select(file,old,RunMode.ZeroDownload);
             if (mode == RunMode.CloudErrors) return same && status == "cloud_error";
-            if (mode == RunMode.ZeroDownload) return same && (status == "timeout" || status == "cancelled_user") && !file.Local && file.DownloadedBytes.HasValue && file.DownloadedBytes.Value == 0;
+            if (mode == RunMode.ZeroDownload) return same && (status == "timeout" || status == "cancelled_user" || status == "failed") && !file.Local;
             if(!same)return true;
             if(Success(status))return !file.Local;
             return status=="pending"||status=="cancelled_user";
@@ -154,7 +155,7 @@ namespace DiskRescue {
                 foreach (DiskFile f in files) output.WriteLine(String.Join(";", new string[] { Csv(f.Path), Csv(f.Folder), Csv(f.Category), Csv(f.Status), Csv(f.Length), Csv(f.Message) }));
             }
             using (StreamWriter output = new StreamWriter(System.IO.Path.Combine(directory, "categories.csv"), false, new UTF8Encoding(true))) {
-                output.WriteLine("Category;Total;DownloadedTotal;DownloadedThisRun;Remaining;ZeroDownload;SyncErrors");
+                output.WriteLine("Category;Total;DownloadedTotal;DownloadedThisRun;Remaining;IncompleteDownload;SyncErrors");
                 foreach (CategoryStats c in snapshot.Categories) output.WriteLine(String.Join(";", new string[] { c.Category, c.Total.ToString(), c.Available.ToString(), c.Downloaded.ToString(), c.Remaining.ToString(), c.ZeroDownload.ToString(), c.CloudErrors.ToString() }));
             }
             Dictionary<string, List<DiskFile>> direct = new Dictionary<string, List<DiskFile>>(StringComparer.OrdinalIgnoreCase);
