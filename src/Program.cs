@@ -13,10 +13,10 @@ namespace DiskRescue {
                 File.WriteAllText(args[2],new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(YandexCloudNative.Probe(args[1])));return 0;
             }
             if(args.Length>0&&args[0]=="--self-test")return Tests.Run();
-            if(args.Length>0&&args[0]=="--render-preview"){
+            if(args.Length>0&&(args[0]=="--render-preview"||args[0]=="--render-preview-api")){
                 string data=Path.Combine(Path.GetTempPath(),"disk-rescue-preview-"+Guid.NewGuid().ToString("N"));
                 using(MainForm form=new MainForm(data)){
-                    form.Preview(args.Length>2&&args[2]=="en");
+                    if(args[0]=="--render-preview-api")form.PreviewApi(args.Length>2&&args[2]=="en");else form.Preview(args.Length>2&&args[2]=="en");
                     // Render offscreen: create a hidden native handle first, then
                     // set managed visibility for DrawToBitmap without showing it.
                     IntPtr handle=form.Handle;

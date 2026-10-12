@@ -9,6 +9,7 @@ namespace DiskRescue {
     public sealed class Engine {
         public volatile Snapshot Latest = new Snapshot();
         volatile bool stopping;
+        ApiEngine apiEngine;
         readonly List<string> events = new List<string>();
         readonly HashSet<string> downloadedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         readonly HashSet<string> cloudErrorPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -19,15 +20,18 @@ namespace DiskRescue {
         HistoryStore history;
         string report = "", current = "";
         int processed, selected, skipped, scanErrors;
+        RunMode currentMode;
+        bool queueReady;
         public string DataFolder { get; private set; }
         public bool RecoveryRequired { get; private set; }
         sealed class Job { public DiskFile File; public YandexCloudNative.Operation Operation; }
         public Engine(string dataFolder) { DataFolder = dataFolder; }
-        public void Stop() { stopping = true; }
+        public void Stop() { stopping = true; if(apiEngine!=null)apiEngine.Stop(); }
         void Event(string text) { events.Add(DateTime.Now.ToString("HH:mm:ss") + "  " + text); if (events.Count > 160) events.RemoveAt(0); }
         public void Run(Settings settings, RunMode mode) {
+            if(settings.UseApi){apiEngine=new ApiEngine(DataFolder,delegate(Snapshot s){Latest=s;});try{apiEngine.Run(settings,mode);}finally{apiEngine=null;}return;}
             if(RecoveryRequired){Latest=new Snapshot{Phase="error",Finished=true,RecoveryRequired=true,Error="Restart Yandex Disk and this application before starting another pass."};return;}
-            stopping = false; processed = selected = skipped = scanErrors = 0;
+            stopping = false; processed = selected = skipped = scanErrors = 0;currentMode=mode;queueReady=false;
             inventory.Clear(); active.Clear(); events.Clear(); downloadedPaths.Clear(); cloudErrorPaths.Clear(); report="";elapsed.Restart(); lastPublish = DateTime.MinValue;
             string phase = "completed", error = "";
             Publish("preparing", "", false, true);
@@ -52,7 +56,7 @@ namespace DiskRescue {
                     Publish("preparing", "", false, false);
                 }
                 List<DiskFile> queue = FileRules.Order(inventory.Where(f => FileRules.Select(f, history.Find(f.Path), mode)));
-                selected = queue.Count; skipped = inventory.Count - selected;
+                selected = queue.Count; skipped = inventory.Count - selected;queueReady=true;
                 int next = 0;
                 bool restartNeeded = false;
                 Stopwatch reportClock = Stopwatch.StartNew();
@@ -168,6 +172,7 @@ namespace DiskRescue {
             }
             s.Downloaded = downloadedPaths.Count; s.Available = s.Categories.Sum(c => c.Available); s.Deferred = s.Categories.Sum(c => c.Deferred); s.CloudErrors = s.Categories.Sum(c => c.CloudErrors); s.OtherErrors = inventory.Count(f => f.Status == "failed");
             s.CloudErrorsThisPass=cloudErrorPaths.Count;
+            if(queueReady){s.ProgressTotal=currentMode==RunMode.Continue?inventory.Count:selected;s.ProgressChecked=currentMode==RunMode.Continue?skipped+processed:processed;}
             s.PerHour = s.Seconds > 0 ? processed * 3600.0 / s.Seconds : 0;
             s.RemainingSeconds = s.PerHour > 0 ? Math.Max(0, selected - processed) * 3600.0 / s.PerHour : 0;
             foreach (Job job in active) s.Files.Add(new ActiveFile { Path = job.File.Path, Category = job.File.Category, Bytes = job.Operation.ProgressBytes, Length = job.File.Length, State = job.Operation.CancelRequested ? "cancelling" : "downloading" });

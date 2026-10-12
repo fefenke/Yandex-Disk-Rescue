@@ -14,16 +14,22 @@ namespace DiskRescue {
         public int Concurrency = 5;
         public int IdleSeconds = 1;
         public bool RestartClient = true;
-        public string GitHubReleasesUrl = "https://github.com/fefenke/Yandex-Disk-Rescue/releases/latest", SupportUrl = "https://yoomoney.ru/fundraise/1KS67440FP0.261012";
+        public bool UseApi;
+        public bool UseCachedApiList = true;
+        public string ApiFolder = "", RemoteFolder = "disk:/";
+        [ScriptIgnore] public string ApiToken = "";
+        public string GitHubReleasesUrl = "https://github.com/fefenke/Yandex-Disk-Rescue/releases", SupportUrl = "https://yoomoney.ru/fundraise/1KS67440FP0.261012";
     }
     public sealed class HistoryRecord {
         public string path, modified, status, message, time;
         public long length;
+        public long? downloadedBytes;
     }
     public sealed class DiskFile {
         public string Path, Folder, Category, Modified, Status = "pending", Message = "";
         public long Length;
         public long? DownloadedBytes;
+        public string Md5 = "", Destination = "";
         public bool Local;
     }
     public sealed class ActiveFile {
@@ -41,6 +47,7 @@ namespace DiskRescue {
         public bool Finished;
         public bool RecoveryRequired;
         public int CloudErrorsThisPass;
+        public int ProgressChecked, ProgressTotal;
         public List<CategoryStats> Categories = new List<CategoryStats>();
         public List<ActiveFile> Files = new List<ActiveFile>();
         public List<string> Events = new List<string>();
@@ -53,7 +60,10 @@ namespace DiskRescue {
         static readonly HashSet<string> Archives = Set("zip rar 7z tar gz bz2 xz tgz iso img cab zst");
         static HashSet<string> Set(string value) { return new HashSet<string>(value.Split(' '), StringComparer.OrdinalIgnoreCase); }
         public static string Category(string path) {
-            string ext = System.IO.Path.GetExtension(path).TrimStart('.');
+            // Cloud paths may contain characters forbidden in Windows paths.
+            // Categorization must inspect the name without filesystem parsing.
+            string value=path??"";int slash=Math.Max(value.LastIndexOf('/'),value.LastIndexOf('\\'));int dot=value.LastIndexOf('.');
+            string ext=dot>slash?value.Substring(dot+1):"";
             if (Photos.Contains(ext)) return "photos";
             if (Videos.Contains(ext)) return "videos";
             if (Audio.Contains(ext)) return "audio";
@@ -79,7 +89,9 @@ namespace DiskRescue {
             if (mode == RunMode.All) return true;
             if (mode == RunMode.CloudErrors) return same && status == "cloud_error";
             if (mode == RunMode.ZeroDownload) return same && (status == "timeout" || status == "cancelled_user") && !file.Local && file.DownloadedBytes.HasValue && file.DownloadedBytes.Value == 0;
-            return !(same && Success(status) && file.Local);
+            if(!same)return true;
+            if(Success(status))return !file.Local;
+            return status=="pending"||status=="cancelled_user";
         }
         public static List<DiskFile> Order(IEnumerable<DiskFile> files) {
             return files.OrderBy(f => f.Status == "pending" || Success(f.Status) ? 0 : 1).ToList();
@@ -88,10 +100,12 @@ namespace DiskRescue {
     public sealed class HistoryStore : IDisposable {
         readonly StreamWriter writer;
         readonly JavaScriptSerializer json = new JavaScriptSerializer();
-        public readonly Dictionary<string, HistoryRecord> Records = new Dictionary<string, HistoryRecord>(StringComparer.OrdinalIgnoreCase);
+        public readonly Dictionary<string, HistoryRecord> Records;
         public readonly string DirectoryPath;
-        public HistoryStore(string dataFolder, string root) {
-            DirectoryPath = System.IO.Path.Combine(dataFolder, RootKey(root));
+        public HistoryStore(string dataFolder, string root) : this(dataFolder,root,null) { }
+        public HistoryStore(string dataFolder, string root, string identity) {
+            Records=new Dictionary<string,HistoryRecord>(identity==null?StringComparer.OrdinalIgnoreCase:StringComparer.Ordinal);
+            DirectoryPath = System.IO.Path.Combine(dataFolder, identity == null ? RootKey(root) : IdentityKey(identity));
             Directory.CreateDirectory(DirectoryPath);
             string path = System.IO.Path.Combine(DirectoryPath, "history.jsonl");
             if (File.Exists(path)) foreach (string line in File.ReadLines(path, Encoding.UTF8)) {
@@ -108,6 +122,7 @@ namespace DiskRescue {
             string normalized = System.IO.Path.GetFullPath(root).TrimEnd('\\').ToUpperInvariant();
             using (SHA256 sha = SHA256.Create()) { return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(normalized))).Replace("-", "").Substring(0, 24); }
         }
+        public static string IdentityKey(string identity) { using(SHA256 sha=SHA256.Create())return "api-"+BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(identity))).Replace("-", "").Substring(0,24); }
         public HistoryRecord Find(string path) { HistoryRecord record; return Records.TryGetValue(path, out record) ? record : null; }
         public void Save(DiskFile file, string status, string message) {
             FileInfo current = new FileInfo(file.Path);
@@ -119,6 +134,11 @@ namespace DiskRescue {
             Records[file.Path] = record;
         }
         public void Dispose() { writer.Dispose(); }
+        public void SaveApi(DiskFile file, string status, string message) {
+            file.Status=status;file.Message=message??"";
+            HistoryRecord record=new HistoryRecord{path=file.Path,length=file.Length,modified=file.Modified,status=status,message=file.Message,time=DateTimeOffset.Now.ToString("o"),downloadedBytes=file.DownloadedBytes};
+            writer.WriteLine();writer.WriteLine(json.Serialize(record));Records[file.Path]=record;
+        }
     }
     public static class Reports {
         static string Csv(object value) { return "\"" + Convert.ToString(value).Replace("\"", "\"\"") + "\""; }

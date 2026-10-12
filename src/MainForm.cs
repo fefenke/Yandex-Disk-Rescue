@@ -42,12 +42,18 @@ namespace DiskRescue {
         bool ru, busy, closeWhenStopped;
         readonly Timer timer = new Timer();
         TextBox folder;
-        ComboBox mode;
+        ComboBox mode, method, apiList;
+        TextBox apiToken, remoteFolder;
+        Label methodCaption, apiCaption, remoteCaption;
+        TableLayoutPanel setupGrid, pageGrid, credentials;
+        bool translating;
         NumericUpDown idle;
         FlatButton browse, start, update, support;
         Button language;
         Label subtitle, guideTitle, guideText, folderCaption, modeCaption, idleCaption, phase, detail, available, footer;
-        Label modeReadout;
+        Label modeReadout, methodReadout;
+        LinkLabel tokenHelp;
+        Label apiListCaption, apiListReadout;
         Label[] metricTitle = new Label[4], metricValue = new Label[4];
         DataGridView categories;
         TabControl tabs;
@@ -57,11 +63,12 @@ namespace DiskRescue {
         public MainForm(string data) {
             dataFolder=data; settingsPath=Path.Combine(data,"settings.json"); Directory.CreateDirectory(data);
             try { settings = File.Exists(settingsPath) ? new JavaScriptSerializer().Deserialize<Settings>(File.ReadAllText(settingsPath)) : new Settings(); } catch { settings=new Settings(); }
+            settings.UseApi=false;settings.UseCachedApiList=true;
             settings.SupportUrl=new Settings().SupportUrl;
             settings.GitHubReleasesUrl=new Settings().GitHubReleasesUrl;
             ru=settings.Language!="en";
             Text="Yandex Disk Rescue"; Font=new Font("Segoe UI",10); ForeColor=ink; BackColor=Color.FromArgb(244,246,251);
-            Size=new Size(1120,850); MinimumSize=new Size(1000,790); StartPosition=FormStartPosition.CenterScreen;
+            Size=new Size(1120,1000); MinimumSize=new Size(1000,950); StartPosition=FormStartPosition.CenterScreen;
             AutoScaleMode=AutoScaleMode.Dpi;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             Build(); Translate(); engine=new Engine(dataFolder);
@@ -75,7 +82,7 @@ namespace DiskRescue {
         TableLayoutPanel Table(int columns) { return new TableLayoutPanel { Dock=DockStyle.Fill, ColumnCount=columns, Margin=Padding.Empty, BackColor=Color.Transparent }; }
         RoundPanel Card() { return new RoundPanel { Dock=DockStyle.Fill, Margin=new Padding(0,0,0,12) }; }
         void Build() {
-            TableLayoutPanel page=Table(1); page.Padding=new Padding(24,14,24,12); page.RowCount=7;
+            TableLayoutPanel page=Table(1);pageGrid=page; page.Padding=new Padding(24,14,24,12); page.RowCount=7;
             foreach(float h in new float[]{72,118,150,90,76}) page.RowStyles.Add(new RowStyle(SizeType.Absolute,h));
             page.RowStyles.Add(new RowStyle(SizeType.Percent,100)); page.RowStyles.Add(new RowStyle(SizeType.Absolute,34)); Controls.Add(page);
             TableLayoutPanel header=Table(2); header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,100));
@@ -89,20 +96,37 @@ namespace DiskRescue {
             TableLayoutPanel guideRows=Table(1); guideRows.RowCount=2; guideRows.RowStyles.Add(new RowStyle(SizeType.Absolute,26)); guideRows.RowStyles.Add(new RowStyle(SizeType.Percent,100));
             guideTitle=Label("",11,true); guideText=Label("",9,false); guideText.ForeColor=Color.FromArgb(60,73,118);
             guideRows.Controls.Add(guideTitle,0,0); guideRows.Controls.Add(guideText,0,1); guide.Controls.Add(guideRows); page.Controls.Add(guide,0,1);
-            RoundPanel setup=Card(); setup.Padding=new Padding(18,10,18,10); TableLayoutPanel config=Table(3); config.RowCount=4;
+            RoundPanel setup=Card(); setup.Padding=new Padding(18,10,18,10); TableLayoutPanel config=Table(3);setupGrid=config; config.RowCount=7;
             config.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); config.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,210)); config.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,170));
-            config.RowStyles.Add(new RowStyle(SizeType.Absolute,21)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,36)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,22)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,40));
-            folderCaption=Label("",9,true); config.Controls.Add(folderCaption,0,0); config.SetColumnSpan(folderCaption,2);
-            folder=new TextBox { Dock=DockStyle.Fill, Text=settings.Folder, BorderStyle=BorderStyle.FixedSingle, Font=new Font("Segoe UI",11), Margin=new Padding(0,4,10,0) }; config.Controls.Add(folder,0,1); config.SetColumnSpan(folder,2);
-            browse=new FlatButton { Dock=DockStyle.Fill, Fill=Color.FromArgb(234,237,247), ForeColor=ink, Margin=new Padding(0,0,0,2) }; browse.Click += ChooseFolder; config.Controls.Add(browse,2,1);
-            modeCaption=Label("",9,true); config.Controls.Add(modeCaption,0,2);
-            idleCaption=Label("",9,true); config.Controls.Add(idleCaption,1,2);
-            Panel modeBox=new Panel{Dock=DockStyle.Fill,Margin=new Padding(0,3,10,0),BackColor=Color.White};config.Controls.Add(modeBox,0,3);
+            config.RowStyles.Add(new RowStyle(SizeType.Absolute,21));config.RowStyles.Add(new RowStyle(SizeType.Absolute,36));config.RowStyles.Add(new RowStyle(SizeType.Absolute,60));config.RowStyles.Add(new RowStyle(SizeType.Absolute,21)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,36)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,22)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,40));
+                        methodCaption=Label("",9,true);config.Controls.Add(methodCaption,0,0);config.SetColumnSpan(methodCaption,2);
+            Panel methodBox=new Panel{Dock=DockStyle.Fill,Margin=new Padding(0,3,10,0),BackColor=Color.White};config.Controls.Add(methodBox,0,1);config.SetColumnSpan(methodBox,2);method=new ComboBox{Dock=DockStyle.Fill,DropDownStyle=ComboBoxStyle.DropDownList};methodBox.Controls.Add(method);methodReadout=Label("",10,false);methodReadout.Padding=new Padding(5,0,5,0);methodReadout.BackColor=Color.FromArgb(244,246,251);methodReadout.ForeColor=muted;methodReadout.Visible=false;methodBox.Controls.Add(methodReadout);
+            tokenHelp=new LinkLabel{Text="OAuth ↗",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter};
+            tokenHelp.LinkClicked+=delegate{System.Diagnostics.Process.Start("https://yandex.ru/dev/disk/poligon/");};config.Controls.Add(tokenHelp,2,1);
+            credentials=Table(2);credentials.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,60));credentials.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,40));credentials.RowStyles.Add(new RowStyle(SizeType.Absolute,22));credentials.RowStyles.Add(new RowStyle(SizeType.Absolute,32));credentials.RowStyles.Add(new RowStyle(SizeType.Absolute,22));credentials.RowStyles.Add(new RowStyle(SizeType.Absolute,32));config.Controls.Add(credentials,0,2);config.SetColumnSpan(credentials,3);
+            apiCaption=Label("",9,true);remoteCaption=Label("",9,true);credentials.Controls.Add(apiCaption,0,0);credentials.Controls.Add(remoteCaption,1,0);
+            apiToken=new TextBox{Dock=DockStyle.Fill,UseSystemPasswordChar=true,Text=TokenVault.Load(dataFolder),Margin=new Padding(0,3,10,0)};
+            ContextMenuStrip tokenMenu=new ContextMenuStrip();tokenMenu.Items.Add("Очистить токен / Clear token",null,delegate{if(busy)return;apiToken.Clear();settings.ApiToken="";try{TokenVault.Save(dataFolder,"");}catch{MessageBox.Show(this,T("Не удалось очистить сохранённый токен.","Could not clear the saved token."),Text);}});apiToken.ContextMenuStrip=tokenMenu;
+            remoteFolder=new TextBox{Dock=DockStyle.Fill,Text=settings.RemoteFolder,Margin=new Padding(0,3,0,0)};
+            credentials.Controls.Add(apiToken,0,1);credentials.Controls.Add(remoteFolder,1,1);
+            apiListCaption=Label("",9,true);credentials.Controls.Add(apiListCaption,0,2);credentials.SetColumnSpan(apiListCaption,2);Panel apiListBox=new Panel{Dock=DockStyle.Fill,Margin=new Padding(0,2,0,0),BackColor=Color.White};credentials.Controls.Add(apiListBox,0,3);credentials.SetColumnSpan(apiListBox,2);apiList=new ComboBox{Dock=DockStyle.Fill,DropDownStyle=ComboBoxStyle.DropDownList};apiListBox.Controls.Add(apiList);apiListReadout=Label("",10,false);apiListReadout.Padding=new Padding(5,0,5,0);apiListReadout.BackColor=Color.FromArgb(244,246,251);apiListReadout.ForeColor=muted;apiListReadout.Visible=false;apiListBox.Controls.Add(apiListReadout);
+            method.SelectedIndexChanged+=delegate{
+                if(translating||method.SelectedIndex<0)return;
+                if(settings.UseApi)settings.ApiFolder=folder.Text;else settings.Folder=folder.Text;
+                settings.UseApi=method.SelectedIndex==1;folder.Text=settings.UseApi?settings.ApiFolder:settings.Folder;
+                Translate();SaveSettings();
+            };
+            folderCaption=Label("",9,true); config.Controls.Add(folderCaption,0,3); config.SetColumnSpan(folderCaption,2);
+            folder=new TextBox { Dock=DockStyle.Fill, Text=settings.UseApi?settings.ApiFolder:settings.Folder, BorderStyle=BorderStyle.FixedSingle, Font=new Font("Segoe UI",11), Margin=new Padding(0,4,10,0) }; config.Controls.Add(folder,0,4); config.SetColumnSpan(folder,2);
+            browse=new FlatButton { Dock=DockStyle.Fill, Fill=Color.FromArgb(234,237,247), ForeColor=ink, Margin=new Padding(0,0,0,2) }; browse.Click += ChooseFolder; config.Controls.Add(browse,2,4);
+            modeCaption=Label("",9,true); config.Controls.Add(modeCaption,0,5);
+            idleCaption=Label("",9,true); config.Controls.Add(idleCaption,1,5);
+            Panel modeBox=new Panel{Dock=DockStyle.Fill,Margin=new Padding(0,3,10,0),BackColor=Color.White};config.Controls.Add(modeBox,0,6);
             mode=new ComboBox { Dock=DockStyle.Fill, DropDownStyle=ComboBoxStyle.DropDownList, Font=new Font("Segoe UI",10) };modeBox.Controls.Add(mode);
             modeReadout=Label("",10,false);modeReadout.Padding=new Padding(5,0,5,0);modeReadout.BorderStyle=BorderStyle.None;modeReadout.BackColor=Color.FromArgb(244,246,251);modeReadout.ForeColor=muted;modeReadout.Visible=false;modeBox.Controls.Add(modeReadout);
             mode.DrawMode=DrawMode.OwnerDrawFixed;mode.ItemHeight=24;mode.DrawItem+=delegate(object sender,DrawItemEventArgs args){if(args.Index<0)return;args.DrawBackground();TextRenderer.DrawText(args.Graphics,Convert.ToString(mode.Items[args.Index]),mode.Font,args.Bounds,ink,TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);args.DrawFocusRectangle();};
-            idle=new NumericUpDown { Minimum=1,Maximum=60,Value=Math.Max(1,Math.Min(60,settings.IdleSeconds)),Dock=DockStyle.Fill,Margin=new Padding(0,3,10,0) }; config.Controls.Add(idle,1,3);
-            start=new FlatButton { Dock=DockStyle.Fill,Margin=new Padding(0,0,0,1) }; start.Click += StartStop; config.Controls.Add(start,2,3);
+            idle=new NumericUpDown { Minimum=1,Maximum=60,Value=Math.Max(1,Math.Min(60,settings.IdleSeconds)),Dock=DockStyle.Fill,Margin=new Padding(0,3,10,0) }; config.Controls.Add(idle,1,6);
+            start=new FlatButton { Dock=DockStyle.Fill,Margin=new Padding(0,0,0,1) }; start.Click += StartStop; config.Controls.Add(start,2,6);
             setup.Controls.Add(config); page.Controls.Add(setup,0,2);
             TableLayoutPanel metrics=Table(4); for(int i=0;i<4;i++) metrics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));
             metrics.RowCount=1;metrics.RowStyles.Add(new RowStyle(SizeType.Percent,100));
@@ -145,15 +169,18 @@ namespace DiskRescue {
             g.RowTemplate.Height=31;g.ColumnHeadersHeight=34;g.GridColor=Color.FromArgb(241,243,249);return g;
         }
         void Translate() {
+            translating=true;method.Items.Clear();method.Items.AddRange(new object[]{T("Через клиент Яндекс Диска","Via Yandex Disk client"),T("Через API · OAuth-токен","Via API · OAuth token")});method.SelectedIndex=settings.UseApi?1:0;translating=false;
+            methodCaption.Text=T("Способ скачивания · Диск на компьютере или API","Download method · desktop Disk or API");apiCaption.Text=T("OAuth-токен · хранится зашифрованно Windows","OAuth token · encrypted by Windows");remoteCaption.Text=T("Облачная папка · disk:/ — весь Диск","Cloud folder · disk:/ — whole Disk");
+            int selectedList=apiList.SelectedIndex<0?(settings.UseCachedApiList?1:0):apiList.SelectedIndex;apiList.Items.Clear();apiList.Items.AddRange(new object[]{T("Обновить список с Диска · найти новые и изменённые файлы","Refresh list from Disk · find new and changed files"),T("Продолжить по сохранённому списку · без повторного сканирования","Continue with saved list · skip rescanning")});apiList.SelectedIndex=selectedList;apiListCaption.Text=T("Список файлов · только для API","File list · API only");
             int selectedMode=mode.SelectedIndex<0?0:mode.SelectedIndex;
             subtitle.Text=T("Скачать доступные файлы. Сохранить результат. Повторить остальные.","Download available files. Keep results. Retry the rest.");
             language.Text=ru?"RU  /  EN":"EN  /  RU";
             PrerequisiteStatus environment=Prerequisites.Check();
             guideTitle.Text=environment.ClientRunning?T("Перед запуском · клиент Диска запущен","Before you start · Disk client is running"):environment.ClientInstalled?T("Перед запуском · запустите клиент Диска","Before you start · start the Disk client"):T("Перед запуском · установите клиент Диска","Before you start · install the Disk client");
-            guideText.Text=T("Установите Яндекс Диск и войдите в аккаунт. Перед запуском дождитесь окончания синхронизации Диска и остановите другие загрузчики.\nВо время работы приложение будет перезапускать Яндекс Диск при ошибках синхронизации.\nБезлимитная автозагрузка не поддерживается: нужны файлы из раздела «Файлы», видимые в локальной папке Диска.","Install Yandex Disk and sign in. Wait for Disk synchronization to finish before starting, and stop other download tools.\nDuring the pass, the app will restart Yandex Disk whenever sync errors occur.\nUnlimited photo/video auto-upload is not supported: files must be in the Files section and visible in the local Disk folder.");
+            guideText.Text=T("1. Выберите способ ниже: клиент Диска на компьютере или API с токеном.\n2. Для клиента: установите Яндекс Диск, войдите в аккаунт и дождитесь окончания синхронизации.\n3. Укажите локальную папку Диска со всеми подпапками и нажмите «Начать проход». При ошибках клиент перезапускается.\nБезлимитная автозагрузка не поддерживается. «Продолжить» пропускает завершённые попытки. Ошибки повторяются отдельными режимами.","1. Choose desktop Disk client or API with an OAuth token below.\n2. For the client: install Yandex Disk, sign in and wait for synchronization to finish.\n3. Select the local Disk folder, including subfolders, then Start pass. The client restarts on sync errors.\nUnlimited auto-upload is unsupported. Continue skips completed attempts. Use retry modes for errors.");
             folderCaption.Text=T("Папка Яндекс Диска · включая все подпапки","Yandex Disk folder · including all subfolders");
             browse.Text=T("Выбрать папку","Browse folder");modeCaption.Text=T("Режим прохода","Pass mode");idleCaption.Text=T("Без прогресса, сек","Idle timeout, sec");
-            mode.Items.Clear();mode.Items.AddRange(new object[]{T("Продолжить · пропускать успешные","Continue · skip successful"),T("Проверить всё заново","Recheck everything"),T("Только ошибки синхронизации","Retry sync errors only"),T("Только файлы с нулевой загрузкой","Only files with zero downloaded bytes")});mode.SelectedIndex=selectedMode;
+            mode.Items.Clear();mode.Items.AddRange(new object[]{T("Продолжить · только ещё не проверенные файлы","Continue · only files not checked yet"),T("Проверить всё заново","Recheck everything"),T("Только ошибки синхронизации","Retry sync errors only"),T("Только файлы с нулевой загрузкой","Only files with zero downloaded bytes")});mode.SelectedIndex=selectedMode;
             modeReadout.Text=Convert.ToString(mode.SelectedItem);
             tip.SetToolTip(mode,T("Каждый проход заново сканирует папку. Одинаковые имена в разных папках — разные файлы. «Всё заново» проверяет локальные файлы, но не удаляет их и не скачивает повторно.","Every pass rescans the folder. Same names in different folders remain separate. Recheck everything verifies local files without deleting or downloading them again."));
             start.Text=busy?T("Остановить","Stop"):T("Начать проход","Start pass");update.Text=T("Обновление","Updates");support.Text=T("Поддержать автора","Support the author");support.Enabled=!String.IsNullOrEmpty(settings.SupportUrl);
@@ -161,26 +188,33 @@ namespace DiskRescue {
             tabs.TabPages[0].Text=T("Категории","Categories");tabs.TabPages[1].Text=T("Журнал","Activity log");
             categories.Columns.Clear();foreach(string c in new string[]{T("Тип","Type"),T("Всего","Total"),T("Скачаны","Downloaded total"),T("Скачано за текущий проход","Downloaded this pass"),T("Осталось","Remaining"),T("Нулевая загрузка","Zero download"),T("Ошибки синхронизации","Sync errors")})categories.Columns.Add(c,c);
             categories.Columns[0].FillWeight=145;categories.Columns[3].FillWeight=155;categories.Columns[5].FillWeight=110;categories.Columns[6].FillWeight=145;categories.ColumnHeadersDefaultCellStyle.WrapMode=DataGridViewTriState.True;categories.ColumnHeadersHeightSizeMode=DataGridViewColumnHeadersHeightSizeMode.EnableResizing;categories.ColumnHeadersHeight=48;
-            footer.Text="";
+            footer.Text="";ApplyMethod();
+        }
+                void ApplyMethod(){
+            bool api=settings.UseApi;credentials.Visible=api;tokenHelp.Visible=api;methodReadout.Text=Convert.ToString(method.SelectedItem);setupGrid.RowStyles[2].Height=api?112:0;pageGrid.RowStyles[2].Height=api?317:205;
+            folderCaption.Text=api?T("Папка для сохранения · структура облачных папок сохраняется","Download folder · preserves cloud folder structure"):T("Папка Яндекс Диска · включая все подпапки","Yandex Disk folder · including all subfolders");
+            if(api){mode.Items[0]=T("Продолжить · только ещё не проверенные файлы","Continue · only files not checked yet");metricTitle[3].Text=T("Ошибки сервера · за проход","Server errors · this pass");categories.Columns[6].HeaderText=T("Ошибки сервера","Server errors");mode.Items[2]=T("Только ошибки сервера","Retry server errors only");guideTitle.Text=T("Перед запуском · API","Before you start · API");guideText.Text=T("1. Получите токен по ссылке OAuth справа и вставьте его. Укажите локальную папку для сохранения.\n2. Облачный путь disk:/ — весь Диск; disk:/Фото — выбранная папка. Клиент Диска не нужен.\n3. «Продолжить по сохранённому списку» — без нового обхода; первый или незавершённый обход будет выполнен/продолжен.\nДля новых файлов обновите список. Проверяются размер и MD5; безлимит не поддерживается. Токен хранится зашифрованно.","1. Use the OAuth link on the right to obtain a token, then enter it and choose a local download folder.\n2. disk:/ is the whole Disk; disk:/Photos is a specific folder. The desktop client is not needed.\n3. Continue with saved list skips enumeration; a missing or unfinished scan is started or resumed.\nRefresh to find new files. Size and available MD5 are checked; unlimited auto-upload is unsupported. Tokens are encrypted.");}
         }
         void ChooseFolder(object sender,EventArgs args) {
             using(FolderBrowserDialog d=new FolderBrowserDialog()) {
                 d.Description=T("Выберите локальную папку Яндекс Диска","Choose the local Yandex Disk folder");d.SelectedPath=folder.Text;
-                if(d.ShowDialog(this)==DialogResult.OK){folder.Text=d.SelectedPath;settings.Folder=d.SelectedPath;SaveSettings();}
+                if(d.ShowDialog(this)==DialogResult.OK){folder.Text=d.SelectedPath;if(settings.UseApi)settings.ApiFolder=d.SelectedPath;else settings.Folder=d.SelectedPath;SaveSettings();}
             }
         }
         void SaveSettings() { try { File.WriteAllText(settingsPath,new JavaScriptSerializer().Serialize(settings)); } catch { } }
         void StartStop(object sender,EventArgs args) {
             if(busy){engine.Stop();start.Enabled=false;phase.Text=T("Завершаем и отменяем текущие запросы…","Finishing and cancelling current requests…");return;}
-            if(!Directory.Exists(folder.Text)){MessageBox.Show(this,T("Выберите существующую локальную папку Диска.","Choose an existing local Disk folder."),Text,MessageBoxButtons.OK,MessageBoxIcon.Information);return;}
+            if(settings.UseApi&&String.IsNullOrWhiteSpace(apiToken.Text)){MessageBox.Show(this,T("Укажите OAuth-токен.","Enter an OAuth token."),Text);return;}
+            if(String.IsNullOrWhiteSpace(folder.Text)){MessageBox.Show(this,settings.UseApi?T("Укажите папку для сохранения.","Choose a download folder."):T("Укажите локальную папку Яндекс Диска.","Choose the local Yandex Disk folder."),Text);return;}
+            if(!Directory.Exists(folder.Text)){MessageBox.Show(this,T("Укажите существующую локальную папку.","Choose an existing local folder."),Text);return;}
             PrerequisiteStatus environment=Prerequisites.Check();
             if(!environment.PlatformReady){MessageBox.Show(this,T("Системный механизм Cloud Files недоступен. Требуются Windows 10 1709+ / Windows 11 x64 и .NET Framework 4.7.1+.","Cloud Files is unavailable. Windows 10 1709+ / Windows 11 x64 and .NET Framework 4.7.1+ are required."),Text);return;}
-            if(!environment.ClientRunning){
+            if(!settings.UseApi&&!environment.ClientRunning){
                 string message=environment.ClientInstalled?T("Яндекс Диск установлен, но не запущен. Запустить клиент? Войдите в аккаунт, затем повторите запуск прохода.","Yandex Disk is installed but not running. Start the client? Sign in, then start the pass again."):T("Клиент Яндекс Диска не найден. Открыть официальную страницу установки? После установки войдите в аккаунт.","Yandex Disk client was not found. Open the official download page? Install it and sign in first.");
                 if(MessageBox.Show(this,message,Text,MessageBoxButtons.YesNo,MessageBoxIcon.Information)==DialogResult.Yes)System.Diagnostics.Process.Start(environment.ClientInstalled?environment.ClientPath:"https://disk.yandex.ru/download");
                 return;
             }
-            settings.Folder=Path.GetFullPath(folder.Text);settings.Concurrency=5;settings.IdleSeconds=(int)idle.Value;settings.RestartClient=true;SaveSettings();
+            if(settings.UseApi){settings.UseCachedApiList=apiList.SelectedIndex==1;settings.ApiFolder=Path.GetFullPath(folder.Text);settings.ApiToken=apiToken.Text.Trim();try{settings.RemoteFolder=ApiEngine.NormalizeRemote(remoteFolder.Text);TokenVault.Save(dataFolder,settings.ApiToken);}catch(Exception){MessageBox.Show(this,T("Проверьте облачный путь и доступ к хранилищу токена.","Check the cloud path and token storage permissions."),Text);return;}}else settings.Folder=Path.GetFullPath(folder.Text);settings.Concurrency=5;settings.IdleSeconds=(int)idle.Value;settings.RestartClient=true;SaveSettings();
             busy=true;SetBusy(true);phase.Text=T("Подготовка…","Preparing…");progress.Style=ProgressBarStyle.Marquee;timer.Start();
             RunMode runMode=(RunMode)mode.SelectedIndex;
             work=Task.Run(delegate { engine.Run(settings,runMode); });
@@ -193,8 +227,8 @@ namespace DiskRescue {
             });
         }
         void SetBusy(bool value) {
-            folder.ReadOnly=value;browse.Enabled=mode.Enabled=idle.Enabled=!value;
-            mode.Visible=!value;modeReadout.Visible=value;modeReadout.Text=Convert.ToString(mode.SelectedItem);if(value)modeReadout.BringToFront();
+            folder.ReadOnly=value;apiToken.ReadOnly=remoteFolder.ReadOnly=value;browse.Enabled=mode.Enabled=method.Enabled=apiList.Enabled=idle.Enabled=!value;
+            apiList.Visible=!value;apiListReadout.Visible=value;apiListReadout.Text=Convert.ToString(apiList.SelectedItem);if(value)apiListReadout.BringToFront();method.Visible=!value;methodReadout.Visible=value;methodReadout.Text=Convert.ToString(method.SelectedItem);if(value)methodReadout.BringToFront();mode.Visible=!value;modeReadout.Visible=value;modeReadout.Text=Convert.ToString(mode.SelectedItem);if(value)modeReadout.BringToFront();
             start.Enabled=true;start.Fill=value?Color.FromArgb(217,94,108):accent;start.Text=value?T("Остановить","Stop"):T("Начать проход","Start pass");start.Invalidate();
         }
         string Category(string key) {
@@ -209,12 +243,12 @@ namespace DiskRescue {
             phase.Text=Phase(s.Phase);phase.ForeColor=s.Phase=="error"?Color.FromArgb(193,75,85):ink;
             if(!String.IsNullOrEmpty(s.Error))detail.Text=s.Error;
             else if(s.Phase=="scanning"||s.Phase=="preparing")detail.Text=s.Current;
-            else if(s.Selected>0){string eta=s.PerHour>0?String.Format("{0}:{1:00}",(int)(s.RemainingSeconds/3600),(int)((s.RemainingSeconds%3600)/60)):"—";detail.Text=String.Format(T("Проверено {0}/{1} · скачано всего {2:N0} · {3:N0} файлов/ч · осталось ≈ {4}","Checked {0}/{1} · total downloaded {2:N0} · {3:N0} files/h · remaining ≈ {4}"),s.Processed,s.Selected,s.Available,s.PerHour,eta);}
+            else if(s.Selected>0||s.ProgressTotal>0){string eta=s.PerHour>0?String.Format("{0}:{1:00}",(int)(s.RemainingSeconds/3600),(int)((s.RemainingSeconds%3600)/60)):"—";detail.Text=String.Format(T("Обработано {0}/{1} · скачано всего {2:N0} · {3:N0} файлов/ч · осталось ≈ {4}","Processed {0}/{1} · total downloaded {2:N0} · {3:N0} files/h · remaining ≈ {4}"),s.ProgressTotal>0?s.ProgressChecked:s.Processed,s.ProgressTotal>0?s.ProgressTotal:s.Selected,s.Available,s.PerHour,eta);}
             else if(s.Finished&&s.Selected==0)detail.Text=T("Для этого режима нет файлов. Для новых файлов выберите «Продолжить».","No files match this mode. Choose Continue to scan new files.");
             else detail.Text=T("Мониторинг начнётся автоматически вместе с проходом.","Monitoring starts automatically with the pass.");
             available.Text=String.Format(T("Скачано за проход {0:N0} · пропущено {1:N0}","Downloaded this pass {0:N0} · skipped {1:N0}"),s.Downloaded,s.Skipped);
             if(s.Phase=="scanning"||s.Phase=="preparing")progress.Style=ProgressBarStyle.Marquee;
-            else{progress.Style=ProgressBarStyle.Continuous;progress.Maximum=Math.Max(1,s.Selected);progress.Value=Math.Min(progress.Maximum,s.Processed);}
+            else{progress.Style=ProgressBarStyle.Continuous;progress.Maximum=Math.Max(1,s.ProgressTotal>0?s.ProgressTotal:s.Selected);progress.Value=Math.Min(progress.Maximum,s.ProgressTotal>0?s.ProgressChecked:s.Processed);}
             categories.Rows.Clear();foreach(CategoryStats c in s.Categories)categories.Rows.Add(Category(c.Category),c.Total,c.Available,c.Downloaded,c.Remaining,c.ZeroDownload,c.CloudErrors);
             string activity=String.Join(Environment.NewLine,s.Events.ToArray());if(log.Text!=activity){log.Text=activity;log.SelectionStart=log.TextLength;log.ScrollToCaret();}
             update.Enabled=!busy&&!String.IsNullOrEmpty(settings.GitHubReleasesUrl);
@@ -228,5 +262,6 @@ namespace DiskRescue {
             foreach(CategoryStats c in s.Categories){c.Remaining=c.Total-c.Available;c.ZeroDownload=c.Deferred;}busy=true;SetBusy(true);Render(s);
         }
         public void Preview(bool english){ru=!english;Translate();Preview();}
+        public void PreviewApi(bool english){ru=!english;settings.UseApi=true;settings.ApiFolder=@"E:\Downloads\Yandex";apiToken.Text="demo-token";Translate();Preview();folder.Text=settings.ApiFolder;ApplyMethod();}
     }
 }

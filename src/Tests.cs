@@ -20,8 +20,10 @@ namespace DiskRescue {
                     Assert(FileRules.Select(first,store.Find(a),RunMode.All),"Recheck-all excludes a success.");
                     Assert(FileRules.Select(second,store.Find(b),RunMode.CloudErrors),"Cloud-error retry failed.");
                     Assert(!FileRules.Select(first,store.Find(a),RunMode.CloudErrors),"Cloud-error retry includes a success.");
+                    second.Local=false;Assert(!FileRules.Select(second,store.Find(b),RunMode.Continue),"Continue retried a completed cloud error.");
                     second.Local=false;second.DownloadedBytes=0;Assert(!FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Sync error included in cancelled retry.");store.Save(second,"timeout","");Assert(!FileRules.Select(second,null,RunMode.ZeroDownload),"New file selected in cancelled retry.");Assert(FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Zero-byte retry failed.");second.DownloadedBytes=1;Assert(!FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Partial file selected.");second.DownloadedBytes=null;Assert(!FileRules.Select(second,store.Find(b),RunMode.ZeroDownload),"Unknown hydration selected.");
                     Assert(FileRules.Select(first,null,RunMode.Continue),"New file is not selected.");
+                    Assert(!FileRules.Select(second,store.Find(b),RunMode.Continue),"Continue retried a completed idle timeout.");store.Save(second,"cancelled_user","");Assert(FileRules.Select(second,store.Find(b),RunMode.Continue),"Stop-interrupted request was not resumed.");
                     first.Length++;Assert(FileRules.Select(first,store.Find(a),RunMode.Continue),"Changed file was skipped.");
                     Assert(FileRules.Order(new[]{second,first})[0]==first,"New files are not before failures.");
                 }
@@ -32,9 +34,11 @@ namespace DiskRescue {
                 Engine engine=new Engine(data);engine.Run(new Settings{Folder=root,RestartClient=false},RunMode.Continue);
                 Assert(engine.Latest.Finished&&engine.Latest.Phase=="completed"&&engine.Latest.Available>=2,"Local engine run failed.");
                 Assert(File.Exists(Path.Combine(engine.Latest.Report,"folders.csv")),"Folder report missing.");
+                Assert(engine.Latest.ProgressChecked==engine.Latest.Total&&engine.Latest.ProgressTotal==engine.Latest.Total,"Native cumulative progress reset on continuation.");
                 string before=File.ReadAllText(a);engine.Run(new Settings{Folder=root,RestartClient=false},RunMode.All);Assert(File.ReadAllText(a)==before,"Recheck changed local content.");
                 string missing=Path.Combine(root,"missing");engine.Run(new Settings{Folder=missing},RunMode.Continue);Assert(engine.Latest.Phase=="error","Missing folder was not reported.");
-                File.WriteAllText(result,"PASS: path identity, version changes, four run modes, retry order, history persistence, categories, metadata probe, local engine, CSV reports and error state.",Encoding.UTF8);
+                ApiTests.Run(root);
+                File.WriteAllText(result,"PASS: native checks plus API authentication, five-request limit, idle cancellation, stop, path safety, separate history, case collisions, MD5 integrity, retry filters and encrypted token storage.",Encoding.UTF8);
                 return 0;
             }catch(Exception ex){File.WriteAllText(result,"FAIL: "+ex.ToString(),Encoding.UTF8);return 1;}
         }

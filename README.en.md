@@ -1,10 +1,10 @@
 # Yandex Disk Rescue
 
-[![Download for Windows x64](https://img.shields.io/badge/Download_for_Windows_x64-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.1.0/YandexDiskRescue-win-x64.zip)
+[![Download for Windows x64](https://img.shields.io/badge/Download_for_Windows_x64-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.0/YandexDiskRescue-win-x64.zip)
 
 Extract the complete ZIP and run **Start Yandex Disk Rescue.cmd**.
 
-[Русский](README.md) · Windows x64 · portable app · version 0.1.0, preview
+[Русский](README.md) · Windows x64 · portable app · version 0.2.0, preview
 
 Download accessible cloud files from a local Yandex Disk folder and its subfolders, keep results, and retry unsuccessful attempts. The app uses Windows Cloud Files directly: it does not open Explorer, launch file viewers, or send keyboard input.
 
@@ -12,7 +12,23 @@ This is an independent community project, not an official Yandex product. It can
 
 ![Application interface](assets/preview-en.png)
 
-## Before you start
+## Two download methods
+
+API mode uses a Yandex OAuth token and downloads directly, without the desktop client or client restarts. It can therefore process files faster, particularly when desktop synchronization fails. Actual throughput depends on the connection and service.
+
+Get an OAuth token from the [Yandex Disk API Playground](https://yandex.ru/dev/disk/poligon/). Disk read access is required.
+
+Choose **Via Yandex Disk client** and the local Disk folder, or **Via API** and an OAuth token, an existing ordinary local download folder, and a cloud path. disk:/ means the whole Disk. API mode needs Disk read access, does not require the desktop client, and never restarts it. Missing required fields prevent a pass from starting.
+
+Both methods use up to five active downloads. API requests with no progress are cancelled; errors are recorded and the next files are attempted. Partials use .ydr-part and restart from the beginning on a later attempt. Success requires matching size and matching MD5 when available. A failed integrity check does not replace an existing final file.
+
+API history is separate and scoped to the account, cloud root and download destination. Zero-download retry selects only previously cancelled files with zero received bytes. Server-error retry selects previous HTTP 5xx failures.
+
+Tokens are masked and stored using Windows DPAPI for the current user in data/api-token.bin. They are excluded from settings JSON, logs and reports, and never forwarded to signed download URLs. Right-click the token field and choose Clear token to remove the saved credential. It cannot be decrypted under another user's Windows profile.
+
+API behavior was tested with simulated server responses, without a real account. Unlimited auto-upload is unsupported in both methods.
+
+## Before you start with the Disk client
 
 1. Use Windows 10 version 1709 or later / Windows 11, x64. .NET Framework 4.7.1 or newer is included in supported Windows versions. Windows 7/8, 32-bit systems, and native ARM64 builds are not supported by this archive.
 2. Install [Yandex Disk for Windows](https://disk.yandex.ru/download), sign in, and wait for its local folder to appear. Wait for Yandex Disk synchronization to finish before starting a pass.
@@ -87,8 +103,14 @@ GitHub Actions builds the ZIP and runs offline checks on Windows. Create a repos
 
 ## Technical basis
 
-Windows [CfHydratePlaceholder](https://learn.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfhydrateplaceholder), [CfGetPlaceholderInfo](https://learn.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfgetplaceholderinfo), and [CancelIoEx](https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-cancelioex). The Yandex Disk HTTP API is not used.
+Windows [CfHydratePlaceholder](https://learn.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfhydrateplaceholder), [CfGetPlaceholderInfo](https://learn.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfgetplaceholderinfo), and [CancelIoEx](https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-cancelioex). API mode uses the Yandex Disk HTTPS REST API.
 
 License: [MIT](LICENSE).
 
 Support the author: [ЮMoney](https://yoomoney.ru/fundraise/1KS67440FP0.261012). The Support the author button opens this page in your browser; payments are made by you on the ЮMoney website.
+
+API file-list selection: Refresh list from Disk discovers new or changed files; Use saved list skips cloud-folder enumeration. A missing list triggers the first scan. Lists are scoped to the account and cloud folder and can be reused with a different destination. Partial inventories and pagination positions are checkpointed; saved-list mode resumes interrupted scans from the checkpoint; lists with folder errors are marked incomplete.
+
+The app always opens with the desktop Disk client selected. Switch to API when needed. API defaults to Continue with saved list; missing or unfinished scans are created or resumed. Choose Refresh list from Disk to discover new or changed files.
+
+API Continue processes new or unprocessed files. Previous successes, failures and idle timeouts count toward cumulative Processed progress and are not retried. Requests interrupted by Stop are retried. Use the dedicated retry modes or Recheck everything for intentional retries.
