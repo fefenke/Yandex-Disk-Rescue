@@ -1,5 +1,9 @@
 # Yandex Disk Rescue
 
+[![Скачать для Windows x64](https://img.shields.io/badge/Скачать_для_Windows_x64-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.1.0/YandexDiskRescue-win-x64.zip)
+
+Распакуйте ZIP целиком и запустите **Start Yandex Disk Rescue.cmd**.
+
 [English](README.en.md) · Windows x64 · портативное приложение · версия 0.1.0, предварительная
 
 Приложение проходит по локальной папке Яндекс Диска и подпапкам, запрашивает скачивание облачных файлов без открытия Проводника или просмотрщиков, сохраняет результаты и позволяет повторять неудачные попытки.
