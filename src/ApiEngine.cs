@@ -140,6 +140,10 @@ namespace DiskRescue {
             FileInfo info=new FileInfo(path);if(!info.Exists||info.Length!=length)return false;if(String.IsNullOrEmpty(md5))return true;
             using(MD5 hash=MD5.Create())using(FileStream stream=File.OpenRead(path)){byte[] buffer=new byte[1024*1024];int n;while((n=stream.Read(buffer,0,buffer.Length))>0){cancellation.ThrowIfCancellationRequested();hash.TransformBlock(buffer,0,n,buffer,0);}hash.TransformFinalBlock(buffer,0,0);return String.Equals(BitConverter.ToString(hash.Hash).Replace("-",""),md5,StringComparison.OrdinalIgnoreCase);}
         }
+        public static bool PreviouslyVerified(DiskFile file,HistoryRecord record){
+            if(!FileRules.SameVersion(file,record)||!FileRules.Success(record.status)||!record.localWriteTicks.HasValue)return false;
+            FileInfo local=new FileInfo(file.Destination);return local.Exists&&local.Length==file.Length&&local.LastWriteTimeUtc.Ticks==record.localWriteTicks.Value;
+        }
         static void SafeDestination(string path){
             for(string current=path;!String.IsNullOrEmpty(current);current=Path.GetDirectoryName(current))if((File.Exists(current)||Directory.Exists(current))&&(File.GetAttributes(current)&FileAttributes.ReparsePoint)!=0)throw new IOException("Download destination contains a link or cloud placeholder.");
         }
@@ -187,9 +191,9 @@ namespace DiskRescue {
                 report=Path.Combine(history.DirectoryPath,"reports",DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss")+"_"+Guid.NewGuid().ToString("N").Substring(0,6));
                 Inventory(account,remote);
                 foreach(DiskFile f in files){stop.Token.ThrowIfCancellationRequested();current=f.Path;HistoryRecord old=history.Find(f.Path);bool same=FileRules.SameVersion(f,old);if(same){f.Status=FileRules.NormalizeStatus(old);f.DownloadedBytes=old.downloadedBytes;}
-                    SafeDestination(f.Destination);f.Local=Verified(f.Destination,f.Length,f.Md5,stop.Token);if(f.Local){f.DownloadedBytes=f.Length;history.SaveApi(f,"local","");}else if(FileRules.Success(f.Status))f.Status="pending";
+                    SafeDestination(f.Destination);f.Local=(mode!=RunMode.All&&PreviouslyVerified(f,old))||Verified(f.Destination,f.Length,f.Md5,stop.Token);if(f.Local){f.DownloadedBytes=f.Length;if(!same||!FileRules.Success(old.status)||!old.localWriteTicks.HasValue||old.localWriteTicks.Value!=new FileInfo(f.Destination).LastWriteTimeUtc.Ticks)history.SaveApi(f,"local","");else f.Status="local";}else if(FileRules.Success(f.Status))f.Status="pending";
                     string partial=f.Destination+".ydr-part";if(File.Exists(partial))f.DownloadedBytes=new FileInfo(partial).Length;
-                    Snapshot("preparing","",false);
+                    Snapshot("checking_local","",false);
                 }
                 List<DiskFile> queue=FileRules.Order(files.Where(f=>mode==RunMode.Continue ? f.Status=="pending"||f.Status=="cancelled_user" : FileRules.Select(f,history.Find(f.Path),mode)));selected=queue.Count;skipped=files.Count-selected;queueReady=true;int next=0;Stopwatch reportClock=Stopwatch.StartNew();
                 while(next<queue.Count||jobs.Count>0){

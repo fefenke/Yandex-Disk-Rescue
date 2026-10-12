@@ -67,6 +67,13 @@ namespace DiskRescue {
             Assert(last.Finished&&last.Phase=="completed"&&last.Total==7&&last.Downloaded==4,"API pass results incorrect.");Assert(last.CloudErrorsThisPass==1&&last.Deferred==2,"Timeout, HTTP error or integrity failure missing.");Assert(downloads.Peak<=5&&downloads.Peak>1,"Download concurrency incorrect.");
             Assert(File.Exists(Path.Combine(folder,"a","same.jpg"))&&File.Exists(Path.Combine(folder,"b","same.jpg")),"Same-name files collided.");Assert(Directory.GetFiles(folder,"*",SearchOption.AllDirectories).Count(x=>Path.GetFileName(x).StartsWith("case",StringComparison.OrdinalIgnoreCase)&&!x.EndsWith(".ydr-part"))==2,"Case-sensitive cloud files collided.");
             Assert(!File.Exists(Path.Combine(folder,"bad.jpg")),"Corrupt download promoted to final file.");
+            string verifiedPath=Path.Combine(folder,"a","same.jpg");FileInfo verifiedInfo=new FileInfo(verifiedPath);
+            DiskFile verifiedFile=new DiskFile{Path="disk:/a/same.jpg",Destination=verifiedPath,Length=verifiedInfo.Length,Modified="v1"};
+            HistoryRecord verifiedRecord=new HistoryRecord{path=verifiedFile.Path,length=verifiedFile.Length,modified="v1",status="success",localWriteTicks=verifiedInfo.LastWriteTimeUtc.Ticks};
+            Assert(ApiEngine.PreviouslyVerified(verifiedFile,verifiedRecord),"Unchanged verified file was not recognized.");
+            verifiedRecord.localWriteTicks=null;Assert(!ApiEngine.PreviouslyVerified(verifiedFile,verifiedRecord),"Legacy history bypassed integrity verification.");
+            verifiedRecord.localWriteTicks=verifiedInfo.LastWriteTimeUtc.Ticks+1;Assert(!ApiEngine.PreviouslyVerified(verifiedFile,verifiedRecord),"Changed local timestamp bypassed verification.");
+            verifiedRecord.localWriteTicks=verifiedInfo.LastWriteTimeUtc.Ticks;verifiedRecord.modified="v2";Assert(!ApiEngine.PreviouslyVerified(verifiedFile,verifiedRecord),"Changed cloud version bypassed verification.");
             Assert(!File.ReadAllText(Path.Combine(last.Report,"summary.json")).Contains("test-secret"),"Token leaked into report.");
             engine=new ApiEngine(data,x=>last=x,new ApiMock(),new DownloadMock());engine.Run(s,RunMode.ZeroDownload);Assert(last.Selected==1&&last.Processed==1,"Zero retry selected untested/partial/server-error files.");
             engine=new ApiEngine(data,x=>last=x,new ApiMock(),new DownloadMock());engine.Run(s,RunMode.Continue);Assert(last.Skipped==7&&last.Selected==0&&last.ProgressChecked==7&&last.ProgressTotal==7,"Continue repeated previous attempts or reset cumulative progress.");

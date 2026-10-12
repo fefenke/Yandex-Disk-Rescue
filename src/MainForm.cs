@@ -236,19 +236,19 @@ namespace DiskRescue {
             switch(key){case"photos":return T("Фото и изображения","Photos & images");case"videos":return T("Видео","Videos");case"documents":return T("Документы","Documents");case"archives":return T("Архивы и образы","Archives & images");case"audio":return T("Аудио","Audio");default:return T("Другое","Other");}
         }
         string Phase(string key) {
-            switch(key){case"preparing":return T("Готовим историю и список файлов…","Preparing history and file list…");case"scanning":return T("Сканируем папки…","Scanning folders…");case"running":return T("Проход выполняется","Pass in progress");case"restarting":return T("Проход выполняется","Pass in progress");case"stopping":return T("Завершаем запросы…","Finishing requests…");case"completed":return T("Проход завершён","Pass completed");case"stopped":return T("Остановлено · история сохранена","Stopped · history saved");case"error":return T("Остановлено с ошибкой","Stopped with an error");default:return T("Готово к запуску","Ready to start");}
+            switch(key){case"preparing":return T("Готовим историю и список файлов…","Preparing history and file list…");case"checking_local":return T("Сверяем историю и локальные файлы…","Checking history and local files…");case"scanning":return T("Сканируем папки…","Scanning folders…");case"running":return T("Проход выполняется","Pass in progress");case"restarting":return T("Проход выполняется","Pass in progress");case"stopping":return T("Завершаем запросы…","Finishing requests…");case"completed":return T("Проход завершён","Pass completed");case"stopped":return T("Остановлено · история сохранена","Stopped · history saved");case"error":return T("Остановлено с ошибкой","Stopped with an error");default:return T("Готово к запуску","Ready to start");}
         }
         static string Bytes(long value){if(value>=1073741824)return(value/1073741824.0).ToString("0.0")+" GB";if(value>=1048576)return(value/1048576.0).ToString("0.0")+" MB";return(value/1024.0).ToString("0")+" KB";}
         void Render(Snapshot s) {
             metricValue[0].Text=s.Total.ToString("N0");metricValue[1].Text=s.Downloaded.ToString("N0");metricValue[2].Text=Math.Max(0,s.Total-s.Available).ToString("N0");metricValue[3].Text=s.CloudErrorsThisPass.ToString("N0");
             phase.Text=Phase(s.Phase);phase.ForeColor=s.Phase=="error"?Color.FromArgb(193,75,85):ink;
             if(!String.IsNullOrEmpty(s.Error))detail.Text=s.Error;
-            else if(s.Phase=="scanning"||s.Phase=="preparing")detail.Text=s.Current;
+            else if(s.Phase=="scanning"||s.Phase=="preparing"||s.Phase=="checking_local")detail.Text=s.Current;
             else if(s.Selected>0||s.ProgressTotal>0){string eta=s.PerHour>0?String.Format("{0}:{1:00}",(int)(s.RemainingSeconds/3600),(int)((s.RemainingSeconds%3600)/60)):"—";detail.Text=String.Format(T("Обработано {0}/{1} · скачано всего {2:N0} · {3:N0} файлов/ч · осталось ≈ {4}","Processed {0}/{1} · total downloaded {2:N0} · {3:N0} files/h · remaining ≈ {4}"),s.ProgressTotal>0?s.ProgressChecked:s.Processed,s.ProgressTotal>0?s.ProgressTotal:s.Selected,s.Available,s.PerHour,eta);}
             else if(s.Finished&&s.Selected==0)detail.Text=T("Для этого режима нет файлов. Для новых файлов выберите «Продолжить».","No files match this mode. Choose Continue to scan new files.");
             else detail.Text=T("Мониторинг начнётся автоматически вместе с проходом.","Monitoring starts automatically with the pass.");
             available.Text=String.Format(T("Скачано за проход {0:N0} · пропущено {1:N0}","Downloaded this pass {0:N0} · skipped {1:N0}"),s.Downloaded,s.Skipped);
-            if(s.Phase=="scanning"||s.Phase=="preparing")progress.Style=ProgressBarStyle.Marquee;
+            if(s.Phase=="scanning"||s.Phase=="preparing"||s.Phase=="checking_local")progress.Style=ProgressBarStyle.Marquee;
             else{progress.Style=ProgressBarStyle.Continuous;progress.Maximum=Math.Max(1,s.ProgressTotal>0?s.ProgressTotal:s.Selected);progress.Value=Math.Min(progress.Maximum,s.ProgressTotal>0?s.ProgressChecked:s.Processed);}
             categories.Rows.Clear();foreach(CategoryStats c in s.Categories)categories.Rows.Add(Category(c.Category),c.Total,c.Available,c.Downloaded,c.Remaining,c.ZeroDownload,c.CloudErrors);
             string activity=String.Join(Environment.NewLine,s.Events.ToArray());if(log.Text!=activity){log.Text=activity;log.SelectionStart=log.TextLength;log.ScrollToCaret();}

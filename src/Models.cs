@@ -24,6 +24,7 @@ namespace DiskRescue {
         public string path, modified, status, message, time;
         public long length;
         public long? downloadedBytes;
+        public long? localWriteTicks;
     }
     public sealed class DiskFile {
         public string Path, Folder, Category, Modified, Status = "pending", Message = "";
@@ -137,6 +138,7 @@ namespace DiskRescue {
         public void SaveApi(DiskFile file, string status, string message) {
             file.Status=status;file.Message=message??"";
             HistoryRecord record=new HistoryRecord{path=file.Path,length=file.Length,modified=file.Modified,status=status,message=file.Message,time=DateTimeOffset.Now.ToString("o"),downloadedBytes=file.DownloadedBytes};
+            if(FileRules.Success(status)&&!String.IsNullOrEmpty(file.Destination)){FileInfo local=new FileInfo(file.Destination);if(local.Exists&&local.Length==file.Length)record.localWriteTicks=local.LastWriteTimeUtc.Ticks;}
             writer.WriteLine();writer.WriteLine(json.Serialize(record));Records[file.Path]=record;
         }
     }

@@ -120,3 +120,5 @@ The app always opens with the desktop Disk client selected. Switch to API when n
 API Continue processes new or unprocessed files. Previous successes, failures and idle timeouts count toward cumulative Processed progress and are not retried. Requests interrupted by Stop are retried. Use the dedicated retry modes or Recheck everything for intentional retries.
 
 The x86 build was tested in a 32-bit process on 64-bit Windows. Full testing on a separate 32-bit Windows installation and its Disk client remains necessary.
+
+Subsequent API passes reuse verification for unchanged files using history, size and modification time instead of rereading MD5. Legacy history requires one full verification. Start over verifies files fully again. Extract the ZIP to a permanent folder to retain history and the cached inventory between launches.
