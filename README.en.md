@@ -47,7 +47,7 @@ Switch between Russian and English with **RU / EN**. The monitor displays total 
 
 | Mode | Behavior |
 |---|---|
-| Continue | Rescans the folder, processes new/changed files, skips unchanged successful files that remain local, and places previous unsuccessful files at the end. |
+| Continue | Processes new and unprocessed files. Previous completed attempts, including failures and timeouts, are skipped; Stop-interrupted requests are retried. API saved-list mode avoids cloud-folder enumeration. |
 | Recheck everything | Checks all currently discovered files. Local files remain in place and are not downloaded again. History is not deleted. |
 | Retry sync errors only | Retries unchanged files whose latest confirmed result is `0x80070185`. |
 | Only files with zero downloaded bytes | Retries only previously checked and cancelled files of the same version with zero downloaded bytes. New files, sync errors, partial downloads and unknown hydration states are skipped. |
@@ -58,7 +58,7 @@ Every pass rescans the directory tree. Records use **full path, file size, and m
 
 - **Available**: already local, or the full hydration request succeeded. It does not mean the contents were verified or opened in a viewer.
 - **Downloaded this pass**: successful new hydration requests in the current run.
-- **Deferred**: idle timeout, another failure, or cancellation on stop. **A timeout does not prove that the file is permanently unavailable or lost.** Client-side queue delays can also cause it.
+- **Zero download**: previously cancelled files with zero received bytes; **Remaining** includes all files not fully available locally. Timeouts do not prove permanent unavailability.
 - **Sync errors · this pass**: unique files returning 0x80070185 during this pass. This counter never decreases within a pass and resets for the next pass.
 
 Photos/images, videos, documents, archives/disk images, audio, and other files are counted separately. Unknown extensions are included. Executables are downloaded as data and are never launched.
