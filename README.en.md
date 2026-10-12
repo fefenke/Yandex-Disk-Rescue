@@ -1,5 +1,9 @@
 # Yandex Disk Rescue
 
+[![Download for Windows x64](https://img.shields.io/badge/Download_for_Windows_x64-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.1.0/YandexDiskRescue-win-x64.zip)
+
+Extract the complete ZIP and run **Start Yandex Disk Rescue.cmd**.
+
 [Русский](README.md) · Windows x64 · portable app · version 0.1.0, preview
 
 Download accessible cloud files from a local Yandex Disk folder and its subfolders, keep results, and retry unsuccessful attempts. The app uses Windows Cloud Files directly: it does not open Explorer, launch file viewers, or send keyboard input.
