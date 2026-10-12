@@ -50,7 +50,7 @@ namespace DiskRescue {
         NumericUpDown idle;
         FlatButton browse, start, update, support;
         Button language;
-        Label subtitle, guideTitle, guideText, folderCaption, modeCaption, idleCaption, phase, detail, available, footer;
+        Label subtitle, guideTitle, guideText, unlimitedWarning, folderCaption, modeCaption, idleCaption, phase, detail, available, footer;
         Label modeReadout, methodReadout;
         LinkLabel tokenHelp;
         Label apiListCaption, apiListReadout;
@@ -83,7 +83,7 @@ namespace DiskRescue {
         RoundPanel Card() { return new RoundPanel { Dock=DockStyle.Fill, Margin=new Padding(0,0,0,12) }; }
         void Build() {
             TableLayoutPanel page=Table(1);pageGrid=page; page.Padding=new Padding(24,14,24,12); page.RowCount=7;
-            foreach(float h in new float[]{72,118,150,90,76}) page.RowStyles.Add(new RowStyle(SizeType.Absolute,h));
+            foreach(float h in new float[]{72,156,150,90,76}) page.RowStyles.Add(new RowStyle(SizeType.Absolute,h));
             page.RowStyles.Add(new RowStyle(SizeType.Percent,100)); page.RowStyles.Add(new RowStyle(SizeType.Absolute,34)); Controls.Add(page);
             TableLayoutPanel header=Table(2); header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,100));
             header.RowCount=1;header.RowStyles.Add(new RowStyle(SizeType.Percent,100));
@@ -93,9 +93,9 @@ namespace DiskRescue {
             language.Click += delegate { ru=!ru; settings.Language=ru?"ru":"en"; SaveSettings(); Translate(); Render(engine.Latest); };
             header.Controls.Add(brand,0,0); header.Controls.Add(language,1,0); page.Controls.Add(header,0,0);
             RoundPanel guide=Card(); guide.Fill=Color.FromArgb(231,236,255); guide.Padding=new Padding(18,10,18,10);
-            TableLayoutPanel guideRows=Table(1); guideRows.RowCount=2; guideRows.RowStyles.Add(new RowStyle(SizeType.Absolute,26)); guideRows.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+            TableLayoutPanel guideRows=Table(1); guideRows.RowCount=3; guideRows.RowStyles.Add(new RowStyle(SizeType.Absolute,26));guideRows.RowStyles.Add(new RowStyle(SizeType.Absolute,38)); guideRows.RowStyles.Add(new RowStyle(SizeType.Percent,100));
             guideTitle=Label("",11,true); guideText=Label("",9,false); guideText.ForeColor=Color.FromArgb(60,73,118);
-            guideRows.Controls.Add(guideTitle,0,0); guideRows.Controls.Add(guideText,0,1); guide.Controls.Add(guideRows); page.Controls.Add(guide,0,1);
+            unlimitedWarning=Label("",10,true);unlimitedWarning.ForeColor=Color.FromArgb(145,43,58);guideRows.Controls.Add(guideTitle,0,0);guideRows.Controls.Add(unlimitedWarning,0,1);guideRows.Controls.Add(guideText,0,2); guide.Controls.Add(guideRows); page.Controls.Add(guide,0,1);
             RoundPanel setup=Card(); setup.Padding=new Padding(18,10,18,10); TableLayoutPanel config=Table(3);setupGrid=config; config.RowCount=7;
             config.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); config.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,210)); config.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,170));
             config.RowStyles.Add(new RowStyle(SizeType.Absolute,21));config.RowStyles.Add(new RowStyle(SizeType.Absolute,36));config.RowStyles.Add(new RowStyle(SizeType.Absolute,60));config.RowStyles.Add(new RowStyle(SizeType.Absolute,21)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,36)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,22)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,40));
@@ -169,6 +169,7 @@ namespace DiskRescue {
             g.RowTemplate.Height=31;g.ColumnHeadersHeight=34;g.GridColor=Color.FromArgb(241,243,249);return g;
         }
         void Translate() {
+            unlimitedWarning.Text=T("Файлы из безлимитной автозагрузки фото и видео НЕ УЧИТЫВАЮТСЯ И НЕ СКАЧИВАЮТСЯ.\nВ обоих режимах поддерживаются только файлы из обычного раздела «Файлы».","Unlimited photo/video auto-upload files are NOT COUNTED OR DOWNLOADED.\nBoth modes support only files in the regular Files section.");
             translating=true;method.Items.Clear();method.Items.AddRange(new object[]{T("Через клиент Яндекс Диска","Via Yandex Disk client"),T("Через API · OAuth-токен","Via API · OAuth token")});method.SelectedIndex=settings.UseApi?1:0;translating=false;
             methodCaption.Text=T("Способ скачивания · Диск на компьютере или API","Download method · desktop Disk or API");apiCaption.Text=T("OAuth-токен · хранится зашифрованно Windows","OAuth token · encrypted by Windows");remoteCaption.Text=T("Облачная папка · disk:/ — весь Диск","Cloud folder · disk:/ — whole Disk");
             int selectedList=apiList.SelectedIndex<0?(settings.UseCachedApiList?1:0):apiList.SelectedIndex;apiList.Items.Clear();apiList.Items.AddRange(new object[]{T("Обновить список с Диска · найти новые и изменённые файлы","Refresh list from Disk · find new and changed files"),T("Продолжить по сохранённому списку · без повторного сканирования","Continue with saved list · skip rescanning")});apiList.SelectedIndex=selectedList;apiListCaption.Text=T("Список файлов · только для API","File list · API only");

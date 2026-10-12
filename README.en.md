@@ -1,4 +1,7 @@
 # Yandex Disk Rescue
+**Important: photos and videos stored through unlimited auto-upload are not counted or downloaded, in either desktop-client or API mode. Only files in the regular Files section are supported.**
+
+
 
 [![Download for Windows x64](https://img.shields.io/badge/Download_for_Windows_x64-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.0/YandexDiskRescue-win-x64.zip)
 

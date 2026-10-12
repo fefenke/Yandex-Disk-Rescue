@@ -1,4 +1,7 @@
 # Yandex Disk Rescue
+**Важно: файлы, загруженные через безлимитную автозагрузку фото и видео, не учитываются и не скачиваются — ни через клиент Диска, ни через API. Поддерживаются только файлы из обычного раздела «Файлы».**
+
+
 
 [![Скачать для Windows x64](https://img.shields.io/badge/Скачать_для_Windows_x64-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.0/YandexDiskRescue-win-x64.zip)
 
