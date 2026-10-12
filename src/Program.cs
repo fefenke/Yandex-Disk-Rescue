@@ -34,7 +34,7 @@ namespace DiskRescue {
                 string data=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"data");
                 try {
                     PrerequisiteStatus requirements=Prerequisites.Check();
-                    if(!requirements.PlatformReady){MessageBox.Show("Windows 10 1709+ / Windows 11 x64 and .NET Framework 4.7.1+ with Cloud Files are required.\n\nТребуются Windows 10 1709+ / Windows 11 x64, .NET Framework 4.7.1+ и Cloud Files.\n\nUse / Используйте: Start Yandex Disk Rescue.cmd", "Yandex Disk Rescue", MessageBoxButtons.OK,MessageBoxIcon.Information);return 1;}
+                    if(!requirements.PlatformReady){MessageBox.Show("Windows 10 1709+ / Windows 11 (x64/x86 build) and .NET Framework 4.7.1+ with Cloud Files are required.\n\nТребуются Windows 10 1709+ / Windows 11 (x64/x86 build), .NET Framework 4.7.1+ и Cloud Files.\n\nUse / Используйте: Start Yandex Disk Rescue.cmd", "Yandex Disk Rescue", MessageBoxButtons.OK,MessageBoxIcon.Information);return 1;}
                     Directory.CreateDirectory(data);Application.Run(new MainForm(data));
                 }
                 catch(Exception ex){MessageBox.Show(ex.Message,"Yandex Disk Rescue",MessageBoxButtons.OK,MessageBoxIcon.Error);return 1;}

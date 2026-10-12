@@ -4,6 +4,7 @@
 
 
 [![Download for Windows x64](https://img.shields.io/badge/Download_for_Windows_x64-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.0/YandexDiskRescue-win-x64.zip)
+[![Download for Windows x86](https://img.shields.io/badge/Download_for_Windows_x86-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.0/YandexDiskRescue-win-x86.zip)
 
 Extract the complete ZIP and run **Start Yandex Disk Rescue.cmd**.
 
@@ -33,7 +34,7 @@ API behavior was tested with simulated server responses, without a real account.
 
 ## Before you start with the Disk client
 
-1. Use Windows 10 version 1709 or later / Windows 11, x64. .NET Framework 4.7.1 or newer is included in supported Windows versions. Windows 7/8, 32-bit systems, and native ARM64 builds are not supported by this archive.
+1. Use Windows 10 version 1709 or later (32/64-bit) or Windows 11 (64-bit). .NET Framework 4.7.1 or newer is included in supported Windows versions. Use x86 for 32-bit Windows 10 and x64 for 64-bit Windows. Windows 7/8 and native ARM64 builds are not supported.
 2. Install [Yandex Disk for Windows](https://disk.yandex.ru/download), sign in, and wait for its local folder to appear. Wait for Yandex Disk synchronization to finish before starting a pass.
 3. Files must exist in the regular **Files** section of Yandex Disk and be visible in its local folder, including cloud-only placeholders.
 4. **Unlimited photo/video auto-upload is not supported.** Items available only through the photo/auto-upload view, without corresponding regular files in the local Disk folder, cannot be discovered.
@@ -117,3 +118,5 @@ API file-list selection: Refresh list from Disk discovers new or changed files; 
 The app always opens with the desktop Disk client selected. Switch to API when needed. API defaults to Continue with saved list; missing or unfinished scans are created or resumed. Choose Refresh list from Disk to discover new or changed files.
 
 API Continue processes new or unprocessed files. Previous successes, failures and idle timeouts count toward cumulative Processed progress and are not retried. Requests interrupted by Stop are retried. Use the dedicated retry modes or Recheck everything for intentional retries.
+
+The x86 build was tested in a 32-bit process on 64-bit Windows. Full testing on a separate 32-bit Windows installation and its Disk client remains necessary.
