@@ -1,0 +1,10 @@
+dist/
+data/
+**/data/
+*.user
+*.suo
+*.log
+self-test-results.txt
+.vs/
+bin/
+obj/

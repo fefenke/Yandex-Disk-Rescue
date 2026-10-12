@@ -1,0 +1,22 @@
+name: Build Windows portable app
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and package
+        shell: powershell
+        run: .\build.ps1 -Package
+      - name: Run offline checks
+        shell: powershell
+        run: .\tests\run-tests.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YandexDiskRescue-win-x64
+          path: dist/YandexDiskRescue-win-x64.zip

@@ -1,0 +1,90 @@
+# Yandex Disk Rescue
+
+[Русский](README.md) · Windows x64 · portable app · version 0.1.0, preview
+
+Download accessible cloud files from a local Yandex Disk folder and its subfolders, keep results, and retry unsuccessful attempts. The app uses Windows Cloud Files directly: it does not open Explorer, launch file viewers, or send keyboard input.
+
+This is an independent community project, not an official Yandex product. It cannot restore deleted files or repair server-side errors. Downloads depend on the installed Yandex Disk client and service.
+
+![Application interface](assets/preview-en.png)
+
+## Before you start
+
+1. Use Windows 10 version 1709 or later / Windows 11, x64. .NET Framework 4.7.1 or newer is included in supported Windows versions. Windows 7/8, 32-bit systems, and native ARM64 builds are not supported by this archive.
+2. Install [Yandex Disk for Windows](https://disk.yandex.ru/download), sign in, and wait for its local folder to appear. Wait for Yandex Disk synchronization to finish before starting a pass.
+3. Files must exist in the regular **Files** section of Yandex Disk and be visible in its local folder, including cloud-only placeholders.
+4. **Unlimited photo/video auto-upload is not supported.** Items available only through the photo/auto-upload view, without corresponding regular files in the local Disk folder, cannot be discovered.
+5. Stop other download scripts and ensure adequate disk space. Close old Explorer transfer dialogs.
+6. Extract the portable ZIP to a writable folder. For the first launch use `Start Yandex Disk Rescue.cmd`, which checks Windows, architecture and .NET **before** starting the EXE. Afterwards you can run `YandexDiskRescue.exe` directly. Keep `YandexDiskRescue.exe.config` beside it.
+
+The app checks Windows Cloud Files and whether the Disk client is installed/running. It offers the official download page if the client is missing, or offers to launch it if installed but stopped. It does not install software or change system settings automatically. An external launcher is necessary because a .NET-dependent EXE cannot check its own prerequisite before the runtime loads. If .NET is missing or damaged, the launcher displays the official installer link.
+
+## Usage
+
+Choose the local Disk folder and a pass mode, then click **Start pass**. Monitoring starts automatically, and the button becomes **Stop**. Stopping prevents new requests, cancels active requests, and saves results. Closing the app uses the same shutdown procedure.
+
+Switch between Russian and English with **RU / EN**. The monitor displays total downloaded files, downloads in the current pass, throughput, and approximate remaining time. Monitoring ends when the pass completes or stops.
+
+| Mode | Behavior |
+|---|---|
+| Continue | Rescans the folder, processes new/changed files, skips unchanged successful files that remain local, and places previous unsuccessful files at the end. |
+| Recheck everything | Checks all currently discovered files. Local files remain in place and are not downloaded again. History is not deleted. |
+| Retry sync errors only | Retries unchanged files whose latest confirmed result is `0x80070185`. |
+| Only files with zero downloaded bytes | Retries only previously checked and cancelled files of the same version with zero downloaded bytes. New files, sync errors, partial downloads and unknown hydration states are skipped. |
+
+Every pass rescans the directory tree. Records use **full path, file size, and modification time**. Identical names in separate folders are independent. Moving a file creates a new identity at its new path.
+
+## Results and reports
+
+- **Available**: already local, or the full hydration request succeeded. It does not mean the contents were verified or opened in a viewer.
+- **Downloaded this pass**: successful new hydration requests in the current run.
+- **Deferred**: idle timeout, another failure, or cancellation on stop. **A timeout does not prove that the file is permanently unavailable or lost.** Client-side queue delays can also cause it.
+- **Sync errors · this pass**: unique files returning 0x80070185 during this pass. This counter never decreases within a pass and resets for the next pass.
+
+Photos/images, videos, documents, archives/disk images, audio, and other files are counted separately. Unknown extensions are included. Executables are downloaded as data and are never launched.
+
+History and preferences are stored in `data` beside the executable, with separate journals for each root folder. Each result is saved immediately. Keep `data` to preserve progress between launches.
+
+Reports are saved automatically under data: files.csv, categories.csv, folders.csv and summary.json. There is no Open reports button. Folder scope direct counts immediate files; tree counts descendants. Overlapping tree rows must not be summed.
+
+Categories display downloaded total, downloaded this pass, remaining files, previously checked and cancelled files with zero downloaded bytes, and current sync errors. Current category errors can decrease when a later attempt changes the result.
+
+During a pass the app repeatedly restarts Yandex Disk whenever sync errors occur. Ten ordinary idle cancellations do not cause a restart. Restart cannot be disabled in the interface.
+
+## Settings and limitations
+
+- Up to five concurrent requests; the limit is fixed.
+- Default idle timeout: **one second without increasing hydrated byte count**, not a limit on total download duration. Increase it for slow connections.
+- Requests are cancelled through `CancelIoEx`, and completion is checked. If cancellation is not acknowledged, the pass stops and further passes in that app process are disabled. Restart Yandex Disk and the app before retrying.
+- Cancelling an app request **does not guarantee clearing autonomous tasks inside the Yandex client**. This app does not inspect or control the client's private queue.
+- Client restart is mandatory: after `0x80070185`, the app waits for its requests to finish and restarts the client. Other client synchronization can be interrupted.
+- Access errors are recorded. Ordinary directory symlinks/junctions are skipped; cloud placeholder folders are traversed.
+- This preview has offline/local-file checks and Cloud Files compatibility verification. Complete GUI download runs with different client versions still require user testing.
+- The binary is unsigned; Windows may show an unknown-publisher warning.
+
+The app does not request OAuth tokens or upload logs. Windows delegates transfers to the installed client. Logs contain local paths: **do not publish `data`**.
+
+## Build and test
+
+No NuGet packages or .NET SDK are needed. The build uses the installed .NET Framework compiler.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Package
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\run-tests.ps1
+```
+
+Executable: `dist\YandexDiskRescue\YandexDiskRescue.exe`.
+
+Portable ZIP: `dist\YandexDiskRescue-win-x64.zip`.
+
+Offline checks cover full-path identity, file versions, pass filters, retry order, history persistence, categories, metadata probes, local execution, reports, and error handling. They do not hydrate cloud files or restart the client.
+
+GitHub Actions builds the ZIP and runs offline checks on Windows. Create a repository from this directory and attach the ZIP to a Release separately; no repository or release is published automatically. Keep personal `data` out of the repository.
+
+## Technical basis
+
+Windows [CfHydratePlaceholder](https://learn.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfhydrateplaceholder), [CfGetPlaceholderInfo](https://learn.microsoft.com/en-us/windows/win32/api/cfapi/nf-cfapi-cfgetplaceholderinfo), and [CancelIoEx](https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-cancelioex). The Yandex Disk HTTP API is not used.
+
+License: [MIT](LICENSE).
+
+Support the author: [ЮMoney](https://yoomoney.ru/fundraise/1KS67440FP0.261012). The Support the author button opens this page in your browser; payments are made by you on the ЮMoney website.
