@@ -1,4 +1,4 @@
-﻿# Yandex Disk Rescue v0.2.1
+﻿# Yandex Disk Rescue v0.2.2
 
 **Файлы безлимитной автозагрузки НЕ учитываются и НЕ скачиваются. Только обычные файлы из раздела «Файлы».**
 
@@ -14,3 +14,6 @@ Continue processes unchecked files; Recheck all files verifies the full inventor
 
 OAuth API requires a token: https://yandex.ru/dev/disk/poligon/
 API avoids desktop-client restarts and can be faster; actual speed depends on server availability.
+Новые отдельные режимы: только ошибки; только нулевая загрузка; ошибки и нулевая загрузка вместе; только новые или изменённые файлы; продолжить незавершённый проход; перепроверить все файлы. Для новых облачных файлов сначала обновите список API.
+
+Separate modes: errors only, zero downloads only, errors plus zero downloads, new/changed files only, resume unfinished pass, recheck all files. Refresh API inventory to discover new cloud files.

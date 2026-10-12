@@ -7,7 +7,7 @@ using System.Text;
 using System.Web.Script.Serialization;
 
 namespace DiskRescue {
-    public enum RunMode { Continue, All, CloudErrors, ZeroDownload }
+    public enum RunMode { Continue, All, CloudErrors, ZeroDownload, ErrorsAndZero, NewFiles }
     public sealed class Settings {
         public string Folder = "";
         public string Language = "ru";
@@ -88,6 +88,8 @@ namespace DiskRescue {
             bool same = SameVersion(file, old);
             string status = same ? NormalizeStatus(old) : "pending";
             if (mode == RunMode.All) return true;
+            if (mode == RunMode.NewFiles) return !same;
+            if (mode == RunMode.ErrorsAndZero) return Select(file,old,RunMode.CloudErrors)||Select(file,old,RunMode.ZeroDownload);
             if (mode == RunMode.CloudErrors) return same && status == "cloud_error";
             if (mode == RunMode.ZeroDownload) return same && (status == "timeout" || status == "cancelled_user") && !file.Local && file.DownloadedBytes.HasValue && file.DownloadedBytes.Value == 0;
             if(!same)return true;

@@ -124,3 +124,5 @@ The x86 build was tested in a 32-bit process on 64-bit Windows. Full testing on 
 Subsequent API passes reuse verification for unchanged files using history, size and modification time instead of rereading MD5. Legacy history requires one full verification. Recheck all files verifies files fully again. Extract the ZIP to a permanent folder to retain history and the cached inventory between launches.
 
 The upper API selector chooses the inventory source: cached list or cloud refresh. The lower pass selector chooses which files to process: Continue skips completed attempts; Recheck all files verifies the entire list, including downloaded files. Separate retry modes handle errors and zero-byte downloads.
+
+Pass modes: sync/server errors only; zero downloads only; errors plus zero downloads; new or changed files only; resume unfinished pass; recheck all files. Resume handles unchecked files and user-interrupted attempts, skipping completed errors and timeouts. Refresh API inventory to discover new cloud files.
