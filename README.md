@@ -1,9 +1,14 @@
-﻿# Yandex Disk Rescue
+# Yandex Disk Rescue
 **Важно: файлы, загруженные через безлимитную автозагрузку фото и видео, не учитываются и не скачиваются — ни через клиент Диска, ни через API. Поддерживаются только файлы из обычного раздела «Файлы».**
 
 
 
+**Windows 64-бит (x64)** — для большинства компьютеров с Windows 10/11.
+
 [![Скачать для Windows x64](https://img.shields.io/badge/Скачать_для_Windows_x64-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.3/YandexDiskRescue-win-x64.zip)
+
+**Windows 32-бит (x86)** — если установлена 32-битная Windows.
+
 [![Скачать для Windows x86](https://img.shields.io/badge/Скачать_для_Windows_x86-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.3/YandexDiskRescue-win-x86.zip)
 
 Распакуйте ZIP целиком и запустите **Start Yandex Disk Rescue.cmd**.
