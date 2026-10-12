@@ -3,12 +3,22 @@
 
 
 
-[![Download for Windows x64](https://img.shields.io/badge/Download_for_Windows_x64-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.0/YandexDiskRescue-win-x64.zip)
-[![Download for Windows x86](https://img.shields.io/badge/Download_for_Windows_x86-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.0/YandexDiskRescue-win-x86.zip)
+[![Download for Windows x64](https://img.shields.io/badge/Download_for_Windows_x64-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.3/YandexDiskRescue-win-x64.zip)
+[![Download for Windows x86](https://img.shields.io/badge/Download_for_Windows_x86-ZIP-5965E9?style=for-the-badge&logo=windows)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.3/YandexDiskRescue-win-x86.zip)
 
 Extract the complete ZIP and run **Start Yandex Disk Rescue.cmd**.
 
-[Русский](README.md) · Windows x64 · portable app · version 0.2.0, preview
+## What's new in v0.2.3
+
+- **Repeat problem files** retries errors and timeouts with a 30-second pause, skipping downloaded files.
+- **Stop** cancels active downloads and the wait before the next pass.
+- **Pass history** shows start time, duration, mode, outcome, downloads per pass and in total, remaining files, zero downloads and errors.
+- Separate modes for errors, zero downloads, both, new/changed files, resume and full verification.
+- API retries reuse cached inventory and verification of unchanged files.
+
+[Release notes v0.2.3](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.3)
+
+[Русский](README.md) · Windows x64 · portable app · version 0.2.3, preview
 
 Download accessible cloud files from a local Yandex Disk folder and its subfolders, keep results, and retry unsuccessful attempts. The app uses Windows Cloud Files directly: it does not open Explorer, launch file viewers, or send keyboard input.
 
@@ -126,3 +136,6 @@ Subsequent API passes reuse verification for unchanged files using history, size
 The upper API selector chooses the inventory source: cached list or cloud refresh. The lower pass selector chooses which files to process: Continue skips completed attempts; Recheck all files verifies the entire list, including downloaded files. Separate retry modes handle errors and zero-byte downloads.
 
 Pass modes: sync/server errors only; zero downloads only; errors plus zero downloads; new or changed files only; resume unfinished pass; recheck all files. Resume handles unchecked files and user-interrupted attempts, skipping completed errors and timeouts. Refresh API inventory to discover new cloud files.
+
+### Automatic retries and pass statistics
+Repeat problem files retries only errors and timeouts, including partial downloads, after the initial pass with a 30-second pause. Stop cancels active requests and the wait. No candidates, fatal errors or uncertain cancellation end the loop. API retries use cached inventory. The Pass history tab shows persisted per-pass statistics in local data/passes.jsonl. Detailed reports are generated automatically in data. Never include data in public packages.
