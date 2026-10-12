@@ -1,4 +1,4 @@
-# Yandex Disk Rescue
+﻿# Yandex Disk Rescue
 **Important: photos and videos stored through unlimited auto-upload are not counted or downloaded, in either desktop-client or API mode. Only files in the regular Files section are supported.**
 
 
@@ -52,7 +52,7 @@ Switch between Russian and English with **RU / EN**. The monitor displays total 
 | Mode | Behavior |
 |---|---|
 | Continue | Processes new and unprocessed files. Previous completed attempts, including failures and timeouts, are skipped; Stop-interrupted requests are retried. API saved-list mode avoids cloud-folder enumeration. |
-| Recheck everything | Checks all currently discovered files. Local files remain in place and are not downloaded again. History is not deleted. |
+| Recheck all files | Checks all currently discovered files. Local files remain in place and are not downloaded again. History is not deleted. |
 | Retry sync errors only | Retries unchanged files whose latest confirmed result is `0x80070185`. |
 | Only files with zero downloaded bytes | Retries only previously checked and cancelled files of the same version with zero downloaded bytes. New files, sync errors, partial downloads and unknown hydration states are skipped. |
 
@@ -117,8 +117,10 @@ API file-list selection: Refresh list from Disk discovers new or changed files; 
 
 The app always opens with the desktop Disk client selected. Switch to API when needed. API defaults to Continue with saved list; missing or unfinished scans are created or resumed. Choose Refresh list from Disk to discover new or changed files.
 
-API Continue processes new or unprocessed files. Previous successes, failures and idle timeouts count toward cumulative Processed progress and are not retried. Requests interrupted by Stop are retried. Use the dedicated retry modes or Recheck everything for intentional retries.
+API Continue processes new or unprocessed files. Previous successes, failures and idle timeouts count toward cumulative Processed progress and are not retried. Requests interrupted by Stop are retried. Use the dedicated retry modes or Recheck all files for intentional retries.
 
 The x86 build was tested in a 32-bit process on 64-bit Windows. Full testing on a separate 32-bit Windows installation and its Disk client remains necessary.
 
-Subsequent API passes reuse verification for unchanged files using history, size and modification time instead of rereading MD5. Legacy history requires one full verification. Start over verifies files fully again. Extract the ZIP to a permanent folder to retain history and the cached inventory between launches.
+Subsequent API passes reuse verification for unchanged files using history, size and modification time instead of rereading MD5. Legacy history requires one full verification. Recheck all files verifies files fully again. Extract the ZIP to a permanent folder to retain history and the cached inventory between launches.
+
+The upper API selector chooses the inventory source: cached list or cloud refresh. The lower pass selector chooses which files to process: Continue skips completed attempts; Recheck all files verifies the entire list, including downloaded files. Separate retry modes handle errors and zero-byte downloads.
