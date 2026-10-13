@@ -16,7 +16,7 @@ namespace DiskRescue {
         public bool RestartClient = true;
         public bool UseApi;
         public bool UseCachedApiList = true;
-        public bool IncreaseIdleTimeout;
+        public bool IncreaseIdleTimeout = true;
         public string ApiFolder = "", RemoteFolder = "disk:/";
         [ScriptIgnore] public string ApiToken = "";
         public string GitHubReleasesUrl = "https://github.com/fefenke/Yandex-Disk-Rescue/releases", SupportUrl = "https://yoomoney.ru/fundraise/1KS67440FP0.261012";

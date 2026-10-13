@@ -68,7 +68,7 @@ namespace DiskRescue {
         public MainForm(string data) {
             dataFolder=data; settingsPath=Path.Combine(data,"settings.json"); Directory.CreateDirectory(data);
             try { settings = File.Exists(settingsPath) ? new JavaScriptSerializer().Deserialize<Settings>(File.ReadAllText(settingsPath)) : new Settings(); } catch { settings=new Settings(); }
-            settings.UseApi=true;settings.UseCachedApiList=true;
+            settings.UseApi=true;settings.UseCachedApiList=true;settings.IncreaseIdleTimeout=true;
             settings.SupportUrl=new Settings().SupportUrl;
             settings.GitHubReleasesUrl=new Settings().GitHubReleasesUrl;
             ru=settings.Language!="en";
