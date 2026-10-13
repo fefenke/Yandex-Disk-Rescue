@@ -1,10 +1,9 @@
-﻿Yandex Disk Rescue v0.2.4
+﻿# Yandex Disk Rescue v0.2.5
 
 **Файлы безлимитной автозагрузки НЕ учитываются и НЕ скачиваются. / Unlimited auto-upload files are NOT counted or downloaded.**
 
-Зелёная карточка «Скачано всего» перед «Скачано за проход». Упрощённые режимы, API и сохранённый список по умолчанию, автоповтор временных ошибок без повторного сканирования. Нулевые и частичные загрузки объединены. Отдельная кнопка подробного гайда и статистика проходов.
+Гайд и README поясняют «Без прогресса, сек»: 1 секунда для быстрого прохода, 3–5 секунд для повторения таймаутов. Короткое ожидание может отменять медленные рабочие загрузки. Это ограничение паузы, а не общей длительности скачивания; автоповтор не увеличивает значение. Для изменения остановите проход, задайте значение и запустите снова.
 
-Green Downloaded total card before Downloaded this pass. Clearer modes, API and cached inventory defaults, resilient automatic retries, grouped timeout/partial failures, separate guide and pass statistics.
+Guide and README explain idle timeout: 1 second for quick passes, 3–5 for retrying timeouts. Short waits can cancel slow working transfers. The setting limits idle waiting, not total download time. Automatic retries keep the selected value. Stop, adjust and restart to change it.
 
-OAuth token: https://yandex.ru/dev/disk/poligon/
-API avoids desktop-client restarts and can be faster. Extract the complete ZIP. Windows x64/x86; .NET Framework 4.7.1+. Keep local data when updating. ZIPs contain no private tokens or logs.
+Portable Windows x64/x86. Extract the complete ZIP. Preserve local data when updating. No personal tokens, history or logs are included. OAuth token: https://yandex.ru/dev/disk/poligon/

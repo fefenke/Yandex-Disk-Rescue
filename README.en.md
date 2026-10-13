@@ -2,19 +2,21 @@
 
 **Unlimited photo/video auto-upload files are NOT counted or downloaded. Only files in the regular Files section are supported.**
 
-[Русский](README.md) · v0.2.4 · portable Windows 10 1709+ / Windows 11 app · preview release
+[Русский](README.md) · v0.2.5 · portable Windows 10 1709+ / Windows 11 app · preview release
 
 **Windows 64-bit (x64)** — for most PCs.
 
-[![Download Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.4/YandexDiskRescue-win-x64.zip)
+[![Download Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.5/YandexDiskRescue-win-x64.zip)
 
 **Windows 32-bit (x86)** — for a 32-bit Windows installation.
 
-[![Download Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.4/YandexDiskRescue-win-x86.zip)
+[![Download Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.5/YandexDiskRescue-win-x86.zip)
 
 Extract the complete ZIP into a permanent folder and run **Start Yandex Disk Rescue.cmd**. Requires .NET Framework 4.7.1 or newer. Do not launch directly from the ZIP.
 
-## What's new in v0.2.4
+## What's new in v0.2.5
+
+- The guide explains idle timeout: 1 second for quick passes, 3–5 for retrying timeouts.
 
 - Green **Downloaded total** card before **Downloaded this pass**.
 - Default: API, cached inventory, retry all files not downloaded, automatic retries.
@@ -47,6 +49,12 @@ Normal use: cached inventory + retry all files not downloaded. After cloud chang
 
 Automatic retries run the selected mode first, then problem files with a 30-second pause. Stop cancels requests and waiting. No remaining problems ends the loop. Invalid tokens, denied access, critical local errors or uncertain cancellation require attention.
 
+## Idle timeout
+
+Use **1 second** for a quick pass. When retrying timeouts, try **3–5 seconds**: short waits can cancel slow but working downloads. Longer waits slow down attempts on stalled files.
+
+Idle timeout limits waiting without new data, not total download duration. Automatic retries do not increase it. Press Stop, adjust the value and restart to change it. These are starting points, not a download guarantee.
+
 ## Statistics and private data
 
 Cards show found, downloaded total, downloaded this pass, remaining and errors. Remaining covers all missing files; the pass size depends on its mode. Pass history stores start, duration, mode, outcome and file counts; detailed reports are generated automatically.
@@ -57,7 +65,7 @@ Identity uses full path and version; identical names in different folders remain
 
 Independent community project, not an official Yandex product. Cannot restore deleted files or repair server errors. Unlimited auto-upload is unsupported.
 
-[Support the author](https://yoomoney.ru/fundraise/1KS67440FP0.261012) · [Release notes](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.4)
+[Support the author](https://yoomoney.ru/fundraise/1KS67440FP0.261012) · [Release notes](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.5)
 
 ## Build
 
