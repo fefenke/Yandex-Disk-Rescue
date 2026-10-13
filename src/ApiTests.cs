@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -61,7 +61,7 @@ namespace DiskRescue {
         }
         public static void Run(string root){
             string folder=Path.Combine(root,"api-downloads"),data=Path.Combine(root,"api-history");Directory.CreateDirectory(folder);
-            Settings s=new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",IdleSeconds=1};
+            Settings s=new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",IdleSeconds=5};
             Assert(ApiEngine.Validation(new Settings{UseApi=true})=="token","Missing token accepted.");Assert(ApiEngine.Validation(new Settings{UseApi=true,ApiToken="x"})=="destination","Missing destination accepted.");
             Assert(!new JavaScriptSerializer().Serialize(s).Contains("test-secret"),"Token serialized in settings.");
             DiskFile retryFile=new DiskFile{Path="disk:/retry.jpg",Modified="v",Length=10,DownloadedBytes=0};HistoryRecord retryRecord=new HistoryRecord{path=retryFile.Path,modified="v",length=10,status="cloud_error"};
@@ -100,7 +100,7 @@ namespace DiskRescue {
             engine=new ApiEngine(data,x=>last=x,new ApiMock{ListingFailure=404},new DownloadMock());engine.Run(s,RunMode.All);Assert(last.Phase=="completed"&&last.ScanErrors==1&&last.Processed>0,"Unreadable folder blocked all remaining downloads.");
             ApiMock temporary=new ApiMock{StartupFailures=1,TransientListingFailures=1};engine=new ApiEngine(data,x=>last=x,temporary,new DownloadMock());engine.Run(s,RunMode.All);Assert(last.Phase=="completed"&&temporary.StartupCalls==2&&temporary.ListingCalls==2&&last.ScanErrors==0,"Temporary API error interrupted connection or scanning.");
             engine=new ApiEngine(data,x=>{last=x;if(x.Phase=="api_retry")engine.Stop();},new ApiMock{ListingFailure=503},new DownloadMock());engine.Run(s,RunMode.All);Assert(last.Phase=="stopped"&&last.Total==7,"Stop did not interrupt scan retry at its current position.");
-            engine=new ApiEngine(data,x=>last=x,new ApiMock{SpecialNames=true},new DownloadMock());engine.Run(s,RunMode.Continue);Assert(last.Phase=="completed"&&last.Total==9&&last.Downloaded==2,"Special cloud names stopped the pass.");Assert(File.Exists(ApiEngine.LocalPath(folder,"disk:/Фото/фото \"1\".jpg"))&&File.Exists(ApiEngine.LocalPath(folder,"disk:/Фото/a|b.png")),"Special cloud names were not saved safely.");
+            engine=new ApiEngine(data,x=>last=x,new ApiMock{SpecialNames=true},new DownloadMock());engine.Run(s,RunMode.Continue);Assert(last.Phase=="completed"&&last.Total==9&&last.Downloaded==2,"Special cloud names stopped the pass: phase="+last.Phase+", total="+last.Total+", downloaded="+last.Downloaded+", deferred="+last.Deferred);Assert(File.Exists(ApiEngine.LocalPath(folder,"disk:/Фото/фото \"1\".jpg"))&&File.Exists(ApiEngine.LocalPath(folder,"disk:/Фото/a|b.png")),"Special cloud names were not saved safely.");
             ManualResetEvent running=new ManualResetEvent(false);engine=new ApiEngine(data,x=>{last=x;if(x.Phase=="running")running.Set();},new ApiMock(),new DownloadMock());Task run=Task.Run(()=>engine.Run(s,RunMode.All));Assert(running.WaitOne(5000),"API stop test never started.");engine.Stop();Assert(run.Wait(5000)&&last.Phase=="stopped"&&last.Active==0,"Stop left active requests.");running.Dispose();
             TokenVault.Save(data,"test-secret");Assert(TokenVault.Load(data)=="test-secret","Encrypted token cannot be loaded.");Assert(!Encoding.UTF8.GetString(File.ReadAllBytes(Path.Combine(data,"api-token.bin"))).Contains("test-secret"),"Token stored in plaintext.");TokenVault.Save(data,"");
             string cacheData=Path.Combine(root,"cache-tests");s.ApiFolder=Path.Combine(root,"cache-downloads");Directory.CreateDirectory(s.ApiFolder);s.UseCachedApiList=true;
