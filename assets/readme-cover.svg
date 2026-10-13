@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">Yandex Disk Rescue</title>
+  <desc id="desc">Download available files, retry failures and keep your progress. An independent Windows tool.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#10192f"/><stop offset="1" stop-color="#333d7c"/></linearGradient>
+    <linearGradient id="accent" x2="1" y2="1"><stop stop-color="#8d96ff"/><stop offset="1" stop-color="#61dec2"/></linearGradient>
+  </defs>
+  <rect width="1200" height="300" rx="24" fill="url(#bg)"/>
+  <circle cx="1060" cy="65" r="230" fill="#8d96ff" opacity=".06"/>
+  <circle cx="1110" cy="330" r="230" fill="#61dec2" opacity=".06"/>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <text x="54" y="65" fill="#b9c5ed" font-size="16" letter-spacing="3">INDEPENDENT · OPEN SOURCE · WINDOWS</text>
+    <text x="50" y="137" fill="#ffffff" font-size="58" font-weight="700">Yandex Disk Rescue</text>
+    <text x="54" y="184" fill="#c6d0ef" font-size="23">Download what is available. Retry the rest.</text>
+    <rect x="54" y="219" width="119" height="34" rx="17" fill="#ffffff" opacity=".08"/>
+    <text x="113" y="242" text-anchor="middle" fill="#dbe3ff" font-size="15">Portable ZIP</text>
+    <rect x="187" y="219" width="97" height="34" rx="17" fill="#ffffff" opacity=".08"/>
+    <text x="235" y="242" text-anchor="middle" fill="#dbe3ff" font-size="15">RU / EN</text>
+    <rect x="298" y="219" width="125" height="34" rx="17" fill="#ffffff" opacity=".08"/>
+    <text x="360" y="242" text-anchor="middle" fill="#dbe3ff" font-size="15">Keep progress</text>
+  </g>
+  <g transform="translate(940 70)">
+    <rect width="170" height="170" rx="38" fill="#ffffff" opacity=".06"/>
+    <path d="M44 91a25 25 0 0 1 1-50 37 37 0 0 1 70-5 28 28 0 0 1 10 55" fill="none" stroke="url(#accent)" stroke-width="8" stroke-linecap="round"/>
+    <path d="M85 72v59m-21-20 21 21 21-21" fill="none" stroke="#a5f0d9" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

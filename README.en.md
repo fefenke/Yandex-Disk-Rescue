@@ -1,90 +1,143 @@
-﻿# Yandex Disk Rescue
+﻿<div align="center">
+  <p><strong>If this app helped you retrieve your files, you can support its author 💜</strong><br>Entirely optional. The app stays free.</p>
+  <a href="https://yoomoney.ru/fundraise/1KS67440FP0.261012"><img alt="Support the author via YooMoney" src="https://img.shields.io/badge/Support_the_author-YooMoney-7556D9?style=for-the-badge"></a>
+</div>
 
-**Unlimited photo/video auto-upload files are NOT counted or downloaded. Only files in the regular Files section are supported.**
+<br>
 
-[Русский](README.md) · v0.2.6 · portable Windows 10 1709+ / Windows 11 app · preview release
+![Yandex Disk Rescue — download available files, retry failures and keep your progress](assets/readme-cover.svg)
 
-**Windows 64-bit (x64)** — for most PCs.
+<div align="center">
 
-[![Download Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.6/YandexDiskRescue-win-x64.zip)
+[![Windows build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
+[![Version 0.2.6](https://img.shields.io/badge/version-0.2.6-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.6)
+[![MIT license](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-**Windows 32-bit (x86)** — for a 32-bit Windows installation.
+[Русский](README.md) · **English** · [Download](#download) · [Quick start](#quick-start) · [Help](#help)
 
-[![Download Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.6/YandexDiskRescue-win-x86.zip)
+</div>
 
-Extract the complete ZIP into a permanent folder and run **Start Yandex Disk Rescue.cmd**. Requires .NET Framework 4.7.1 or newer. Do not launch directly from the ZIP.
+A free portable Windows app that downloads available Yandex Disk files, keeps results and retries unsuccessful attempts. Choose OAuth API access or the official desktop client without entering a token.
 
-## What's new in v0.2.6
+> [!IMPORTANT]
+> **Unlimited photo/video auto-upload files are NOT counted or downloaded.** Only files in the regular **Files** section are supported.
 
-- Independent API connection/scan retries and optional gradual download idle-timeout increases.
+## Download
 
-- The guide explains idle timeout: 1 second for quick passes, 3–5 for retrying timeouts.
+**Windows 64-bit · x64** — for most Windows 10/11 PCs.
 
-- Green **Downloaded total** card before **Downloaded this pass**.
-- Default: API, cached inventory, retry all files not downloaded, automatic retries.
-- API connection and scan failures retry within the current request; file passes keep their separate 30-second pause.
-- Zero-byte and partial downloads grouped under timeout/download failures.
-- Separate detailed guide button and simpler pass modes.
-- Persistent pass statistics.
+[![Download Windows x64](https://img.shields.io/badge/Download_Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.6/YandexDiskRescue-win-x64.zip)
 
-## Setup
+**Windows 32-bit · x86** — for a 32-bit Windows installation.
 
-**API:** obtain an OAuth token from the [Yandex Disk playground](https://yandex.ru/dev/disk/poligon/), enter it and choose a download folder. `disk:/` selects the whole Disk; `disk:/Photos` selects a folder. No desktop client or restarts are required. API can be faster, depending on service and network availability.
+[![Download Windows x86](https://img.shields.io/badge/Download_Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.6/YandexDiskRescue-win-x86.zip)
 
-**Desktop:** install [Yandex Disk](https://disk.yandex.ru/download), sign in, wait for synchronization and select the local Disk folder. The client may restart on synchronization errors.
+Windows 10 **1709+** or Windows 11 · .NET Framework **4.7.1+** · RU / EN · no installer.
 
-Open **Open guide** in the app for detailed instructions and combinations.
+Extract the complete ZIP to a permanent folder and run **Start Yandex Disk Rescue.cmd**. Do not launch directly from the archive. [Current release notes](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.6).
 
-## Inventory and modes
+## A look inside
 
-The upper API selector chooses cached inventory or cloud refresh. Cached inventory is created once if missing; interrupted scans resume. Refresh when cloud files are added or changed. Automatic retries do not refresh inventory on every pass.
+![API interface showing destination, cached inventory, five statistics cards and automatic retry settings](assets/preview-current-en.png)
+
+*Screenshot uses demonstration data. Pass history stores results from each run.*
+
+| Download without manual attempts | Keep your progress | See what is happening |
+| --- | --- | --- |
+| Up to five downloads; retry errors and timeouts | History by full path and version; valid local files are skipped | Downloaded total and this pass, remaining files, categories and pass history |
+
+## Quick start
+
+1. **Download and extract** the ZIP for your Windows architecture.
+2. **Choose a method:** API or desktop client.
+3. **Select a folder**, review the settings and press **Start pass**. The app's **Open guide** button explains all modes and combinations.
+
+| API — selected by default | Official desktop client |
+| --- | --- |
+| Get an [OAuth token from Yandex](https://yandex.ru/dev/disk/poligon/) and enter it | Install [Yandex Disk](https://disk.yandex.ru/download), sign in and wait for synchronization |
+| Select a **download destination**; `disk:/` means the whole Disk, `disk:/Photos` selects a folder | Select the **local Disk folder**, including subfolders; no token entry required |
+| No client or restarts needed; API can be faster | The client may restart on synchronization errors |
+
+Defaults: **cached inventory**, **retry all files not downloaded**, automatic retries and gradual idle-timeout increases. Missing inventory is created once. Refresh it when you add or change cloud files.
+
+## Understand the settings
+
+<details>
+<summary><strong>Inventory and five pass modes</strong></summary>
+
+The upper API selector chooses **where the file list comes from**; the lower selector chooses **which files to process**. Cached inventory avoids rescanning; unfinished scans resume. Automatic file retries do not refresh inventory on every pass.
 
 | Mode | Files processed |
 | --- | --- |
 | Resume unfinished pass | Unchecked files and user-interrupted attempts |
-| Retry server/sync errors | Recorded server or synchronization errors |
-| Retry timeouts and failures | Zero-byte and partial transfers and other failures |
-| Retry all files not downloaded | All files not downloaded, including unchecked files |
-| Start pass from the beginning | Entire inventory; valid local files are not downloaded again |
+| Retry server / sync errors | Recorded server or synchronization failures |
+| Retry timeouts and failures | Zero-byte and partial transfers and other unsuccessful attempts |
+| Retry all files not downloaded | All missing files, including unchecked and problem files |
+| Start pass from the beginning | Entire inventory again; valid local files are not downloaded again |
 
-Normal use: cached inventory + retry all files not downloaded. After cloud changes: refresh inventory + retry all files not downloaded.
+**Normal use:** cached list + retry all files not downloaded. **After cloud changes:** refresh list + retry all files not downloaded.
 
-Automatic retries run the selected mode first, then problem files with a 30-second pause. Stop cancels requests and waiting. No remaining problems ends the loop. Invalid tokens, denied access, critical local errors or uncertain cancellation require attention.
+</details>
 
-## Independent API retries and download waiting
+<details>
+<summary><strong>File retries, download idle timeout and API connection retries</strong></summary>
 
-**API connection and scanning:** temporary network errors and HTTP 408/429/5xx retry the same request, folder and page. First retry is immediate, then pauses of 1, 2 and up to 5 seconds. Server Retry-After is respected. Download idle timeout and the automatic file-retry checkbox do not control these requests. Stop interrupts waiting; invalid tokens and denied access require attention.
+**Automatic file retries:** run the selected mode first, then problem files with a 30-second pause. An empty initial pass still proceeds to remaining problems. Stop cancels requests and waiting. No remaining candidates ends the loop.
 
-**Increase idle wait up to 5 sec:** only active with automatic file retries. Every two completed nonempty passes increases the initial download idle timeout by 2 seconds up to 5.
+**Idle timeout:** limits waiting without new data, not total download duration. Use 1 second for a quick pass or try 3–5 seconds for timeout retries. Short waits can cancel slow working transfers.
+
+**Increase idle wait up to 5 sec:** enabled by default, available only with automatic retries. Every two completed nonempty passes increases the initial timeout by two seconds up to five.
 
 | Initial | Passes 1–2 | Passes 3–4 | Later |
 | --- | --- | --- | --- |
 | 1 sec | 1 sec | 3 sec | 5 sec |
 | 3 sec | 3 sec | 5 sec | 5 sec |
-| 5 sec or more | Selected value | Selected value | Selected value |
+| 5 sec or more | Unchanged | Unchanged | Unchanged |
 
-Connection failures, incomplete scans and empty passes do not increase download waiting. The value stays constant within each pass. Each new session starts from the initial value. Without the increase checkbox, waiting is constant. Actual timeout is shown above the field and recorded in Pass history. API connection retries are independent.
+Each new session restarts the schedule. Connection failures, unfinished scans and empty passes do not increase waiting. The actual value appears in the interface and pass history. Without this checkbox, waiting stays constant.
 
-## Idle timeout
+**API connection and scanning:** independently retry temporary network errors and HTTP 408/429/5xx at the same folder and page. First retry is immediate, then 1/2/5-second pauses; server Retry-After is respected. Download idle timeout does not control these requests. Invalid tokens and denied access require attention.
 
-Use **1 second** for a quick pass. When retrying timeouts, try **3–5 seconds**: short waits can cancel slow but working downloads. Longer waits slow down attempts on stalled files.
+</details>
 
-Idle timeout limits waiting without new data, not total download duration. Without the increase checkbox, it remains constant. Press Stop, adjust the value and restart to change it. These are starting points, not a download guarantee.
+<details>
+<summary><strong>Statistics, partial files and updating the app</strong></summary>
 
-## Statistics and private data
+**Remaining** means all files not downloaded; the current pass size depends on its mode. **Downloaded this pass** counts new successful downloads. Categories groups file types. Pass history stores start, duration, mode, idle timeout and outcome.
 
-Cards show found, downloaded total, downloaded this pass, remaining and errors. Remaining covers all missing files; the pass size depends on its mode. Pass history stores start, duration, mode, outcome and file counts; detailed reports are generated automatically.
+History, inventory and reports stay in `data` beside the EXE. **Preserve this folder when updating.** Files use full-path and version identity; identical names in different folders remain separate.
 
-History, inventory, reports and the Windows DPAPI-encrypted token stay in local `data` beside the EXE. Preserve this folder when updating. **Never publish data.** Release ZIPs contain no private tokens, history or logs.
+API verifies size and available MD5. `.ydr-part` partials are not successful downloads and restart on retry. Verified unchanged files reconcile faster; a full pass verifies them again.
 
-Identity uses full path and version; identical names in different folders remain separate. API validates size and available MD5. `.ydr-part` partials are not completed downloads and restart from the beginning on retry. Verified unchanged files use faster reconciliation; full passes verify them again.
+</details>
 
-Independent community project, not an official Yandex product. Cannot restore deleted files or repair server errors. Unlimited auto-upload is unsupported.
+## Token and security
 
-[Support the author](https://yoomoney.ru/fundraise/1KS67440FP0.261012) · [Release notes](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.6)
+API tokens are stored locally using **Windows DPAPI**, tied to your Windows user account. They are decrypted in memory for requests to Yandex and excluded from `settings.json`. Never publish `data` or show tokens in screenshots.
 
-## Build
+When access is no longer needed, revoke it in **Yandex ID → Data access**. [Yandex instructions](https://yandex.ru/dev/id/doc/ru/tokens/token-invalidate). Deleting a local token does not revoke it at the service. Use the desktop-client method if you prefer not to enter a token.
 
-`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Package -Platform x64`
+The code is open and you can build it yourself. This does not guarantee the absence of vulnerabilities: review the code and permissions before use.
 
-Use `x86` for 32-bit. Local checks: `tests/run-tests.ps1`. License: [MIT](LICENSE).
+## Help
+
+[Report an issue](https://github.com/fefenke/Yandex-Disk-Rescue/issues/new) · [Release notes](RELEASE-NOTES.md) · [Support the author](https://yoomoney.ru/fundraise/1KS67440FP0.261012)
+
+Include the app version, download method and exact error text. Remove **tokens and personal data** from screenshots.
+
+<details>
+<summary><strong>Build from source</strong></summary>
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Package -Platform x64
+```
+
+Use `-Platform x86` for 32-bit. Offline checks: `tests/run-tests.ps1`. GitHub Actions checks both architectures.
+
+</details>
+
+---
+
+**Independent, unofficial project. Not developed by or affiliated with Yandex.** Cannot restore deleted files, repair server errors or guarantee every download. Unlimited auto-upload is unsupported.
+
+[MIT License](LICENSE) · Less manual work, more visible progress.
