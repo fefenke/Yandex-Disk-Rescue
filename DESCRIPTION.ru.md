@@ -1,9 +1,11 @@
-﻿# Yandex Disk Rescue v0.2.5
+﻿# Yandex Disk Rescue v0.2.6
 
-**Файлы безлимитной автозагрузки НЕ учитываются и НЕ скачиваются. / Unlimited auto-upload files are NOT counted or downloaded.**
+**Безлимитная автозагрузка НЕ учитывается и НЕ скачивается. / Unlimited auto-upload files are NOT counted or downloaded.**
 
-Гайд и README поясняют «Без прогресса, сек»: 1 секунда для быстрого прохода, 3–5 секунд для повторения таймаутов. Короткое ожидание может отменять медленные рабочие загрузки. Это ограничение паузы, а не общей длительности скачивания; автоповтор не увеличивает значение. Для изменения остановите проход, задайте значение и запустите снова.
+Подключение и скан API повторяют временные ошибки в том же запросе с сохранением папки и страницы. Первая повторная попытка сразу, затем паузы 1, 2 и до 5 секунд; Retry-After сервера учитывается. Стоп отменяет ожидание.
 
-Guide and README explain idle timeout: 1 second for quick passes, 3–5 for retrying timeouts. Short waits can cancel slow working transfers. The setting limits idle waiting, not total download time. Automatic retries keep the selected value. Stop, adjust and restart to change it.
+Отдельная галка увеличения ожидания скачивания работает только с автоповтором: первые два завершённых непустых прохода с начальным значением, следующие два +2 секунды, максимум 5. С 1 сек: 1,1,3,3,5; с 3 сек: 3,3,5. Значения 5 и больше неизменны. Ошибки подключения и скана не считаются проходами. Новый запуск сбрасывает последовательность, фактическое ожидание записывается в статистику. Гайд и README обновлены.
 
-Portable Windows x64/x86. Extract the complete ZIP. Preserve local data when updating. No personal tokens, history or logs are included. OAuth token: https://yandex.ru/dev/disk/poligon/
+API connection/scan requests retry temporary failures at the same position, independently of file passes. Immediate first retry, then 1/2/5-second delays and server Retry-After. Optional adaptive download waiting increases every two completed nonempty passes up to 5 seconds. Connection failures and scans do not advance the schedule. Each session restarts at its initial setting; actual timeout is recorded in pass history.
+
+Portable Windows x64/x86; extract ZIP completely. Preserve your local data when updating. No personal tokens, logs or history included. OAuth: https://yandex.ru/dev/disk/poligon/

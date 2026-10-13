@@ -18,14 +18,17 @@ namespace DiskRescue {
             public int ListingFailure;
             public bool SpecialNames;
             public int ListingCalls;
+            public int StartupFailures,TransientListingFailures,StartupCalls;
             public string Account="test-account";
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancellation){
                 Assert(request.RequestUri.Host=="cloud-api.yandex.net","Token sent outside API host.");Assert(request.Headers.Authorization!=null&&request.Headers.Authorization.Parameter=="test-secret","OAuth header missing.");
                 if(Unauthorized)return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+                if(request.RequestUri.AbsolutePath.EndsWith("/disk")){StartupCalls++;if(StartupFailures-->0)throw new HttpRequestException("Synthetic connection failure");}
                 string json;
                 if(request.RequestUri.AbsolutePath.EndsWith("/download"))json="{\"href\":\"https://download.example/"+Uri.EscapeDataString(request.RequestUri.Query)+"\"}";
                 else if(request.RequestUri.AbsolutePath.EndsWith("/resources")){
                     ListingCalls++;
+                    if(TransientListingFailures-->0)return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
                     if(ListingFailure!=0&&Uri.UnescapeDataString(request.RequestUri.Query).Contains("disk:/unreadable"))return Task.FromResult(new HttpResponseMessage((HttpStatusCode)ListingFailure));
                     string[] names={"a/same.jpg","b/same.jpg","Case.JPG","case.JPG","bad.jpg","stall.mov","server.png"};
                     object[] entries=names.Select(n=>(object)new{path="disk:/"+n,type="file",size=4,md5=Md5("test"),modified="2026-01-01T00:00:00Z"}).ToArray();
@@ -66,6 +69,8 @@ namespace DiskRescue {
             retryRecord.status="timeout";Assert(FileRules.Select(retryFile,retryRecord,RunMode.ErrorsAndZero)&&!FileRules.Select(retryFile,retryRecord,RunMode.CloudErrors),"Zero download missing from combined retry.");
             retryFile.DownloadedBytes=5;Assert(FileRules.Select(retryFile,retryRecord,RunMode.ErrorsAndZero),"Partial timeout missing from incomplete downloads.");
             Assert(FileRules.Select(retryFile,null,RunMode.NewFiles)&&!FileRules.Select(retryFile,null,RunMode.ErrorsAndZero),"New file counted as a prior failure.");
+            Assert(PassHistory.IdleForPass(1,0,true,true)==1&&PassHistory.IdleForPass(1,1,true,true)==1&&PassHistory.IdleForPass(1,2,true,true)==3&&PassHistory.IdleForPass(1,4,true,true)==5,"Idle escalation schedule incorrect.");
+            Assert(PassHistory.IdleForPass(3,2,true,true)==5&&PassHistory.IdleForPass(7,8,true,true)==7&&PassHistory.IdleForPass(1,8,false,true)==1&&PassHistory.IdleForPass(1,8,true,false)==1,"Idle escalation ignored initial value or checkboxes.");
             Assert(FileRules.Select(retryFile,null,RunMode.Remaining)&&FileRules.Select(retryFile,retryRecord,RunMode.Remaining),"All remaining skipped untested or failed files.");retryFile.Local=true;Assert(!FileRules.Select(retryFile,retryRecord,RunMode.Remaining),"All remaining included a valid local file.");retryFile.Local=false;
             retryRecord.status="failed";Assert(FileRules.Select(retryFile,retryRecord,RunMode.ProblemFiles),"Automatic retry missed an integrity failure.");retryFile.Local=true;Assert(!FileRules.Select(retryFile,retryRecord,RunMode.ProblemFiles),"Automatic retry selected a local file.");
             Snapshot repeatSnapshot=new Snapshot{Phase="completed",Finished=true,Selected=5,Downloaded=2,Available=3,Total=7,CloudErrors=1,CloudErrorsThisPass=1};
@@ -92,7 +97,9 @@ namespace DiskRescue {
             using(HistoryStore history=new HistoryStore(data,folder,"case-test")){DiskFile a=new DiskFile{Path="disk:/A.jpg",Length=1,Modified="v"},b=new DiskFile{Path="disk:/a.jpg",Length=1,Modified="v"};history.SaveApi(a,"success","");history.SaveApi(b,"timeout","");Assert(history.Records.Count==2,"API history lost case-sensitive identity.");}
             engine=new ApiEngine(data,x=>last=x,new ApiMock{Unauthorized=true},new DownloadMock());engine.Run(s,RunMode.Continue);Assert(last.Phase=="error"&&last.Error.Contains("token"),"Invalid OAuth was not reported.");
             engine=new ApiEngine(data,x=>last=x,new ApiMock{ListingFailure=401},new DownloadMock());engine.Run(s,RunMode.Continue);Assert(last.Phase=="error"&&last.Total==7&&last.Error.Contains("token")&&File.Exists(Path.Combine(last.Report,"summary.json")),"Partial scan report hid the original error.");
-            engine=new ApiEngine(data,x=>last=x,new ApiMock{ListingFailure=500},new DownloadMock());engine.Run(s,RunMode.All);Assert(last.Phase=="completed"&&last.ScanErrors==1&&last.Processed>0,"Unreadable folder blocked all remaining downloads.");
+            engine=new ApiEngine(data,x=>last=x,new ApiMock{ListingFailure=404},new DownloadMock());engine.Run(s,RunMode.All);Assert(last.Phase=="completed"&&last.ScanErrors==1&&last.Processed>0,"Unreadable folder blocked all remaining downloads.");
+            ApiMock temporary=new ApiMock{StartupFailures=1,TransientListingFailures=1};engine=new ApiEngine(data,x=>last=x,temporary,new DownloadMock());engine.Run(s,RunMode.All);Assert(last.Phase=="completed"&&temporary.StartupCalls==2&&temporary.ListingCalls==2&&last.ScanErrors==0,"Temporary API error interrupted connection or scanning.");
+            engine=new ApiEngine(data,x=>{last=x;if(x.Phase=="api_retry")engine.Stop();},new ApiMock{ListingFailure=503},new DownloadMock());engine.Run(s,RunMode.All);Assert(last.Phase=="stopped"&&last.Total==7,"Stop did not interrupt scan retry at its current position.");
             engine=new ApiEngine(data,x=>last=x,new ApiMock{SpecialNames=true},new DownloadMock());engine.Run(s,RunMode.Continue);Assert(last.Phase=="completed"&&last.Total==9&&last.Downloaded==2,"Special cloud names stopped the pass.");Assert(File.Exists(ApiEngine.LocalPath(folder,"disk:/Фото/фото \"1\".jpg"))&&File.Exists(ApiEngine.LocalPath(folder,"disk:/Фото/a|b.png")),"Special cloud names were not saved safely.");
             ManualResetEvent running=new ManualResetEvent(false);engine=new ApiEngine(data,x=>{last=x;if(x.Phase=="running")running.Set();},new ApiMock(),new DownloadMock());Task run=Task.Run(()=>engine.Run(s,RunMode.All));Assert(running.WaitOne(5000),"API stop test never started.");engine.Stop();Assert(run.Wait(5000)&&last.Phase=="stopped"&&last.Active==0,"Stop left active requests.");running.Dispose();
             TokenVault.Save(data,"test-secret");Assert(TokenVault.Load(data)=="test-secret","Encrypted token cannot be loaded.");Assert(!Encoding.UTF8.GetString(File.ReadAllBytes(Path.Combine(data,"api-token.bin"))).Contains("test-secret"),"Token stored in plaintext.");TokenVault.Save(data,"");

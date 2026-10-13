@@ -71,7 +71,7 @@ namespace DiskRescue {
                 request.Headers.Authorization=new AuthenticationHeaderValue("OAuth",settings.ApiToken);
                 using(HttpResponseMessage response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,cancellation).ConfigureAwait(false)){
                     using(CancellationTokenRegistration abort=cancellation.Register(delegate{response.Dispose();})){
-                    if(!response.IsSuccessStatusCode)throw new ApiException((int)response.StatusCode);
+                    if(!response.IsSuccessStatusCode){double retryAfter=0;var header=response.Headers.RetryAfter;if(header!=null){if(header.Delta.HasValue)retryAfter=header.Delta.Value.TotalSeconds;else if(header.Date.HasValue)retryAfter=Math.Max(0,(header.Date.Value-DateTimeOffset.UtcNow).TotalSeconds);}throw new ApiException((int)response.StatusCode,retryAfter);}
                     using(Stream stream=await response.Content.ReadAsStreamAsync().ConfigureAwait(false))using(MemoryStream buffer=new MemoryStream()){
                         byte[] bytes=new byte[8192];int n;while((n=await stream.ReadAsync(bytes,0,bytes.Length,cancellation).ConfigureAwait(false))>0){buffer.Write(bytes,0,n);if(buffer.Length>32*1024*1024)throw new IOException("API response too large.");}
                         return new JavaScriptSerializer{MaxJsonLength=32*1024*1024}.Deserialize<Dictionary<string,object>>(Encoding.UTF8.GetString(buffer.ToArray()));
@@ -80,7 +80,22 @@ namespace DiskRescue {
                 }
             }
         }
-        Dictionary<string,object> Listing(string route){using(CancellationTokenSource timeout=CancellationTokenSource.CreateLinkedTokenSource(stop.Token)){timeout.CancelAfter(TimeSpan.FromSeconds(30));return Json(route,timeout.Token).GetAwaiter().GetResult();}}
+        Dictionary<string,object> Listing(string route){
+            int failures=0;
+            while(true){stop.Token.ThrowIfCancellationRequested();using(CancellationTokenSource timeout=CancellationTokenSource.CreateLinkedTokenSource(stop.Token)){
+                timeout.CancelAfter(TimeSpan.FromSeconds(30));
+                try{var result=Json(route,timeout.Token).GetAwaiter().GetResult();if(failures>0)Snapshot(route==""?"preparing":"scanning","",false);return result;}
+                catch(Exception ex){
+                    stop.Token.ThrowIfCancellationRequested();ApiException http=ex as ApiException;
+                    bool temporary=timeout.IsCancellationRequested||ex is OperationCanceledException||ex is HttpRequestException||ex is System.Net.WebException||(http!=null&&(http.Code==408||http.Code==429||http.Code>=500));
+                    if(!temporary)throw;
+                    double delay=failures==0?0:failures==1?1:failures==2?2:5;
+                    if(http!=null)delay=Math.Max(delay,http.RetryAfterSeconds);failures++;
+                    Event("Temporary API connection/listing failure; retry "+failures+" in "+delay.ToString("0")+" s.");Snapshot("api_retry","",false);
+                    if(stop.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(Math.Min(delay,86400))))stop.Token.ThrowIfCancellationRequested();
+                }
+            }}
+        }
         void Scan(string root,string cachePath,string account,InventoryCache resume){
             Stack<string> folders=new Stack<string>();if(resume==null)folders.Push(root);else{foreach(string pending in (resume.PendingFolders??new List<string>()).AsEnumerable().Reverse())folders.Push(pending);if(!String.IsNullOrEmpty(resume.ActiveFolder))folders.Push(resume.ActiveFolder);}
             HashSet<string> seen=new HashSet<string>(StringComparer.Ordinal);
@@ -216,6 +231,6 @@ namespace DiskRescue {
             s.Available=s.Categories.Sum(c=>c.Available);s.CloudErrors=s.Categories.Sum(c=>c.CloudErrors);s.Deferred=s.Categories.Sum(c=>c.Deferred);s.PerHour=s.Seconds>0?processed*3600.0/s.Seconds:0;s.RemainingSeconds=s.PerHour>0?Math.Max(0,selected-processed)*3600.0/s.PerHour:0;s.Events=events.ToList();
             if(queueReady){s.ProgressTotal=runMode==RunMode.Continue?files.Count:selected;s.ProgressChecked=runMode==RunMode.Continue?skipped+processed:processed;}latest=s;publish(s);
         }
-        sealed class ApiException:Exception {public readonly int Code;public ApiException(int code){Code=code;}}
+        sealed class ApiException:Exception {public readonly int Code;public readonly double RetryAfterSeconds;public ApiException(int code,double retryAfterSeconds=0){Code=code;RetryAfterSeconds=retryAfterSeconds;}}
     }
 }
