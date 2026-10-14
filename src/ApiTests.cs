@@ -59,7 +59,32 @@ namespace DiskRescue {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(json)});
             }
         }
+        sealed class ResumeMock:HttpMessageHandler {
+            public bool IgnoreRange,WrongRange;public long Requested=-1;
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancellation){
+                Assert(request.Headers.Authorization==null,"Resume leaked OAuth.");
+                Requested=request.Headers.Range==null?-1:request.Headers.Range.Ranges.First().From.Value;
+                HttpResponseMessage response=new HttpResponseMessage(Requested>=0&&!IgnoreRange?HttpStatusCode.PartialContent:HttpStatusCode.OK);
+                response.Content=new ByteArrayContent(Encoding.UTF8.GetBytes(Requested>=0&&!IgnoreRange?"st":"test"));
+                if(response.StatusCode==HttpStatusCode.PartialContent)response.Content.Headers.ContentRange=new System.Net.Http.Headers.ContentRangeHeaderValue(WrongRange?0:Requested,3,4);
+                return Task.FromResult(response);
+            }
+        }
+        static void ResumeTests(string root){
+            for(int variant=0;variant<4;variant++){
+                string folder=Path.Combine(root,"resume-"+variant),data=Path.Combine(root,"resume-data-"+variant);Directory.CreateDirectory(Path.Combine(folder,"a"));
+                string destination=Path.Combine(folder,"a","same.jpg");File.WriteAllText(destination+".ydr-part","te");
+                DiskFile file=new DiskFile{Path="disk:/a/same.jpg",Destination=destination,Length=4,Modified=(variant==3?"different":"2026-01-01T00:00:00Z|"+Md5("test")),DownloadedBytes=2};
+                using(HistoryStore history=new HistoryStore(data,folder,"test-account|disk:/|"+folder.ToUpperInvariant()))history.SaveApi(file,"timeout","");
+                ResumeMock mock=new ResumeMock{IgnoreRange=variant==1,WrongRange=variant==2};Snapshot result=null;
+                new ApiEngine(data,x=>result=x,new ApiMock(),mock).Run(new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",IdleSeconds=5},RunMode.PartialFiles);
+                Assert(result.Selected==1,"Partial mode included unrelated files.");
+                if(variant==2){Assert(!File.Exists(destination)&&File.ReadAllText(destination+".ydr-part")=="te","Invalid range corrupted existing partial data.");}
+                else{Assert(File.ReadAllText(destination)=="test"&&result.Downloaded==1,"Resume or full-response fallback failed.");Assert(mock.Requested==(variant==3?-1:2),"Resume ignored cloud version or byte offset.");}
+            }
+        }
         public static void Run(string root){
+            ResumeTests(root);
             string folder=Path.Combine(root,"api-downloads"),data=Path.Combine(root,"api-history");Directory.CreateDirectory(folder);
             Settings s=new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",IdleSeconds=5};
             Assert(ApiEngine.Validation(new Settings{UseApi=true})=="token","Missing token accepted.");Assert(ApiEngine.Validation(new Settings{UseApi=true,ApiToken="x"})=="destination","Missing destination accepted.");

@@ -164,28 +164,48 @@ namespace DiskRescue {
         }
         async Task<Result> Download(Job job){
             string partial=job.File.Destination+".ydr-part";
+            string metadata=Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(job.File.Path)+".txt");
+            string identity=job.File.Path+"\n"+job.File.Modified+"\n"+job.File.Length;
+            long offset=0;
             using(CancellationTokenSource idle=CancellationTokenSource.CreateLinkedTokenSource(stop.Token)){
                 try{
-                    SafeDestination(partial);SafeDestination(job.File.Destination);Directory.CreateDirectory(Path.GetDirectoryName(partial));idle.CancelAfter(TimeSpan.FromSeconds(settings.IdleSeconds));
+                    SafeDestination(partial);SafeDestination(job.File.Destination);Directory.CreateDirectory(Path.GetDirectoryName(partial));
+                    if(File.Exists(partial)&&((File.Exists(metadata)&&File.ReadAllText(metadata)==identity)||(!File.Exists(metadata)&&job.File.ResumeEligible))){offset=new FileInfo(partial).Length;if(offset>job.File.Length)offset=0;}
+                    if(offset==0&&File.Exists(partial)){using(FileStream reset=new FileStream(partial,FileMode.Create,FileAccess.Write)){} }
+                    Directory.CreateDirectory(Path.GetDirectoryName(metadata));File.WriteAllText(metadata,identity);
+                    if(offset==job.File.Length&&offset>0){if(Verified(partial,job.File.Length,job.File.Md5,stop.Token)){stop.Token.ThrowIfCancellationRequested();if(File.Exists(job.File.Destination))File.Replace(partial,job.File.Destination,null);else File.Move(partial,job.File.Destination);File.Delete(metadata);return new Result{Status="success",Bytes=offset,Message=""};}offset=0;}
+                    job.Bytes=offset;
+                    idle.CancelAfter(TimeSpan.FromSeconds(settings.IdleSeconds));
                     Dictionary<string,object> link=await Json("/resources/download?path="+Uri.EscapeDataString(job.File.Path),idle.Token).ConfigureAwait(false);
                     Uri uri;if(!Uri.TryCreate(Text(link,"href"),UriKind.Absolute,out uri)||uri.Scheme!="https"||!String.IsNullOrEmpty(uri.UserInfo))throw new IOException("Invalid HTTPS download link.");
                     // No OAuth header is sent to the signed download URL.
-                    using(HttpResponseMessage response=await downloadClient.GetAsync(uri,HttpCompletionOption.ResponseHeadersRead,idle.Token).ConfigureAwait(false))using(CancellationTokenRegistration abort=idle.Token.Register(delegate{response.Dispose();})){
+                    using(HttpRequestMessage request=new HttpRequestMessage(HttpMethod.Get,uri)){
+                    if(offset>0)request.Headers.Range=new RangeHeaderValue(offset,null);
+                    using(HttpResponseMessage response=await downloadClient.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,idle.Token).ConfigureAwait(false))using(CancellationTokenRegistration abort=idle.Token.Register(delegate{response.Dispose();})){
+                        if(!response.IsSuccessStatusCode&&response.StatusCode!=HttpStatusCode.RequestedRangeNotSatisfiable)throw new ApiException((int)response.StatusCode);
+                        if(response.StatusCode==HttpStatusCode.PartialContent){ContentRangeHeaderValue range=response.Content.Headers.ContentRange;if(range==null||range.Unit!="bytes"||range.From!=offset||range.Length!=job.File.Length||range.To!=job.File.Length-1)throw new IOException("Invalid download byte range.");}
+                        else if(response.StatusCode==HttpStatusCode.OK){offset=0;job.Bytes=0;}
+                        else if(response.StatusCode==HttpStatusCode.RequestedRangeNotSatisfiable){using(FileStream reset=new FileStream(partial,FileMode.Create,FileAccess.Write)){}job.Bytes=0;throw new IOException("Server rejected resume range; next pass starts from zero.");}
+                        if(response.Content.Headers.ContentEncoding.Count>0)throw new IOException("Encoded download cannot be safely resumed.");
                         if(!response.IsSuccessStatusCode)throw new ApiException((int)response.StatusCode);
                         idle.CancelAfter(TimeSpan.FromSeconds(settings.IdleSeconds));
-                        using(Stream input=await response.Content.ReadAsStreamAsync().ConfigureAwait(false))using(FileStream output=new FileStream(partial,FileMode.Create,FileAccess.Write,FileShare.Read,65536,true)){
+                        using(Stream input=await response.Content.ReadAsStreamAsync().ConfigureAwait(false))using(FileStream output=new FileStream(partial,offset>0?FileMode.Append:FileMode.Create,FileAccess.Write,FileShare.Read,65536,true)){
                             byte[] buffer=new byte[65536];int n;
                             while((n=await input.ReadAsync(buffer,0,buffer.Length,idle.Token).ConfigureAwait(false))>0){idle.CancelAfter(TimeSpan.FromSeconds(settings.IdleSeconds));await output.WriteAsync(buffer,0,n,stop.Token).ConfigureAwait(false);Interlocked.Add(ref job.Bytes,n);}
                         }
                     }
+                    }
                     idle.CancelAfter(Timeout.Infinite);
-                    if(!Verified(partial,job.File.Length,job.File.Md5,stop.Token))return new Result{Status="failed",Message="File size or MD5 mismatch.",Bytes=job.Bytes};
+                    if(!Verified(partial,job.File.Length,job.File.Md5,stop.Token)){
+                        if(new FileInfo(partial).Length>=job.File.Length){using(FileStream reset=new FileStream(partial,FileMode.Create,FileAccess.Write)){}job.Bytes=0;}
+                        return new Result{Status="failed",Message="File size or MD5 mismatch; incomplete data retained, invalid complete data reset.",Bytes=job.Bytes};
+                    }
                     stop.Token.ThrowIfCancellationRequested();
                     if(File.Exists(job.File.Destination))File.Replace(partial,job.File.Destination,null);else File.Move(partial,job.File.Destination);
-                    return new Result{Status="success",Message="",Bytes=job.Bytes};
+                    File.Delete(metadata);return new Result{Status="success",Message="",Bytes=job.Bytes};
                 }catch(OperationCanceledException){return new Result{Status=stop.IsCancellationRequested?"cancelled_user":"timeout",Message=stop.IsCancellationRequested?"Stopped by user.":"No progress during the idle timeout.",Bytes=job.Bytes};}
                 catch(ApiException ex){return new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="HTTP "+ex.Code,Bytes=job.Bytes};}
-                catch(Exception){return new Result{Status=stop.IsCancellationRequested?"cancelled_user":idle.IsCancellationRequested?"timeout":"failed",Message=stop.IsCancellationRequested?"Stopped by user.":idle.IsCancellationRequested?"No progress during the idle timeout.":"Network or local file operation failed.",Bytes=job.Bytes};}
+                catch(Exception ex){return new Result{Status=stop.IsCancellationRequested?"cancelled_user":idle.IsCancellationRequested?"timeout":"failed",Message=stop.IsCancellationRequested?"Stopped by user.":idle.IsCancellationRequested?"No progress during the idle timeout.":"Download failed: "+ex.GetType().Name+" (0x"+ex.HResult.ToString("X8")+")",Bytes=job.Bytes};}
             }
         }
         public void Run(Settings options,RunMode mode){
@@ -205,7 +225,7 @@ namespace DiskRescue {
                 history=new HistoryStore(data,destination,account+"|"+remote+"|"+destination.ToUpperInvariant());
                 report=Path.Combine(history.DirectoryPath,"reports",DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss")+"_"+Guid.NewGuid().ToString("N").Substring(0,6));
                 Inventory(account,remote);
-                foreach(DiskFile f in files){stop.Token.ThrowIfCancellationRequested();current=f.Path;HistoryRecord old=history.Find(f.Path);bool same=FileRules.SameVersion(f,old);if(same){f.Status=FileRules.NormalizeStatus(old);f.DownloadedBytes=old.downloadedBytes;}
+                foreach(DiskFile f in files){stop.Token.ThrowIfCancellationRequested();current=f.Path;HistoryRecord old=history.Find(f.Path);bool same=FileRules.SameVersion(f,old);f.ResumeEligible=same&&!String.IsNullOrEmpty(f.Md5);if(same){f.Status=FileRules.NormalizeStatus(old);f.DownloadedBytes=old.downloadedBytes;}
                     SafeDestination(f.Destination);f.Local=(mode!=RunMode.All&&PreviouslyVerified(f,old))||Verified(f.Destination,f.Length,f.Md5,stop.Token);if(f.Local){f.DownloadedBytes=f.Length;if(!same||!FileRules.Success(old.status)||!old.localWriteTicks.HasValue||old.localWriteTicks.Value!=new FileInfo(f.Destination).LastWriteTimeUtc.Ticks)history.SaveApi(f,"local","");else f.Status="local";}else if(FileRules.Success(f.Status))f.Status="pending";
                     string partial=f.Destination+".ydr-part";if(File.Exists(partial))f.DownloadedBytes=new FileInfo(partial).Length;
                     Snapshot("checking_local","",false);

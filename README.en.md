@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
   <p><strong>If this app helped you retrieve your files, you can support its author 💜</strong><br>Entirely optional. The app stays free.</p>
   <a href="https://yoomoney.ru/fundraise/1KS67440FP0.261012"><img alt="Support the author via YooMoney" src="https://img.shields.io/badge/Support_the_author-YooMoney-7556D9?style=for-the-badge"></a>
 </div>
@@ -10,7 +10,7 @@
 <div align="center">
 
 [![Windows build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![Version 0.2.6](https://img.shields.io/badge/version-0.2.6-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.6)
+[![Version 0.2.7](https://img.shields.io/badge/version-0.2.7-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.7)
 [![MIT license](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
 [Русский](README.md) · **English** · [Download](#download) · [Quick start](#quick-start) · [Help](#help)
@@ -26,15 +26,15 @@ A free portable Windows app that downloads available Yandex Disk files, keeps re
 
 **Windows 64-bit · x64** — for most Windows 10/11 PCs.
 
-[![Download Windows x64](https://img.shields.io/badge/Download_Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.6/YandexDiskRescue-win-x64.zip)
+[![Download Windows x64](https://img.shields.io/badge/Download_Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.7/YandexDiskRescue-win-x64.zip)
 
 **Windows 32-bit · x86** — for a 32-bit Windows installation.
 
-[![Download Windows x86](https://img.shields.io/badge/Download_Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.6/YandexDiskRescue-win-x86.zip)
+[![Download Windows x86](https://img.shields.io/badge/Download_Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.7/YandexDiskRescue-win-x86.zip)
 
 Windows 10 **1709+** or Windows 11 · .NET Framework **4.7.1+** · RU / EN · no installer.
 
-Extract the complete ZIP to a permanent folder and run **Start Yandex Disk Rescue.cmd**. Do not launch directly from the archive. [Current release notes](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.6).
+Extract the complete ZIP to a permanent folder and run **Start Yandex Disk Rescue.cmd**. Do not launch directly from the archive. [Current release notes](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.7).
 
 ## A look inside
 
@@ -141,3 +141,10 @@ Use `-Platform x86` for 32-bit. Offline checks: `tests/run-tests.ps1`. GitHub Ac
 **Independent, unofficial project. Not developed by or affiliated with Yandex.** Cannot restore deleted files, repair server errors or guarantee every download. Unlimited auto-upload is unsupported.
 
 [MIT License](LICENSE) · Less manual work, more visible progress.
+### Resuming partial downloads
+
+API downloads resume nonempty `.ydr-part` files using HTTP Range when supported. Full responses restart the download. File size and available MD5 are checked before completion. Changed cloud versions cannot reuse old fragments; corrupt complete files are reset.
+
+**Resume partial downloads · API** selects nonempty temporary files. Automatic retries remain in this mode; otherwise one pass runs. Failed attempts do not block other files. Resuming also works in other API modes. Windows and the official client manage downloads in client mode.
+
+The activity log preserves selection and scrolling as events arrive. Reading earlier lines or selecting text suspends automatic scrolling.

@@ -7,7 +7,7 @@ using System.Text;
 using System.Web.Script.Serialization;
 
 namespace DiskRescue {
-    public enum RunMode { Continue, All, CloudErrors, ZeroDownload, ErrorsAndZero, NewFiles, ProblemFiles, Remaining }
+    public enum RunMode { Continue, All, CloudErrors, ZeroDownload, ErrorsAndZero, NewFiles, ProblemFiles, Remaining, PartialFiles }
     public sealed class Settings {
         public string Folder = "";
         public string Language = "ru";
@@ -33,6 +33,7 @@ namespace DiskRescue {
         public long? DownloadedBytes;
         public string Md5 = "", Destination = "";
         public bool Local;
+        public bool ResumeEligible;
     }
     public sealed class ActiveFile {
         public string Path, Category, State;
@@ -90,6 +91,7 @@ namespace DiskRescue {
             string status = same ? NormalizeStatus(old) : "pending";
             if (mode == RunMode.All) return true;
             if (mode == RunMode.Remaining) return !file.Local;
+            if (mode == RunMode.PartialFiles) return !file.Local && !String.IsNullOrEmpty(file.Destination) && File.Exists(file.Destination+".ydr-part") && new FileInfo(file.Destination+".ydr-part").Length>0;
             if (mode == RunMode.ProblemFiles) return same && !file.Local && (status=="cloud_error"||status=="failed"||status=="timeout");
             if (mode == RunMode.NewFiles) return !same;
             if (mode == RunMode.ErrorsAndZero) return Select(file,old,RunMode.CloudErrors)||Select(file,old,RunMode.ZeroDownload);

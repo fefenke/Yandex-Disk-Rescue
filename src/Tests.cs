@@ -10,6 +10,12 @@ namespace DiskRescue {
             string root=Path.Combine(Path.GetTempPath(),"disk-rescue-tests-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
             string result=Path.Combine(Path.GetDirectoryName(typeof(Tests).Assembly.Location),"self-test-results.txt");
             try{
+                using(StableLog log=new StableLog()){
+                    log.Multiline=true;log.UpdateEvents(new System.Collections.Generic.List<string>{"first","second"});log.Select(1,3);
+                    log.UpdateEvents(new System.Collections.Generic.List<string>{"second","third"});
+                    Assert(log.SelectedText=="irs"&&log.Text=="first"+Environment.NewLine+"second"+Environment.NewLine+"third","Activity log replaced text or cleared selection.");
+                    log.UpdateEvents(new System.Collections.Generic.List<string>{"second","third"});Assert(log.SelectedText=="irs","Unchanged activity log cleared selection.");
+                }
                 Directory.CreateDirectory(Path.Combine(root,"a"));Directory.CreateDirectory(Path.Combine(root,"b"));
                 string a=Path.Combine(root,"a","same.jpg"),b=Path.Combine(root,"b","same.jpg");File.WriteAllText(a,"test");File.WriteAllText(b,"test");
                 DiskFile first=Make(a),second=Make(b);string data=Path.Combine(root,"state");

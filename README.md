@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
   <p><strong>Если приложение помогло забрать файлы — можно поддержать автора 💜</strong><br>Это необязательно. Приложение остаётся бесплатным.</p>
   <a href="https://yoomoney.ru/fundraise/1KS67440FP0.261012"><img alt="Поддержать автора через ЮMoney" src="https://img.shields.io/badge/Поддержать_автора-ЮMoney-7556D9?style=for-the-badge"></a>
 </div>
@@ -10,7 +10,7 @@
 <div align="center">
 
 [![Сборка Windows](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![Версия 0.2.6](https://img.shields.io/badge/версия-0.2.6-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.6)
+[![Версия 0.2.7](https://img.shields.io/badge/версия-0.2.7-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.7)
 [![Лицензия MIT](https://img.shields.io/badge/лицензия-MIT-208B74)](LICENSE)
 
 **Русский** · [English](README.en.md) · [Скачать](#скачать) · [Быстрый старт](#быстрый-старт) · [Помощь](#помощь)
@@ -26,15 +26,15 @@
 
 **Windows 64-бит · x64** — для большинства компьютеров с Windows 10/11.
 
-[![Скачать Windows x64](https://img.shields.io/badge/Скачать_для_Windows_64_бит-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.6/YandexDiskRescue-win-x64.zip)
+[![Скачать Windows x64](https://img.shields.io/badge/Скачать_для_Windows_64_бит-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.7/YandexDiskRescue-win-x64.zip)
 
 **Windows 32-бит · x86** — если установлена 32-битная Windows.
 
-[![Скачать Windows x86](https://img.shields.io/badge/Скачать_для_Windows_32_бит-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.6/YandexDiskRescue-win-x86.zip)
+[![Скачать Windows x86](https://img.shields.io/badge/Скачать_для_Windows_32_бит-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.2.7/YandexDiskRescue-win-x86.zip)
 
 Windows 10 **1709+** или Windows 11 · .NET Framework **4.7.1+** · RU / EN · без установки.
 
-Полностью распакуйте ZIP в постоянную папку и запустите **Start Yandex Disk Rescue.cmd**. Не запускайте программу прямо из архива. [Описание текущего выпуска](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.6).
+Полностью распакуйте ZIP в постоянную папку и запустите **Start Yandex Disk Rescue.cmd**. Не запускайте программу прямо из архива. [Описание текущего выпуска](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.2.7).
 
 ## Как выглядит
 
@@ -141,3 +141,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Package -Pl
 **Независимый неофициальный проект, не разработан Яндексом и не связан с компанией.** Не восстанавливает удалённые файлы, не исправляет ошибки сервера и не гарантирует скачивание каждого файла. Безлимитная автозагрузка не поддерживается.
 
 [MIT License](LICENSE) · Сделано, чтобы ручного перебора стало меньше.
+### Докачка начатых файлов
+
+В API-режиме непустые `.ydr-part` дописываются через HTTP Range, если сервер поддерживает продолжение. При полном ответе файл скачивается заново. Перед завершением проверяются размер и MD5, если API предоставил его. Смена версии файла запрещает использование прежнего фрагмента. Неверный полный файл сбрасывается для новой попытки.
+
+Режим **«Докачать начатые файлы · API»** выбирает только непустые временные файлы. С галочкой автоповтора повторяется эта же очередь; без неё выполняется один проход. Безуспешная попытка не блокирует остальные файлы. В обычных API-режимах докачка также работает. Через официальный клиент загрузкой управляют Windows и клиент Диска.
+
+Журнал сохраняет прокрутку и выделение при поступлении новых событий. Если читать старые строки или выделять текст, автоматическая прокрутка отключается.
