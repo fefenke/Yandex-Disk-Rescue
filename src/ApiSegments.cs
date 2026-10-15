@@ -12,7 +12,26 @@ using System.Web.Script.Serialization;
 
 namespace DiskRescue {
     public sealed partial class ApiEngine {
-        SemaphoreSlim downloadSlots;
+        DownloadSlotQueue downloadSlots;
+        // SemaphoreSlim does not promise FIFO ordering. Retries must join the tail.
+        sealed class DownloadSlotQueue {
+            readonly object sync=new object();readonly Queue<TaskCompletionSource<bool>> waiting=new Queue<TaskCompletionSource<bool>>();int available;
+            public DownloadSlotQueue(int capacity){available=capacity;}
+            public Task WaitAsync(CancellationToken cancellation){
+                TaskCompletionSource<bool> waiter=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                lock(sync){if(cancellation.IsCancellationRequested){waiter.SetCanceled();return waiter.Task;}if(available>0){available--;return Task.FromResult(true);}waiting.Enqueue(waiter);}
+                return WaitQueued(waiter,cancellation);
+            }
+            static async Task WaitQueued(TaskCompletionSource<bool> waiter,CancellationToken cancellation){using(cancellation.Register(delegate{waiter.TrySetCanceled();}))await waiter.Task.ConfigureAwait(false);}
+            public void Release(){lock(sync){while(waiting.Count>0)if(waiting.Dequeue().TrySetResult(true))return;available++;}}
+        }
+        sealed class DownloadReadException:IOException {public DownloadReadException(Exception inner):base("Download stream was interrupted.",inner){}}
+        static async Task<int> ReadDownloadData(Stream input,byte[] buffer,int count,CancellationToken cancellation){
+            try{return await input.ReadAsync(buffer,0,count,cancellation).ConfigureAwait(false);}
+            catch(ObjectDisposedException){cancellation.ThrowIfCancellationRequested();throw;}
+            catch(IOException ex){throw new DownloadReadException(ex);}
+            catch(HttpRequestException ex){throw new DownloadReadException(ex);}
+        }
         sealed class SegmentPlan { public string Identity;public long Offset,Length;public int Parts; }
         static string SegmentIdentity(DiskFile f){return f.Path+"\n"+f.Modified+"\n"+f.Length;}
         static string SegmentFolder(DiskFile f){return f.Destination+".ydr-segments";}
@@ -27,7 +46,7 @@ namespace DiskRescue {
         }
         static void ClearSegments(DiskFile f){
             string folder=SegmentFolder(f);SafeDestination(folder);if(!Directory.Exists(folder))return;
-            foreach(string name in Enumerable.Range(0,8).Select(i=>i+".part").Concat(new[]{"plan.json","plan.tmp"})){
+            foreach(string name in Enumerable.Range(0,8).SelectMany(i=>new[]{i+".part",i+".part.ydr-state",i+".part.ydr-state.tmp"}).Concat(new[]{"plan.json","plan.tmp","plan.json.tmp"})){
                 string path=Path.Combine(folder,name);SafeDestination(path);if(File.Exists(path))File.Delete(path);
             }
             if(!Directory.EnumerateFileSystemEntries(folder).Any())Directory.Delete(folder);
@@ -46,16 +65,30 @@ namespace DiskRescue {
             }catch(OperationCanceledException){return new Result{Status="cancelled_user",Message="Stopped by user.",Bytes=job.Bytes};}
             catch(Exception ex){return new Result{Status=stop.IsCancellationRequested?"cancelled_user":"failed",Message="Download preparation failed: "+ex.GetType().Name,Bytes=job.Bytes};}
         }
-        async Task<Result> DownloadSingleWithSlot(Job job){await downloadSlots.WaitAsync(stop.Token).ConfigureAwait(false);try{return await DownloadSingle(job).ConfigureAwait(false);}finally{downloadSlots.Release();}}
+        async Task<Result> DownloadSingleWithSlot(Job job){
+            for(int attempt=0;;attempt++){
+                await downloadSlots.WaitAsync(stop.Token).ConfigureAwait(false);Result result;
+                try{result=await DownloadSingle(job,settings.IdleSeconds+(attempt>0?2:0)).ConfigureAwait(false);}finally{downloadSlots.Release();}
+                // A read error after the last byte must not send Range: size- and
+                // risk resetting a complete partial on HTTP 416. Next preparation verifies it.
+                if(stop.IsCancellationRequested||!result.RetryTransfer||attempt>=2||job.Bytes>=job.File.Length)return result;
+            }
+        }
         async Task<Result> ReadSegment(Job job,SegmentPlan plan,int index,TaskCompletionSource<bool> supported){
+            for(int attempt=0;;attempt++){
+                Result result=await ReadSegmentAttempt(job,plan,index,attempt==0?supported:null,settings.IdleSeconds+(attempt>0?2:0)).ConfigureAwait(false);
+                if(stop.IsCancellationRequested||!result.RetryTransfer||attempt>=2)return result;
+            }
+        }
+        async Task<Result> ReadSegmentAttempt(Job job,SegmentPlan plan,int index,TaskCompletionSource<bool> supported,int idleSeconds){
             string path=SegmentPath(SegmentFolder(job.File),index);long start=SegmentStart(plan,index),end=SegmentStart(plan,index+1)-1;
-            bool acquired=false;using(CancellationTokenSource idle=CancellationTokenSource.CreateLinkedTokenSource(stop.Token)){
+            bool acquired=false;long received=0;using(CancellationTokenSource idle=CancellationTokenSource.CreateLinkedTokenSource(stop.Token)){
                 try{
-                    SafeDestination(path);long existing=File.Exists(path)?new FileInfo(path).Length:0;
+                    SafeDestination(path);long existing=new FileInfo(path).Length;
                     if(existing>end-start+1)throw new IOException("Segment is larger than its range.");
                     if(existing==end-start+1){if(supported!=null)supported.TrySetResult(true);return new Result{Status="success"};}
                     await downloadSlots.WaitAsync(stop.Token).ConfigureAwait(false);acquired=true;
-                    idle.CancelAfter(TimeSpan.FromSeconds(settings.IdleSeconds));
+                    idle.CancelAfter(TimeSpan.FromSeconds(idleSeconds));
                     using(HttpRequestMessage request=new HttpRequestMessage(HttpMethod.Get,job.Link)){
                         request.Headers.Range=new RangeHeaderValue(start+existing,end);
                         using(HttpResponseMessage response=await downloadClient.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,idle.Token).ConfigureAwait(false))
@@ -63,21 +96,21 @@ namespace DiskRescue {
                             if(response.StatusCode==HttpStatusCode.OK||response.StatusCode==HttpStatusCode.RequestedRangeNotSatisfiable)return new Result{Status="range_unavailable",Message="Server does not support the requested byte range."};
                             if(!response.IsSuccessStatusCode)throw new ApiException((int)response.StatusCode);
                             ContentRangeHeaderValue range=response.Content.Headers.ContentRange;
-                            if(response.StatusCode!=HttpStatusCode.PartialContent||range==null||range.Unit!="bytes"||range.From!=start+existing||range.To!=end||range.Length!=job.File.Length||response.Content.Headers.ContentEncoding.Count>0)throw new IOException("Invalid segmented download range.");
+                            if(response.StatusCode!=HttpStatusCode.PartialContent||range==null||range.Unit!="bytes"||range.From!=start+existing||range.To!=end||range.Length!=job.File.Length||response.Content.Headers.ContentEncoding.Count>0){InvalidateLink(job);throw new IOException("Invalid segmented download range.");}
                             if(supported!=null)supported.TrySetResult(true);
-                            idle.CancelAfter(TimeSpan.FromSeconds(settings.IdleSeconds));
+                            idle.CancelAfter(TimeSpan.FromSeconds(idleSeconds));
                             using(Stream input=await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
-                            using(FileStream output=new FileStream(path,FileMode.Append,FileAccess.Write,FileShare.Read,65536,true)){
+                            using(DurablePartial output=new DurablePartial(path,SegmentIdentity(job.File)+"\nsegment:"+index,existing)){
                                 byte[] buffer=new byte[65536];long left=end-start+1-existing;
-                                while(left>0){int n=await input.ReadAsync(buffer,0,(int)Math.Min(left,buffer.Length),idle.Token).ConfigureAwait(false);if(n==0)throw new IOException("Incomplete segment response.");idle.CancelAfter(TimeSpan.FromSeconds(settings.IdleSeconds));await output.WriteAsync(buffer,0,n,stop.Token).ConfigureAwait(false);left-=n;Interlocked.Add(ref job.Bytes,n);}
-                                if(await input.ReadAsync(buffer,0,1,idle.Token).ConfigureAwait(false)!=0){output.SetLength(0);throw new IOException("Segment response exceeded its range.");}
+                                while(left>0){int n=await ReadDownloadData(input,buffer,(int)Math.Min(left,buffer.Length),idle.Token).ConfigureAwait(false);if(n==0)throw new DownloadReadException(new EndOfStreamException());idle.CancelAfter(TimeSpan.FromSeconds(idleSeconds));await output.WriteAsync(buffer,0,n,stop.Token).ConfigureAwait(false);left-=n;received+=n;Interlocked.Add(ref job.Bytes,n);ConfirmLink(job);}
+                                if(await ReadDownloadData(input,buffer,1,idle.Token).ConfigureAwait(false)!=0){InvalidateLink(job);output.SetLength(0);throw new IOException("Segment response exceeded its range.");}
                             }
                         }
                     }
                     return new Result{Status="success"};
-                }catch(OperationCanceledException){return new Result{Status=stop.IsCancellationRequested?"cancelled_user":"timeout",Message=stop.IsCancellationRequested?"Stopped by user.":"A file segment received no data during the idle timeout."};}
-                catch(ApiException ex){return new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="Segment HTTP "+ex.Code};}
-                catch(Exception ex){return new Result{Status=stop.IsCancellationRequested?"cancelled_user":idle.IsCancellationRequested?"timeout":"failed",Message=stop.IsCancellationRequested?"Stopped by user.":idle.IsCancellationRequested?"A file segment received no data during the idle timeout.":"Segment download failed: "+ex.GetType().Name};}
+                }catch(OperationCanceledException){if(!stop.IsCancellationRequested&&received==0)InvalidateLink(job);return new Result{Status=stop.IsCancellationRequested?"cancelled_user":"timeout",Message=stop.IsCancellationRequested?"Stopped by user.":"A file segment received no data during the idle timeout.",RetryTransfer=!stop.IsCancellationRequested&&received>0};}
+                catch(ApiException ex){InvalidateLink(job);return new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="Segment HTTP "+ex.Code};}
+                catch(Exception ex){if(!stop.IsCancellationRequested&&received==0&&(idle.IsCancellationRequested||ex is DownloadReadException||ex is HttpRequestException))InvalidateLink(job);return new Result{Status=stop.IsCancellationRequested?"cancelled_user":idle.IsCancellationRequested?"timeout":"failed",Message=stop.IsCancellationRequested?"Stopped by user.":idle.IsCancellationRequested?"A file segment received no data during the idle timeout.":"Segment download failed: "+ex.GetType().Name,RetryTransfer=!stop.IsCancellationRequested&&received>0&&(ex is DownloadReadException||ex is HttpRequestException)};}
                 finally{if(acquired)downloadSlots.Release();if(supported!=null)supported.TrySetResult(false);}
             }
         }
@@ -88,11 +121,13 @@ namespace DiskRescue {
                 plan=new SegmentPlan{Identity=SegmentIdentity(job.File),Offset=job.Bytes,Length=job.File.Length,Parts=Math.Min(workers,(int)Math.Min(8,(job.File.Length-job.Bytes)/1048576))};
                 if(plan.Parts<2){ClearSegments(job.File);return await DownloadSingleWithSlot(job).ConfigureAwait(false);}
                 SafeDestination(partial);using(FileStream prefix=new FileStream(partial,FileMode.OpenOrCreate,FileAccess.Write)){}
-                string temp=Path.Combine(folder,"plan.tmp"),path=Path.Combine(folder,"plan.json");SafeDestination(temp);SafeDestination(path);File.WriteAllText(temp,new JavaScriptSerializer().Serialize(plan),new UTF8Encoding(false));File.Move(temp,path);
+                DurablePartial.AtomicText(Path.Combine(folder,"plan.json"),new JavaScriptSerializer().Serialize(plan));
             }
-            job.Bytes=plan.Offset+SegmentBytes(job.File,plan);
             List<int> pending=new List<int>();
-            for(int i=0;i<plan.Parts;i++){string path=SegmentPath(folder,i);SafeDestination(path);long length=File.Exists(path)?new FileInfo(path).Length:0;long expected=SegmentStart(plan,i+1)-SegmentStart(plan,i);if(length>expected){using(FileStream reset=new FileStream(path,FileMode.Create,FileAccess.Write)){}length=0;}if(length!=expected)pending.Add(i);}
+            // Verify each extent once, before request admission and HTTP idle
+            // timers. Retried attempts use the checkpointed offset on disposal.
+            for(int i=0;i<plan.Parts;i++){string path=SegmentPath(folder,i);SafeDestination(path);long length=DurablePartial.Recover(path,SegmentIdentity(job.File)+"\nsegment:"+i,!String.IsNullOrEmpty(job.File.Md5),stop.Token);long expected=SegmentStart(plan,i+1)-SegmentStart(plan,i);if(length>expected){DurablePartial.Reset(path,SegmentIdentity(job.File)+"\nsegment:"+i);length=0;}if(length!=expected)pending.Add(i);}
+            job.Bytes=plan.Offset+SegmentBytes(job.File,plan);
             List<Result> results=new List<Result>();
             if(pending.Count>0){
                 TaskCompletionSource<bool> supported=new TaskCompletionSource<bool>();Task<Result> first=ReadSegment(job,plan,pending[0],supported);
@@ -119,14 +154,16 @@ namespace DiskRescue {
                     string path=SegmentPath(folder,i);SafeDestination(path);long expected=SegmentStart(plan,i+1)-SegmentStart(plan,i);
                     using(FileStream input=File.OpenRead(path)){if(input.Length!=expected)throw new IOException("Incomplete segment before merge.");int n;while((n=await input.ReadAsync(buffer,0,buffer.Length,stop.Token).ConfigureAwait(false))>0)await output.WriteAsync(buffer,0,n,stop.Token).ConfigureAwait(false);}
                 }
+                output.Flush(true);
             }
             if(!Verified(partial,job.File.Length,job.File.Md5,stop.Token)){
-                ClearSegments(job.File);using(FileStream reset=new FileStream(partial,FileMode.Create,FileAccess.Write)){}job.Bytes=0;
+                InvalidateLink(job);
+                ClearSegments(job.File);DurablePartial.Reset(partial,SegmentIdentity(job.File));job.Bytes=0;
                 return new Result{Status="failed",Message="Segmented file size or MD5 mismatch; invalid parts reset.",Bytes=0};
             }
             stop.Token.ThrowIfCancellationRequested();SafeDestination(job.File.Destination);
             if(File.Exists(job.File.Destination))File.Replace(partial,job.File.Destination,null);else File.Move(partial,job.File.Destination);
-            ClearSegments(job.File);File.Delete(Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(job.File.Path)+".txt"));
+            DurablePartial.Forget(partial);ClearSegments(job.File);File.Delete(Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(job.File.Path)+".txt"));
             return new Result{Status="success",Message="",Bytes=job.File.Length};
         }
     }

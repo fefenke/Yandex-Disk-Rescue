@@ -10,6 +10,8 @@ namespace DiskRescue {
         public volatile Snapshot Latest = new Snapshot();
         volatile bool stopping;
         ApiEngine apiEngine;
+        readonly ApiPacer apiPacer=new ApiPacer();
+        readonly SignedLinkCache linkCache=new SignedLinkCache();
         readonly List<string> events = new List<string>();
         readonly HashSet<string> downloadedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         readonly HashSet<string> cloudErrorPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -26,11 +28,13 @@ namespace DiskRescue {
         public bool RecoveryRequired { get; private set; }
         sealed class Job { public DiskFile File; public YandexCloudNative.Operation Operation; }
         public Engine(string dataFolder) { DataFolder = dataFolder; }
+        internal Engine(string dataFolder,ApiPacer apiPacer):this(dataFolder){this.apiPacer=apiPacer;}
+        internal Engine(string dataFolder,ApiPacer apiPacer,SignedLinkCache linkCache):this(dataFolder,apiPacer){this.linkCache=linkCache;}
         public void Stop() { stopping = true; ApiEngine current=apiEngine;if(current!=null)current.Stop(); }
         void Event(string text) { events.Add(DateTime.Now.ToString("HH:mm:ss") + "  " + text); if (events.Count > 160) events.RemoveAt(0); }
         public void Run(Settings settings, RunMode mode) {
             browserRoot=settings.Folder;catalog=null;
-            if(settings.UseApi){apiEngine=new ApiEngine(DataFolder,delegate(Snapshot s){Latest=s;});try{apiEngine.Run(settings,mode);}finally{apiEngine=null;}return;}
+            if(settings.UseApi){apiEngine=new ApiEngine(DataFolder,delegate(Snapshot s){Latest=s;},null,null,apiPacer,linkCache);try{apiEngine.Run(settings,mode);}finally{apiEngine=null;}return;}
             if(RecoveryRequired){Latest=new Snapshot{Phase="error",Finished=true,RecoveryRequired=true,Error="Restart Yandex Disk and this application before starting another pass."};return;}
             stopping = false; processed = selected = skipped = scanErrors = 0;currentMode=mode;queueReady=false;
             inventory.Clear(); active.Clear(); events.Clear(); downloadedPaths.Clear(); cloudErrorPaths.Clear(); report="";elapsed.Restart(); lastPublish = DateTime.MinValue;

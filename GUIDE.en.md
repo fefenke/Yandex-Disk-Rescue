@@ -1,82 +1,125 @@
-# Guide
+# Yandex Disk Rescue 1.0.4 — guide
 
-IMPORTANT: Unlimited photo/video auto-upload files are NOT counted or downloaded. Only the regular Files section is supported.
+[Home](README.en.md) · [Русский](GUIDE.md) · [Releases](https://github.com/fefenke/Yandex-Disk-Rescue/releases)
 
-GETTING STARTED
-Extract the entire ZIP to a permanent folder and run YandexDiskRescue.exe. Settings always opens first. Choose API or the official desktop client, fill the required fields and press Start pass. Download settings are locked throughout scanning, downloads and automatic retry pauses. Stop cancels the whole session.
+## 1. Scope and requirements
 
-TWO METHODS
-API: use the OAuth link, sign into the intended Yandex account, obtain a token and paste it into Settings. Choose an ordinary local destination. disk:/ means the whole Disk; disk:/Photos selects a folder. Cloud folder structure is retained. The desktop client and its restarts are unnecessary, which may improve speed; server availability still determines results.
-Desktop client: install the official client, sign in and wait for synchronization to finish. Select its local Disk folder. This app does not request your OAuth token in this mode. Windows and the client manage downloading; this app requests files and monitors results. Sync errors may cause client restarts. HTTP Range resume applies to API only.
+Only the regular Files section of Yandex Disk is supported. Unlimited photo/video auto-upload is neither counted nor downloaded. The app uses Yandex Disk API technology or the official desktop client, retries available files and records results. It does not repair cloud originals, recover deleted files or guarantee access to unavailable data.
 
-API LIST VS PASS MODE
-The saved list is used by default without rescanning. Missing lists are fetched and incomplete scans resume. Refresh the list when cloud files are added, changed or deleted. Refreshing the list does not force completed files to download again.
+Requires Windows 10 1709+ or Windows 11 and .NET Framework 4.7.1+. Choose x64 for 64-bit Windows, or x86 for 32-bit Windows; x86 also works on x64. There is no separate ARM64 build.
 
-PASS MODES
-• Resume unfinished pass: unprocessed files and attempts stopped by the user; previously completed failures are skipped.
-• Retry server/sync errors: recorded errors of that type.
-• Retry timeouts and failures: interrupted, stalled and other failed downloads, including partial files.
-• Retry all files not downloaded: every file lacking a valid completed local copy, including untested files. Recommended for normal use.
-• Start pass from the beginning: check the entire list again, including local files. Valid complete copies are not downloaded again.
-• Resume partial downloads · API: nonempty .ydr-part files only. Automatic retries stay in this mode; otherwise one pass runs.
+## 2. First launch
 
-AUTOMATIC RETRIES AND TIMING
-Continuous passes starts later problem passes after 30-second pauses. Normal modes switch to problem-file retries; the cloud list is not refreshed on every pass. Partial-file mode keeps its own queue. Stop, an empty matching queue or a nonrecoverable error ends the series.
-TWO INDEPENDENT API TIMEOUTS
-Link timeout, sec: how long to wait for the API download-link response after sending the request. Default: 3 seconds. Queueing and the chosen interval between request launches do not count. A timed-out file remains eligible for another pass.
-File idle timeout, sec: wait for the download response, then for new data. Default: 3 seconds. Starts only when downloading begins and resets on response headers and each new block of bytes. Waiting in the ready-link queue does not count. This is not a total download-duration limit. In desktop-client mode it controls time without file-retrieval progress; link timeout is API-only.
-Both fields accept 1–60 seconds. With 3 + 3, the API request gets three seconds after sending, then downloading has a fresh three-second idle budget.
+1. Download the architecture-specific ZIP and extract the entire archive to a permanent writable folder.
+2. Run Start Yandex Disk Rescue.cmd to check prerequisites and launch the app. Settings opens first.
+3. Choose API or the official desktop client, fill required fields, select a pass mode and press Start pass at the top.
+4. The guide button is always at the top. Transfer settings are locked during passes and automatic retries. Press Stop and wait before changing them.
 
-CONCURRENT WORK
-By default, up to 7 link requests and up to 20 download connections run simultaneously and independently. Links for subsequent files are obtained while other files download. These are ceilings, not guaranteed active-transfer counts. Ready links wait in a bounded queue. The API launch interval defaults to 50 ms.
-Defaults: repeat problem files indefinitely, both timeouts fixed at 3 seconds, automatic increases disabled. Stop cancels the whole series. Manual choices persist. When migrating to this pipeline, defaults reset once to 3 + 3 with repeat enabled; history, inventory and token are retained.
-Temporary API connection/listing failures retry independently at the current folder/page: first immediately, then 1/2/up to 5 seconds and server Retry-After. Invalid tokens and access denial require attention.
+The data folder beside the executable holds settings, history, inventory, reports and an encrypted token. Each extracted app copy has its own history; a new copy does not automatically use another copy's data.
 
-CONCURRENCY: WHAT THE TWO FIELDS CONTROL
-Link requests: how many tasks can request download links simultaneously. Default 7; range 1–30. This is in-flight task count, not requests per second. Try increasing it when downloads wait for links; try reducing it if link timeouts, connection failures or HTTP 429 responses increase. More requests do not guarantee more successful downloads.
-Download connections: shared active HTTP data request limit for all files and segments combined. Default 20; range 1–30. Queue time does not consume network idle timeout.
-7 + 20 is the best balance in our tests and our starting recommendation, not a Yandex limit or a universal optimum. You may choose 30 + 30. The app caps each field at 30 to bound connection and memory use. Queues remain bounded instead of spawning a task for every file.
-On a slow connection, try fewer downloads, for example 5–10. Files share your total bandwidth; more transfers do not increase it. If the link is already saturated, increasing concurrency usually adds no overall speed. If server waits leave bandwidth idle, increasing it may help. A few large-file transfers may fill the link, while small files depend more on link acquisition.
-Change one setting at a time and compare several passes with equal timeouts: successful files, completed data and elapsed time. A fast pass with more failures is not necessarily better. All transfer settings persist and are locked throughout passes and automatic-retry pauses. Concurrency and link timeout are API-only; Windows and the official desktop client control transfers in client mode.
+## 3. API mode
 
-REQUEST LAUNCH INTERVAL
-API launch interval, ms: time between API request launches. Range 25–1000 ms; default 50 ms. Approximate maximum launch rates: 25 ms → 40/s; 50 ms → 20/s; 100 ms → 10/s; 200 ms → 5/s; 1000 ms → 1/s. Requests can wait for responses concurrently without waiting for the preceding response before launching.
-Reduce the interval to try a higher launch rate and compare results. Increase it if rate restrictions, HTTP 429 or API instability occur. A lower interval does not guarantee better speed or success. Queueing and the chosen interval do not consume link response time. This setting persists and is locked while running.
-Section 2.2 of the official Disk API terms specifies 40 requests per second: https://yandex.ru/legal/disk_api/ru/ . This limits frequency, not the number of tasks waiting concurrently. The default 50 ms leaves headroom below that rate.
+The desktop client is unnecessary. Follow the OAuth link in Settings, sign into the intended Yandex account, obtain a token and enter it. Tokens grant account access: never send them to others or include them in bug reports.
 
-RESUME AND INTEGRITY
-API resumes nonempty .ydr-part files through HTTP Range when the server accepts the requested range and the cloud version matches. Full responses restart downloading. Size and available MD5 are checked before the temporary file becomes complete. Size-only verification is weaker; damaged cloud originals cannot be repaired.
-HTTP 5xx is a server error. IOException can mean a connection, read or write failure and does not prove a server issue. The log records the type/code. A retained partial may exist after a later attempt receives no new bytes.
+Choose an ordinary local destination, such as an HDD backup folder. Cloud placeholders, links and reparse points are rejected. Cloud folder structure is retained. disk:/ means the regular Disk section; disk:/Photos selects a folder. Different accounts and cloud roots use separate history contexts.
 
-PRE-PASS VERIFICATION
-Before downloading, the app checks history and local files. The header shows checked file counts and overall progress. MD5 checks also show percentage, megabytes read, elapsed time and the current filename. Large videos can take time; elapsed time keeps updating while disk reads are pending. The completed-file count is provisional during this stage. Each application copy keeps its own history beside it; starting another copy with older history may trigger rechecking files already on disk.
+The usual choice is Retry all files not downloaded with the saved list. A missing inventory is fetched automatically.
 
-INTERFACE
-Overview shows only categories present in the list. Files and folders shows folder progress including descendants and the selected folder contents. Search and remaining-only filtering apply to that folder. Tooltips show full names; resize columns/splitters and use horizontal scrolling when needed.
-Double-click a completed file to open it or a folder to browse. File menus offer Open and Show in Explorer; partial files cannot open as completed files. Folders offer Open in Explorer. Missing local objects cannot yet be revealed.
-Saved inventory/history is read locally without API requests. The first large-history load runs in the background. Counts reflect recorded results, not a new full MD5 verification. Refresh the list to reflect cloud changes.
-Downloaded total counts completed files; this pass counts new successes. Remaining covers the whole list while the processed denominator depends on pass mode. The log has search and All events / Successful / Errors filters without automatic scrolling. Pass history stores results; detailed reports live in data.
+## 4. Official desktop client mode
 
-UPDATES
-Check for updates automatically enables startup and 6-hour public GitHub checks. Uncheck it to disable background checks; the setting persists. Manual Check for updates and Update remain available. Installation requires approval while idle.
-The architecture-specific ZIP is checked against the GitHub SHA-256 digest. The app exits, replaces program files only and restarts. The data folder with history, inventory, settings and encrypted token is retained. Failed replacement is rolled back. Offline checks do not interrupt downloads. Versions without the updater need one manual update.
-Version 1.0.3 supports in-app updates while preserving user data.
+Install the official client, sign in and wait for the file list to synchronize. Select its local Disk folder. This app does not request your OAuth token in this mode.
 
-SECURITY AND LIMITATIONS
-Windows DPAPI encrypts the saved token for your Windows account. It is decrypted in memory for use; storage encryption does not replace trust in the application. Do not share tokens; revoke unused access in Yandex ID. Never publish your data folder. Preserve it when updating and do not overwrite the history of a running app.
-Independent unofficial project, unaffiliated with Yandex. It does not repair server failures, recover deleted data or guarantee every download. Unlimited auto-upload is unsupported.
+The app requests file retrieval and monitors results; Windows and the client control network transfers. The optional restart-on-errors setting can restart the client. Link concurrency, HTTP partial resume and 32 MiB / 15-second checkpoints apply to API mode only.
 
+## 5. Inventory and pass selection
 
-ERROR MESSAGES
-Download link request timed out. means the API did not return a link within Link timeout; downloading has not started in that attempt. A file idle timeout means the download response or more data did not arrive in time. A timeout alone does not imply HTTP 500 or file corruption.
-HTTP 429 means too many requests: increase the API launch interval and try later. HTTP 503 means temporarily unavailable; HTTP 500 means an internal server error. Retrying may help temporary failures but cannot guarantee availability.
-Continuous passes retain the selected timeouts without automatic increases.
+These are separate settings. The saved inventory avoids enumeration before every attempt. Missing lists are scanned and interrupted scans resume from their saved position. Refresh after cloud files are added, changed or deleted. Refreshing does not force suitable completed files to download again.
 
+Before resuming a started file, the app queries that file's fresh size, modification time and available MD5. This is an individual metadata request, not a full Disk rescan. Failed checks preserve parts and defer the attempt. Changed versions cannot mix old and new data. Refreshed inventory is saved after active jobs finish: on normal completion, manual Stop or handled errors.
 
-MULTI-STREAM LARGE-FILE DOWNLOADS · API
-Streams per large file: 1–8, default 4. For files from, MB: size threshold 64–4096 MB, default 256. One MB equals 1,000,000 bytes. New files at or above this threshold with known MD5 are split into byte ranges. Small files use one stream. Set 1 to disable splitting new files. Saved parts retain their layout and resume with the selected concurrency even after the threshold changes.
-The API link comes first. The first range request checks server support; after valid response headers, remaining parts enter the shared download queue. All streams count toward Download connections: a limit of 20 never permits 20 files with four active connections each. Actual concurrency may be lower.
-The file idle timeout applies separately to each stream, starts after queueing when its request is sent, and resets on response headers and new data. Three seconds limits idle time, not the total duration of a part. A stalled stream stops while other parts continue. Saved parts retry on later passes; without continuous passes, start the next pass manually.
-Parts are stored beside the destination in its .ydr-segments directory. Keep it and .ydr-part until completion. Completed parts are reused and incomplete parts resume at their saved offsets. A changed cloud version discards old parts. Interrupted merging rolls back on the next pass and reuses the saved parts.
-Size and MD5 are checked before promoting the assembled file and removing parts. If Range is ignored or rejected, downloading falls back to a single response. Invalid ranges and MD5 mismatches are never treated as success.
-More streams may help large files but cannot fix unavailable originals or link errors. On slow connections try 1–2 streams or increase file idle timeout if active downloads keep timing out. Merging temporarily needs extra disk space up to the size being assembled, in addition to saved parts. Settings persist and lock while running. This feature applies to API mode.
+Scan errors appear in the log and warning. Finishing enumeration does not prove every cloud folder was accessible. Counts describe discovered files; errors prevent a completeness guarantee. A sudden crash may leave an older intact inventory, and the started file's version is checked again when resuming.
+
+Pass modes:
+
+- Resume unfinished pass: unprocessed files and user-cancelled attempts, rather than every completed failure.
+- Retry server/sync errors: recorded errors of that type.
+- Retry timeouts and failures: interrupted, stalled and otherwise unsuccessful transfers.
+- Retry all files not downloaded: everything lacking a suitable completed local copy; the usual retry choice.
+- Start pass from the beginning: check the entire list again. Suitable local copies are not downloaded again.
+- Resume partial downloads · API: files with saved bytes in .ydr-part or .ydr-segments. Automatic repeats retain this queue.
+
+## 6. Timeouts and retry queue
+
+Link timeout measures the API response after request dispatch. Default 3 seconds, range 1–60. Queueing, API launch spacing and shared cooldown do not consume it.
+
+File idle timeout measures the download response and further bytes. Default 3 seconds, range 1–60, separately per stream. It resets on response headers and new data. It is not a total-duration limit: a file can download for hours while bytes continue arriving. Saved-data checks run before requests, outside network idle timeout. In client mode this setting measures lack of retrieval progress.
+
+Up to two extra attempts follow new bytes and a network interruption, idle timeout or incomplete response. Retries use the same link and saved offset, rejoining the tail of the shared connection queue. Both retries use the selected idle timeout +2 seconds: 3 → 5 → 5. Even small new progress may permit the next retry within this cap.
+
+An attempt with no new bytes ends quick retries; the file remains for the next matching pass. Old saved parts are not new progress. HTTP errors, invalid ranges, MD5 failures, disk write errors and Stop do not trigger quick retries.
+
+A working signed link is retained only in memory within one automatic-pass session after receiving data. No arbitrary lifetime is assumed. Rejection or zero new bytes causes a fresh link request on the next pass, without an immediate refresh chain in the failed attempt. Restarting the app or starting a new manual session creates a new link cache.
+
+## 7. Continuous passes and API throttling
+
+Continuous passes are enabled by default. Normal completion starts preparing the next problem pass without a mandatory 30-second pause. Preparation is not instantaneous: reports, history and local checks still take time. Partial-download mode keeps its own queue.
+
+Temporary whole-pass failures back off for 1, 2, 4, 8, 16, up to 30 seconds. Normal completion resets this delay. An empty matching queue or a nonrecoverable error ends the session. Stop cancels both the pass and waiting.
+
+All REST API calls share one pacer. HTTP 429 means too many requests, 408 a request timeout, and 5xx a server error. Retry-After is honored as seconds or a date. Without a usable header, cooldown grows through 1, 2, 4, 8, 16, 32, up to 60 seconds. Server instructions may require a longer delay.
+
+The launch interval temporarily rises, up to 5000 ms, and gradually returns to the selected value after healthy responses. Saved settings are unchanged, and automatic passes share the state. The UI shows the reason, countdown and temporary interval. In-flight requests and ready-link downloads continue. Storage-server failures do not throttle the REST API through this pacer. Preparation, API waiting and downloading are separate stages.
+
+## 8. Concurrency and request interval
+
+Defaults are up to 7 link tasks and 20 download connections. Each setting ranges from 1–30 and works independently: new links are prepared while files download. All parts of all files share the 20-connection limit; it does not mean 20 files with four connections each. Queues are bounded rather than creating a task for every cloud file.
+
+API spacing is 25–1000 ms, default 50 ms. Approximate maximum launch rates are 40, 20, 10, 5 and 1 per second at 25, 50, 100, 200 and 1000 ms. This is request frequency, not in-flight count. Section 2.2 of the API terms specifies 40 requests per second: https://yandex.ru/legal/disk_api/ru/ . Error handling may temporarily increase the interval.
+
+More connections do not create bandwidth. Increasing concurrency usually cannot help an already saturated connection. On HDDs, simultaneous writes to separate parts can slow the drive. Try fewer connections and 1–2 streams per file under disk load. Concurrency may help when server waits leave bandwidth idle. Change one setting at a time and compare several passes using equal timeouts, successful files and byte totals.
+
+## 9. Large-file parts
+
+Streams per file: 1–8, default 4 from 256 MB. Threshold: 64–4096 MB; MB means 1,000,000 bytes. New splitting requires cloud MD5. Small files use one stream. Setting 1 disables new splitting; existing parts retain their plan and resume with the selected concurrency.
+
+The first range request checks server support. Valid headers allow the other parts to begin. Ignored or rejected ranges fall back to a full response. Invalid ranges and MD5 failures never count as success. One stalled part need not stop the others.
+
+The destination's .ydr-part and .ydr-segments folder hold a plan and separate parts. Completed parts are merged, size and available MD5 are checked, and the temporary file becomes final. Interrupted merging rolls back and reuses completed parts. In addition to parts, merging needs space for the assembled copy, up to the file's full size. Direct range writes into one shared file are not implemented in this version.
+
+## 10. Checkpoints, HDDs and recovery
+
+Each active stream checkpoints after 32 MiB of new data OR 15 seconds when the next data arrives, whichever occurs first. Both counters reset after saving. This is not a 15-second pause or network timeout. If only 5 MiB arrived in 15 seconds, those bytes are saved; another 27 MiB afterwards does not reach the next 32 MiB threshold.
+
+Normal Stop, interruptions and attempt completion also checkpoint remaining bytes. Data is flushed to disk before the SHA-256 extent journal in .ydr-state is committed. Recovery verifies confirmed extents, discards corrupt or unconfirmed tails and redownloads them. Up to 32 MiB can remain unconfirmed per active stream, rather than per whole file or session.
+
+Keep .ydr-state, .ydr-part and .ydr-segments until completion. Legacy parts without journals may be reused when cloud MD5 is known, subject to final verification. Cloud version changes invalidate incompatible data.
+
+Saving briefly delays the corresponding worker; other downloads can continue but share the drive. One SATA HDD/NTFS test wrote 2 GiB in 77.9 seconds without checkpoints and 84.9 seconds with SHA-256/checkpoints (+7.0 seconds, about 9%). This is one synthetic measurement, not a guarantee for other files or drives. Recovery reads saved bytes; a real reboot has a cold system cache, so warm-memory reads do not predict its duration.
+
+Tests killed a separate process during downloading and merging, corrupted saved data and journal records, and verified final MD5. Physical power removal was not performed. Durability depends on a healthy drive/controller honoring flush commands; absolute protection against hardware failure or ignored flush requests cannot be promised.
+
+## 11. What file verification proves
+
+When cloud MD5 is known, size and digest are checked. For a previously verified file, history, cloud identity, length and local write timestamp can avoid a full reread. Start from the beginning performs full checks and may take time on large files. The UI shows filename, checked counts and hashing progress; completed counts remain provisional during verification.
+
+Without cloud MD5, matching size currently suffices. This is weaker and does not prove identical contents. Local SHA-256 protects saved extents but cannot replace the cloud original's missing digest. A separate strict status for that case is not implemented in 1.0.4.
+
+An unsuitable existing file remains while a new temporary copy downloads, but may be replaced after the new copy passes checks. Never-overwrite mode and automatic archives of old copies are not implemented. Keep your own backup before using a destination containing unique manual edits.
+
+## 12. Interface, history and errors
+
+Overview shows categories present in the list. Files and folders shows folder progress including descendants and the selected folder's contents. Search and remaining-only filtering apply to that folder. Double-click opens completed files or folders; context menus offer Open and Show in Explorer. Partial files cannot open as completed files.
+
+History and inventory are local; a large initial history loads in the background. Downloaded total counts completed files, while this pass counts new successes. Mode changes the selected queue; remaining refers to the whole list. The log has search and filters; pass history and detailed reports live in data.
+
+A link timeout means downloading has not started. A data timeout means no response or more bytes, not automatically HTTP 500. Check tokens for 401 and access for 403. HTTP 429 triggers API cooldown; 500/503 are server failures. IOException may describe network or disk trouble: inspect the stage, code and log. Retries cannot guarantee the cloud original will become available.
+
+## 13. Updates and privacy
+
+Automatic update checks run at startup and every 6 hours. They can be disabled; manual checks remain available. Installation is offered while idle and requires confirmation. The architecture-specific ZIP is checked against GitHub SHA-256. The app exits, replaces program files, retains data and restarts; failed replacement rolls back.
+
+For manual updates, close the app first. Preserve data and download parts, then replace application files from the whole ZIP. Do not overwrite the history of a running copy or import someone else's data. Windows DPAPI encrypts the saved token for your Windows account; requests use the token in memory.
+
+Never publish data, api-token.bin, personal-path logs or signed URLs. Remove tokens, signed query parameters and personal filenames from bug reports. Revoke leaked access through Yandex ID. Public sources and release archives must contain no user data.
+
+Independent unofficial project. [Report an issue](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [MIT license](LICENSE).

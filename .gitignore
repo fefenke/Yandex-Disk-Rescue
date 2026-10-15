@@ -8,3 +8,10 @@ self-test-results.txt
 .vs/
 bin/
 obj/
+*.ydr-part
+*.ydr-state
+*.ydr-state.tmp
+*.ydr-segments/
+api-token.bin
+history.jsonl
+crash-*.txt

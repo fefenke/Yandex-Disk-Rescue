@@ -27,6 +27,8 @@ namespace DiskRescue {
                 string json;
                 if(request.RequestUri.AbsolutePath.EndsWith("/download"))json="{\"href\":\"https://download.example/"+Uri.EscapeDataString(request.RequestUri.Query)+"\"}";
                 else if(request.RequestUri.AbsolutePath.EndsWith("/resources")){
+                    string requested=Uri.UnescapeDataString(request.RequestUri.Query.Split('&')[0].Substring(6));
+                    if(requested!="disk:/"&&requested!="disk:/unreadable"&&requested!="disk:/Another")return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(new JavaScriptSerializer().Serialize(new{path=requested,type="file",size=4,md5=Md5("test"),modified="2026-01-01T00:00:00Z"}))});
                     ListingCalls++;
                     if(TransientListingFailures-->0)return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
                     if(ListingFailure!=0&&Uri.UnescapeDataString(request.RequestUri.Query).Contains("disk:/unreadable"))return Task.FromResult(new HttpResponseMessage((HttpStatusCode)ListingFailure));
@@ -116,6 +118,7 @@ namespace DiskRescue {
             }
         }
         public static void Run(string root){
+            TransferRetryTests.Run(root);
             SegmentTests.Run(root);
             PipelineTests(root);
             ResumeTests(root);

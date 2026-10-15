@@ -43,6 +43,7 @@ namespace DiskRescue {
         readonly Timer timer = new Timer();
         System.Threading.CancellationTokenSource sessionStop;
         bool waitingForRetry,renderingFailed;
+        PassTransition passTransition;
         CheckBox repeatProblems;NumericUpDown streamsPerFile,multiStreamThreshold;Label streamsCaption,thresholdCaption;
         DataGridView passes;
         readonly System.Collections.Generic.List<PassResult> passRows=new System.Collections.Generic.List<PassResult>();
@@ -209,12 +210,12 @@ namespace DiskRescue {
             tip.SetToolTip(mode,T("Каждый проход заново сканирует папку. Одинаковые имена в разных папках — разные файлы. «Всё заново» проверяет локальные файлы, но не удаляет их и не скачивает повторно.","Every pass rescans the folder. Same names in different folders remain separate. Recheck all files verifies local files without deleting or downloading them again."));
             tip.SetToolTip(linkTimeout,T("Ожидание ответа API после отправки запроса. Очередь и выбранный интервал запуска не учитываются. Другие файлы скачиваются одновременно.","API response timeout after sending the request. Queueing and the selected launch interval do not count. Other files download concurrently."));tip.SetToolTip(idle,T("Ожидание ответа скачивания или новых данных. Начинается при запуске скачивания и сбрасывается при получении заголовков и новых байтов. Это не предел общего времени загрузки.","Wait for download response or new data. Starts when downloading begins and resets on response headers and new bytes. Not a total download duration limit."));
             parallelCaption.Text=T("Интервал запросов API, мс","API launch interval, ms");linkConcurrencyCaption.Text=T("Запросов ссылок","Link requests");downloadConcurrencyCaption.Text=T("Соединений скачивания","Download connections");
-            tip.SetToolTip(requestInterval,T("От 25 до 1000 мс между запусками запросов API, по умолчанию 50. Уменьшение повышает частоту запусков, увеличение снижает её. Очередь запуска не расходует таймаут ответа.","25–1000 ms between API request launches; default 50. Lower values increase launch frequency; higher values reduce it. Launch queueing does not consume the response timeout."));
+            tip.SetToolTip(requestInterval,T("Базовый интервал 25–1000 мс, по умолчанию 50. При ответах API 429, 408 или 5xx программа учитывает Retry-After и временно замедляет новые запросы, затем постепенно восстанавливает частоту. Настройка не меняется. Очередь и пауза не расходуют таймаут ответа; скачивания по готовым ссылкам не отменяются.","Base interval 25–1000 ms; default 50. API HTTP 429, 408 or 5xx triggers Retry-After cooldown and temporary slowdown, followed by gradual recovery. The setting is unchanged. Queueing and cooldown do not consume response timeout; ready-link downloads are not cancelled."));
             tip.SetToolTip(linkConcurrency,T("От 1 до 30 одновременных запросов ссылок. По умолчанию 7. Это независимая очередь; увеличение может ускорить подготовку ссылок, но не гарантирует меньше таймаутов.","1–30 simultaneous link requests. Default 7. Independent queue; more requests can prepare links faster but do not guarantee fewer timeouts."));
             tip.SetToolTip(downloadConcurrency,T("От 1 до 30 соединений скачивания на все файлы и их части вместе. По умолчанию 20. Один крупный файл может использовать несколько соединений. На медленном интернете можно уменьшить.","1–30 download connections shared by all files and segments. Default 20. A large file can use multiple connections. Try fewer on a slow connection."));
             start.Text=busy?T("Остановить","Stop"):T("Начать проход","Start pass");update.Text=T("Обновление","Updates");support.Text=T("Поддержать автора","Support the author");support.Enabled=!String.IsNullOrEmpty(settings.SupportUrl);
             metricTitle[0].Text=T("Найдено файлов","Files found");metricTitle[1].Text=T("Скачано всего","Downloaded total");metricTitle[2].Text=T("Скачано за проход","Downloaded this pass");metricTitle[3].Text=T("Осталось скачать","Remaining to download");metricTitle[4].Text=T("Ошибки синхронизации · за проход","Sync errors · this pass");
-            repeatProblems.Text=T("Бесконечные проходы","Continuous passes");tip.SetToolTip(repeatProblems,T("Повтор ошибок и таймаутов с паузой 30 секунд. Стоп отменяет и проход, и ожидание.","Retry errors and timeouts with a 30-second pause. Stop cancels both the pass and the wait."));tabs.TabPages[2].Text=T("Проходы","Pass history");RenderPasses();
+            repeatProblems.Text=T("Бесконечные проходы","Continuous passes");tip.SetToolTip(repeatProblems,T("Следующий проход готовится без фиксированной паузы. Временная ошибка всего прохода вызывает замедление 1–30 секунд. Стоп отменяет и проход, и ожидание.","Prepare the next pass without a fixed pause. Temporary whole-pass failures back off for 1–30 seconds. Stop cancels both the pass and the wait."));tabs.TabPages[2].Text=T("Проходы","Pass history");RenderPasses();
             tabs.TabPages[3].Text=T("Файлы и папки","Files and folders");dashboard.Translate(ru);tabs.TabPages[0].Text=T("Категории","Categories");tabs.TabPages[1].Text=T("Журнал","Activity log");
             categories.Columns.Clear();foreach(string c in new string[]{T("Тип","Type"),T("Всего","Total"),T("Скачаны","Downloaded total"),T("Скачано за текущий проход","Downloaded this pass"),T("Осталось","Remaining"),T("Нет ответа / сбой загрузки","Timeout / download failure"),T("Ошибки синхронизации","Sync errors")})categories.Columns.Add(c,c);
             categories.Columns[0].FillWeight=145;categories.Columns[3].FillWeight=155;categories.Columns[5].FillWeight=110;categories.Columns[6].FillWeight=145;categories.ColumnHeadersDefaultCellStyle.WrapMode=DataGridViewTriState.True;categories.ColumnHeadersHeightSizeMode=DataGridViewColumnHeadersHeightSizeMode.EnableResizing;categories.ColumnHeadersHeight=48;
@@ -269,17 +270,22 @@ namespace DiskRescue {
         }
         async Task RunSession(RunMode runMode) {
             bool repeat=repeatProblems.Checked,originalCache=settings.UseCachedApiList;int initialIdle=settings.IdleSeconds;
+            passTransition=new PassTransition();
+            ApiPacer sessionPacer=new ApiPacer();
+            SignedLinkCache sessionLinks=new SignedLinkCache();
             try {
                 while(!sessionStop.IsCancellationRequested){
-                    engine=new Engine(dataFolder);DateTime started=DateTime.UtcNow;
+                    engine=new Engine(dataFolder,sessionPacer,sessionLinks);DateTime started=DateTime.UtcNow;
                     await Task.Run(delegate{if(!sessionStop.IsCancellationRequested)engine.Run(settings,runMode);});
                     Snapshot result=engine.Latest;
                     if(result.Finished){PassResult row=PassResult.From(result,started,settings.UseApi,runMode);row.IdleSeconds=settings.IdleSeconds;row.LinkTimeoutSeconds=settings.UseApi?settings.LinkTimeoutSeconds:0;row.ApiLinkConcurrency=settings.UseApi?settings.ApiLinkConcurrency:0;row.ApiDownloadConcurrency=settings.UseApi?settings.ApiDownloadConcurrency:0;row.ApiRequestIntervalMs=settings.UseApi?settings.ApiRequestIntervalMs:0;PassHistory.Append(Path.Combine(dataFolder,"passes.jsonl"),row);passRows.Add(row);RenderPasses();}
                     Render(result);
                     if(!PassHistory.ShouldRepeat(result,repeat,sessionStop.IsCancellationRequested)||((runMode==RunMode.ProblemFiles||runMode==RunMode.PartialFiles)&&result.Phase=="completed"&&result.Selected==0))break;
-                    waitingForRetry=true;
-                    try{await Task.Delay(30000,sessionStop.Token);}catch(OperationCanceledException){break;}finally{waitingForRetry=false;}
                     if(result.Phase=="completed"&&runMode!=RunMode.PartialFiles)runMode=RunMode.ProblemFiles;if(settings.UseApi)settings.UseCachedApiList=true;
+                    passTransition.Prepare(result);
+                    waitingForRetry=true;
+                    Render(result);
+                    try{await passTransition.WaitAsync(sessionStop.Token);}catch(OperationCanceledException){break;}finally{waitingForRetry=false;}
                 }
             } finally {waitingForRetry=false;settings.UseCachedApiList=originalCache;settings.IdleSeconds=initialIdle;idleCaption.Text=T("Без данных файла, сек","File idle timeout, sec");linkTimeoutCaption.Text=T("Ожидание ссылки, сек","Link timeout, sec");}
         }
@@ -318,7 +324,12 @@ namespace DiskRescue {
             if(!busy&&s.Phase=="idle"&&s.Total==0&&idleView!=null)s=idleView;
             RenderShell(s);
             if(dashboard!=null&&(section==1||dashboard.Detached)&&s.Catalog!=null&&(s.Phase=="running"||s.Phase=="completed"||s.Phase=="stopped")&&(s.Catalog.Count>0||s.Phase=="completed"))dashboard.Live(s.Catalog,settings.UseApi?settings.ApiFolder:settings.Folder);
-            if(waitingForRetry){phase.Text=T("Пауза перед повтором · 30 секунд","Waiting to retry · 30 seconds");return;}
+            if(waitingForRetry){
+                int remaining=passTransition==null?0:(int)Math.Max(0,Math.Ceiling((passTransition.ReadyUtc-DateTime.UtcNow).TotalSeconds));
+                phase.Text=remaining>0?String.Format(T("Временная ошибка · следующий проход через {0} с","Temporary error · next pass in {0} s"),remaining):T("Подготовка к следующему проходу…","Preparing the next pass…");
+                detail.Text=remaining>0?T("Замедляем повтор после временной ошибки всего прохода. Стоп отменяет ожидание.","Slowing retries after a temporary whole-pass failure. Stop cancels this wait."):T("Переходим к подготовке следующего прохода без фиксированной паузы.","Starting preparation of the next pass without a fixed pause.");
+                phase.ForeColor=ink;return;
+            }
             metricValue[0].Text=s.Total.ToString("N0");metricValue[1].Text=s.Available.ToString("N0");metricValue[2].Text=s.Downloaded.ToString("N0");metricValue[3].Text=Math.Max(0,s.Total-s.Available).ToString("N0");metricValue[4].Text=s.CloudErrorsThisPass.ToString("N0");
             phase.Text=Phase(s.Phase);phase.ForeColor=s.Phase=="error"?Color.FromArgb(193,75,85):ink;
             if(!String.IsNullOrEmpty(s.Error))detail.Text=s.Error;
@@ -330,6 +341,11 @@ namespace DiskRescue {
             else if(s.Selected>0||s.ProgressTotal>0){string eta=s.PerHour>0?String.Format("{0}:{1:00}",(int)(s.RemainingSeconds/3600),(int)((s.RemainingSeconds%3600)/60)):"—";detail.Text=String.Format(T("Обработано {0}/{1} · {3:N0} файлов/ч · осталось ≈ {4}","Processed {0}/{1} · {3:N0} files/h · remaining ≈ {4}"),s.ProgressTotal>0?s.ProgressChecked:s.Processed,s.ProgressTotal>0?s.ProgressTotal:s.Selected,s.Available,s.PerHour,eta);}
             else if(s.Finished&&s.Selected==0)detail.Text=T("Для этого режима нет файлов. Для новых файлов обновите список и выберите «Продолжить незавершённый проход».","No files match this mode. Refresh the list and choose Continue for new files.");
             else detail.Text=T("Мониторинг начнётся автоматически вместе с проходом.","Monitoring starts automatically with the pass.");
+            if(!s.Finished&&s.ApiEffectiveIntervalMs>0){
+                double apiWait=Math.Max(0,s.ApiCooldownSeconds-(DateTime.UtcNow-s.ApiStatusCapturedUtc).TotalSeconds);
+                if(apiWait>0)detail.Text+=String.Format(T(" · API HTTP {0}: пауза ещё {1:0} с; уже начатые скачивания не приостанавливаются"," · API HTTP {0}: paused for {1:0} more s; already-started downloads are not paused"),s.ApiCooldownCode,Math.Ceiling(apiWait));
+                else if(s.ApiEffectiveIntervalMs>settings.ApiRequestIntervalMs)detail.Text+=String.Format(T(" · API временно: интервал {0} мс"," · API temporarily: {0} ms interval"),s.ApiEffectiveIntervalMs);
+            }
             available.Text=String.Format(T("Скачано за проход {0:N0} · пропущено {1:N0}","Downloaded this pass {0:N0} · skipped {1:N0}"),s.Downloaded,s.Skipped);
             if(s.Phase=="api_retry"||s.Phase=="scanning"||s.Phase=="preparing")progress.Style=ProgressBarStyle.Marquee;
             else{progress.Style=ProgressBarStyle.Continuous;progress.Maximum=Math.Max(1,s.ProgressTotal>0?s.ProgressTotal:s.Selected);progress.Value=Math.Min(progress.Maximum,s.ProgressTotal>0?s.ProgressChecked:s.Processed);}

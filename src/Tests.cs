@@ -10,6 +10,10 @@ namespace DiskRescue {
             string root=Path.Combine(Path.GetTempPath(),"disk-rescue-tests-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
             string result=Path.Combine(Path.GetDirectoryName(typeof(Tests).Assembly.Location),"self-test-results.txt");
             try{
+                PassTransitionTests.Run(root);
+                DurablePartialTests.Run(root);
+                SignedLinkTests.Run(root);
+                ApiPacerTests.Run(root);
                 Settings defaults=new Settings();defaults.ApplyTransferDefaults();Assert(defaults.IdleSeconds==3&&defaults.LinkTimeoutSeconds==3&&defaults.RepeatProblemFiles,"Transfer defaults differ from fixed 3 + 3 with retries.");defaults.IdleSeconds=4;defaults.LinkTimeoutSeconds=6;defaults.RepeatProblemFiles=false;defaults.ApplyTransferDefaults();Assert(defaults.IdleSeconds==4&&defaults.LinkTimeoutSeconds==6&&!defaults.RepeatProblemFiles,"Transfer migration overwrote saved choices more than once.");
                 UpdaterTests.Run(root);
                 string diagnostic=CrashDiagnostics.Describe(new IOException("sensitive-credential"));Assert(diagnostic.Contains("IOException")&&!diagnostic.Contains("sensitive-credential"),"Crash diagnostics retained exception messages.");

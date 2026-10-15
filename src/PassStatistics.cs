@@ -2,8 +2,26 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 namespace DiskRescue {
+    internal sealed class PassTransition {
+        int failures;
+        public DateTime ReadyUtc {get;private set;}
+        public PassTransition(){}
+        public int Prepare(Snapshot result){
+            int delay=0;
+            if(result.Phase=="error"&&result.RetryableError){failures=Math.Min(failures+1,6);delay=Math.Min(30,1<<(failures-1));}
+            else failures=0;
+            ReadyUtc=DateTime.UtcNow.AddSeconds(delay);return delay;
+        }
+        public async Task WaitAsync(CancellationToken cancellation){
+            cancellation.ThrowIfCancellationRequested();
+            TimeSpan remaining=ReadyUtc-DateTime.UtcNow;
+            if(remaining>TimeSpan.Zero)await Task.Delay(remaining,cancellation).ConfigureAwait(false);
+        }
+    }
     public sealed class PassResult {
         public DateTime StartedUtc;
         public string Method,Mode,Outcome;

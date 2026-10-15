@@ -17,7 +17,8 @@ namespace DiskRescue {
         sealed class Api:HttpMessageHandler {
             public int Seed,Files=1;public string Digest;
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token){
-                string json=request.RequestUri.AbsolutePath.EndsWith("/download")?"{\"href\":\"https://download.example/large\"}":request.RequestUri.AbsolutePath.EndsWith("/resources")?new JavaScriptSerializer().Serialize(new{type="dir",_embedded=new{items=Enumerable.Range(0,Files).Select(i=>new{path="disk:/large"+i+".mov",type="file",size=Length,md5=Digest,modified="v"+Seed}).ToArray()}}):"{\"user\":{\"uid\":\"segment-test\"}}";
+                string requested=request.RequestUri.Query.StartsWith("?path=")?Uri.UnescapeDataString(request.RequestUri.Query.Split('&')[0].Substring(6)):"";
+                string json=request.RequestUri.AbsolutePath.EndsWith("/download")?"{\"href\":\"https://download.example/large\"}":request.RequestUri.AbsolutePath.EndsWith("/resources")?(requested!="disk:/"?new JavaScriptSerializer().Serialize(new{path=requested,type="file",size=Length,md5=Digest,modified="v"+Seed}):new JavaScriptSerializer().Serialize(new{type="dir",_embedded=new{items=Enumerable.Range(0,Files).Select(i=>new{path="disk:/large"+i+".mov",type="file",size=Length,md5=Digest,modified="v"+Seed}).ToArray()}})):"{\"user\":{\"uid\":\"segment-test\"}}";
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(json)});
             }
         }

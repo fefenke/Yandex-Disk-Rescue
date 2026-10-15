@@ -69,6 +69,9 @@ namespace DiskRescue {
         public int CheckFilesChecked,CheckFilesTotal;
         public long CheckFileBytes,CheckFileLength;
         public DateTime CheckFileStartedUtc;
+        public int ApiEffectiveIntervalMs,ApiWaitingRequests,ApiCooldownCode;
+        public double ApiCooldownSeconds;
+        public DateTime ApiStatusCapturedUtc;
         public List<CategoryStats> Categories = new List<CategoryStats>();
         public List<ActiveFile> Files = new List<ActiveFile>();
         [ScriptIgnore] public List<BrowserFile> Catalog;
