@@ -10,6 +10,11 @@ namespace DiskRescue {
         static string Hash(string file){using(SHA256 sha=SHA256.Create())using(Stream stream=File.OpenRead(file))return "sha256:"+BitConverter.ToString(sha.ComputeHash(stream)).Replace("-","").ToLowerInvariant();}
         static void Archive(string file,bool malicious){using(ZipArchive zip=ZipFile.Open(file,ZipArchiveMode.Create)){foreach(string name in new[]{"YandexDiskRescue.exe","YandexDiskRescue.exe.config"})using(StreamWriter writer=new StreamWriter(zip.CreateEntry(name).Open()))writer.Write("new app");if(malicious)using(StreamWriter writer=new StreamWriter(zip.CreateEntry("data/history.jsonl").Open()))writer.Write("must not be installed");}}
         internal static void Run(string root){
+            using(System.Diagnostics.Process current=System.Diagnostics.Process.GetCurrentProcess()){
+                bool stopped=false;try{AppUpdater.WaitForParent(current.Id,current.MainModule.FileName,1);}catch(IOException){stopped=true;}Assert(stopped,"Updater did not wait for a running parent.");
+                bool mismatch=false;try{AppUpdater.WaitForParent(current.Id,"wrong-parent.exe",1);}catch(IOException){mismatch=true;}Assert(mismatch,"Updater accepted another parent executable.");
+            }
+            using(System.Diagnostics.Process exited=System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Path.Combine(Environment.SystemDirectory,"cmd.exe"),"/c exit 0"){UseShellExecute=false,CreateNoWindow=true})){exited.WaitForExit();AppUpdater.WaitForParent(exited.Id,"already-exited.exe",1000);}
             string folder=Path.Combine(root,"updater");Directory.CreateDirectory(folder);string zip=Path.Combine(folder,"safe.zip"),package=Path.Combine(folder,"package");Archive(zip,false);AppUpdater.Extract(zip,package,Hash(zip));
             bool rejected=false;try{AppUpdater.Extract(zip,Path.Combine(folder,"wrong-hash"),"sha256:"+new string('0',64));}catch(IOException){rejected=true;}Assert(rejected,"Updater accepted wrong hash.");
             string bad=Path.Combine(folder,"bad.zip");Archive(bad,true);rejected=false;try{AppUpdater.Extract(bad,Path.Combine(folder,"bad-extract"),Hash(bad));}catch(IOException){rejected=true;}Assert(rejected,"Updater accepted a private data entry.");

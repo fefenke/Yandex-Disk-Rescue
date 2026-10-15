@@ -11,6 +11,9 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
 
 namespace DiskRescue {
     internal sealed class UpdateRelease {public Version Version;public string Url,Digest,Asset;}
@@ -48,10 +51,27 @@ namespace DiskRescue {
             try{foreach(string name in Allowed){string source=Path.Combine(package,name.Replace('/','\\'));if(!File.Exists(source))continue;string destination=Path.Combine(target,name.Replace('/','\\'));for(string p=Path.GetDirectoryName(destination);p!=null&&p.Length>=target.Length;p=Path.GetDirectoryName(p))if(Directory.Exists(p)&&(File.GetAttributes(p)&FileAttributes.ReparsePoint)!=0)throw new IOException("Update destination contains a link.");Directory.CreateDirectory(Path.GetDirectoryName(destination));string old=Path.Combine(backup,name.Replace('/','\\'));if(File.Exists(destination)){Directory.CreateDirectory(Path.GetDirectoryName(old));File.Copy(destination,old);}string temporary=destination+".update-"+Guid.NewGuid().ToString("N");File.Copy(source,temporary);changed.Add(name);if(File.Exists(destination))File.Replace(temporary,destination,null);else File.Move(temporary,destination);}}
             catch{foreach(string name in changed.AsEnumerable().Reverse()){string destination=Path.Combine(target,name.Replace('/','\\')),old=Path.Combine(backup,name.Replace('/','\\'));if(File.Exists(old))File.Copy(old,destination,true);else if(File.Exists(destination))File.Delete(destination);}throw;}
         }
+        [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]
+        static extern bool QueryFullProcessImageName(IntPtr process,int flags,StringBuilder path,ref int size);
+        internal static void WaitForParent(int pid,string expected,int timeout){
+            Process parent;try{parent=Process.GetProcessById(pid);}catch(ArgumentException){return;}
+            using(parent){
+                if(parent.HasExited)return;
+                StringBuilder path=new StringBuilder(32768);int size=path.Capacity;
+                // MainModule reads the other process's module list and can fail while
+                // the CLR is shutting down. Query only its executable image instead.
+                try{if(!QueryFullProcessImageName(parent.Handle,0,path,ref size)){
+                    int code=Marshal.GetLastWin32Error();if(parent.HasExited)return;throw new Win32Exception(code);
+                }}catch(Win32Exception){if(parent.HasExited)return;throw;}catch(InvalidOperationException){if(parent.HasExited)return;throw;}
+                if(!String.Equals(path.ToString(),expected,StringComparison.OrdinalIgnoreCase))throw new IOException("Updater process mismatch.");
+                if(!parent.WaitForExit(timeout))throw new IOException("Application is still running.");
+            }
+        }
         internal static int Apply(string[] args){
             if(args.Length!=4)return 2;string target=Path.GetFullPath(args[2]),package=Path.GetFullPath(args[3]);
-            try{int pid=int.Parse(args[1]);try{using(Process parent=Process.GetProcessById(pid)){if(!String.Equals(parent.MainModule.FileName,Path.Combine(target,"YandexDiskRescue.exe"),StringComparison.OrdinalIgnoreCase))throw new IOException("Updater process mismatch.");if(!parent.WaitForExit(120000))throw new IOException("Application is still running.");}}catch(ArgumentException){}Install(package,target);Process.Start(new ProcessStartInfo(Path.Combine(target,"YandexDiskRescue.exe")){UseShellExecute=true});return 0;}
-            catch(Exception ex){MessageBox.Show("Не удалось установить обновление. История не изменялась.\n"+ex.GetType().Name,"Yandex Disk Rescue");return 1;}
+            string stage="wait";
+            try{WaitForParent(int.Parse(args[1]),Path.Combine(target,"YandexDiskRescue.exe"),120000);stage="install";Install(package,target);stage="restart";Process.Start(new ProcessStartInfo(Path.Combine(target,"YandexDiskRescue.exe")){UseShellExecute=false,WorkingDirectory=target});return 0;}
+            catch(Exception ex){Win32Exception native=ex as Win32Exception;string code=native==null?"0x"+ex.HResult.ToString("X8"):native.NativeErrorCode.ToString();MessageBox.Show((stage=="restart"?"Обновление установлено. Запустите приложение вручную.":"Не удалось установить обновление.")+"\n"+stage+" · "+ex.GetType().Name+" · "+code,"Yandex Disk Rescue");return 1;}
         }
     }
 }
