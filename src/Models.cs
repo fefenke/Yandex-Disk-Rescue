@@ -52,6 +52,9 @@ namespace DiskRescue {
         public bool RecoveryRequired; public bool RetryableError;
         public int CloudErrorsThisPass;
         public int ProgressChecked, ProgressTotal;
+        public int CheckFilesChecked,CheckFilesTotal;
+        public long CheckFileBytes,CheckFileLength;
+        public DateTime CheckFileStartedUtc;
         public List<CategoryStats> Categories = new List<CategoryStats>();
         public List<ActiveFile> Files = new List<ActiveFile>();
         [ScriptIgnore] public List<BrowserFile> Catalog;

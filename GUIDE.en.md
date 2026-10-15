@@ -30,6 +30,9 @@ RESUME AND INTEGRITY
 API resumes nonempty .ydr-part files through HTTP Range when the server accepts the requested range and the cloud version matches. Full responses restart downloading. Size and available MD5 are checked before the temporary file becomes complete. Size-only verification is weaker; damaged cloud originals cannot be repaired.
 HTTP 5xx is a server error. IOException can mean a connection, read or write failure and does not prove a server issue. The log records the type/code. A retained partial may exist after a later attempt receives no new bytes.
 
+PRE-PASS VERIFICATION
+Before downloading, the app checks history and local files. The header shows checked file counts and overall progress. MD5 checks also show percentage, megabytes read, elapsed time and the current filename. Large videos can take time; elapsed time keeps updating while disk reads are pending. The completed-file count is provisional during this stage. Each application copy keeps its own history beside it; starting another copy with older history may trigger rechecking files already on disk.
+
 INTERFACE
 Overview shows only categories present in the list. Files and folders shows folder progress including descendants and the selected folder contents. Search and remaining-only filtering apply to that folder. Tooltips show full names; resize columns/splitters and use horizontal scrolling when needed.
 Double-click a completed file to open it or a folder to browse. File menus offer Open and Show in Explorer; partial files cannot open as completed files. Folders offer Open in Explorer. Missing local objects cannot yet be revealed.
@@ -39,7 +42,7 @@ Downloaded total counts completed files; this pass counts new successes. Remaini
 UPDATES
 Check for updates automatically enables startup and 6-hour public GitHub checks. Uncheck it to disable background checks; the setting persists. Manual Check for updates and Update remain available. Installation requires approval while idle.
 The architecture-specific ZIP is checked against the GitHub SHA-256 digest. The app exits, replaces program files only and restarts. The data folder with history, inventory, settings and encrypted token is retained. Failed replacement is rolled back. Offline checks do not interrupt downloads. Versions without the updater need one manual update.
-Version 1.0.0 supports in-app updates while preserving user data.
+Version 1.0.1 supports in-app updates while preserving user data.
 
 SECURITY AND LIMITATIONS
 Windows DPAPI encrypts the saved token for your Windows account. It is decrypted in memory for use; storage encryption does not replace trust in the application. Do not share tokens; revoke unused access in Yandex ID. Never publish your data folder. Preserve it when updating and do not overwrite the history of a running app.

@@ -8,7 +8,7 @@
 <div align="center">
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.0.0 release](https://img.shields.io/badge/1.0.0-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.0)
+[![1.0.1 release](https://img.shields.io/badge/1.0.1-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.1)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
 **Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md)
@@ -22,12 +22,12 @@
 
 ## Скачать
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_бит-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.0/YandexDiskRescue-win-x64.zip)
-[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.0/YandexDiskRescue-win-x86.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_бит-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.1/YandexDiskRescue-win-x64.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.1/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11** · .NET Framework **4.7.1+** · RU / EN · без установки.
 
-**Версия 1.0.0.** Распакуйте ZIP целиком в постоянную папку и запустите **Start Yandex Disk Rescue.cmd**.
+**Версия 1.0.1.** Распакуйте ZIP целиком в постоянную папку и запустите **Start Yandex Disk Rescue.cmd**.
 
 ![Файлы и папки: прогресс, докачка и состояние файлов](assets/preview-api.png)
 
@@ -69,6 +69,8 @@ API продолжает временный файл через HTTP Range, ес
 <details>
 <summary><strong>Интерфейс и обновления</strong></summary>
 
+При сверке перед проходом видны количество проверенных файлов, а при проверке MD5 — процент, мегабайты и время. Крупные файлы могут проверяться долго; промежуточный счётчик скачанных ещё не означает итог сверки.
+
 В «Файлах и папках» двойной щелчок открывает готовый файл или содержимое папки. Через правую кнопку можно открыть файл или показать его в Проводнике. Полные имена видны в подсказках; ширину столбцов и панелей можно менять. В журнале есть поиск и фильтры **«Все события / Успешные / Ошибки»**, выделение и прокрутка сохраняются при обновлении статистики. В обзоре скрыты отсутствующие типы файлов.
 
 В настройках можно отключить автоматическую проверку обновлений и пользоваться кнопками **«Проверить обновления» / «Обновить»**. Автопроверка выполняется при запуске и раз в 6 часов; установка — после согласия, когда проход остановлен. ZIP нужной разрядности проверяется по SHA-256 из GitHub, заменяются только файлы программы. Папка `data` с историей, списком, настройками и зашифрованным токеном сохраняется. При ручном обновлении тоже сохраняйте `data` и сначала закройте приложение.
@@ -79,7 +81,7 @@ API продолжает временный файл через HTTP Range, ес
 
 Токен хранится локально через **Windows DPAPI**, с привязкой к учётной записи Windows; при работе расшифровывается в памяти. Это защита хранения, а не гарантия безопасности любого кода. Не публикуйте свою папку `data`, не передавайте токен другим людям и отзывайте доступ, когда он больше не нужен.
 
-[Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Сообщить об ошибке](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [Заметки выпуска](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.0)
+[Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Сообщить об ошибке](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [Заметки выпуска](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.1)
 
 К сообщению об ошибке приложите версию, способ скачивания и текст ошибки. Не прикладывайте токены, личные пути или всю историю.
 

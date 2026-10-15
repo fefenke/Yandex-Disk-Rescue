@@ -300,12 +300,16 @@ namespace DiskRescue {
             metricValue[0].Text=s.Total.ToString("N0");metricValue[1].Text=s.Available.ToString("N0");metricValue[2].Text=s.Downloaded.ToString("N0");metricValue[3].Text=Math.Max(0,s.Total-s.Available).ToString("N0");metricValue[4].Text=s.CloudErrorsThisPass.ToString("N0");
             phase.Text=Phase(s.Phase);phase.ForeColor=s.Phase=="error"?Color.FromArgb(193,75,85):ink;
             if(!String.IsNullOrEmpty(s.Error))detail.Text=s.Error;
-            else if(s.Phase=="api_retry"||s.Phase=="scanning"||s.Phase=="preparing"||s.Phase=="checking_local")detail.Text=s.Current;
+            else if(s.Phase=="checking_local"){
+                string hash=s.CheckFileLength>0?String.Format(T(" · MD5 {0:0}% · {1:N1}/{2:N1} МБ · {3:0} с"," · MD5 {0:0}% · {1:N1}/{2:N1} MB · {3:0} s"),100.0*s.CheckFileBytes/s.CheckFileLength,s.CheckFileBytes/1048576.0,s.CheckFileLength/1048576.0,Math.Max(0,(DateTime.UtcNow-s.CheckFileStartedUtc).TotalSeconds)):"";
+                detail.Text=String.Format(T("Проверено {0:N0}/{1:N0}{2} · {3}","Checked {0:N0}/{1:N0}{2} · {3}"),s.CheckFilesChecked,s.CheckFilesTotal,hash,s.Current);
+            }
+            else if(s.Phase=="api_retry"||s.Phase=="scanning"||s.Phase=="preparing")detail.Text=s.Current;
             else if(s.Selected>0||s.ProgressTotal>0){string eta=s.PerHour>0?String.Format("{0}:{1:00}",(int)(s.RemainingSeconds/3600),(int)((s.RemainingSeconds%3600)/60)):"—";detail.Text=String.Format(T("Обработано {0}/{1} · {3:N0} файлов/ч · осталось ≈ {4}","Processed {0}/{1} · {3:N0} files/h · remaining ≈ {4}"),s.ProgressTotal>0?s.ProgressChecked:s.Processed,s.ProgressTotal>0?s.ProgressTotal:s.Selected,s.Available,s.PerHour,eta);}
             else if(s.Finished&&s.Selected==0)detail.Text=T("Для этого режима нет файлов. Для новых файлов обновите список и выберите «Продолжить незавершённый проход».","No files match this mode. Refresh the list and choose Continue for new files.");
             else detail.Text=T("Мониторинг начнётся автоматически вместе с проходом.","Monitoring starts automatically with the pass.");
             available.Text=String.Format(T("Скачано за проход {0:N0} · пропущено {1:N0}","Downloaded this pass {0:N0} · skipped {1:N0}"),s.Downloaded,s.Skipped);
-            if(s.Phase=="api_retry"||s.Phase=="scanning"||s.Phase=="preparing"||s.Phase=="checking_local")progress.Style=ProgressBarStyle.Marquee;
+            if(s.Phase=="api_retry"||s.Phase=="scanning"||s.Phase=="preparing")progress.Style=ProgressBarStyle.Marquee;
             else{progress.Style=ProgressBarStyle.Continuous;progress.Maximum=Math.Max(1,s.ProgressTotal>0?s.ProgressTotal:s.Selected);progress.Value=Math.Min(progress.Maximum,s.ProgressTotal>0?s.ProgressChecked:s.Processed);}
             var visibleCategories=s.Categories.Where(c=>c.Total>0).ToList();
             if(categories.Rows.Count!=visibleCategories.Count){categories.Rows.Clear();foreach(CategoryStats c in visibleCategories)categories.Rows.Add(Category(c.Category),c.Total,c.Available,c.Downloaded,c.Remaining,c.ZeroDownload,c.CloudErrors);}else for(int i=0;i<visibleCategories.Count;i++){CategoryStats c=visibleCategories[i];object[] values={Category(c.Category),c.Total,c.Available,c.Downloaded,c.Remaining,c.ZeroDownload,c.CloudErrors};for(int j=0;j<values.Length;j++)if(!Object.Equals(categories.Rows[i].Cells[j].Value,values[j]))categories.Rows[i].Cells[j].Value=values[j];}
