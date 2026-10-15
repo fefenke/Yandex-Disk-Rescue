@@ -12,15 +12,25 @@ namespace DiskRescue {
         public string Folder = "";
         public string Language = "ru";
         public int Concurrency = 5;
-        public int IdleSeconds = 1;
+        public int IdleSeconds = 3;
+        public int LinkTimeoutSeconds = 3;
+        public int ApiLinkConcurrency = 7;
+        public int ApiDownloadConcurrency = 20;
+        public int ApiRequestIntervalMs = 50;
+        public bool RepeatProblemFiles = true;
+        public int TransferSettingsVersion;
         public bool RestartClient = true;
         public bool UseApi;
         public bool UseCachedApiList = true;
-        public bool IncreaseIdleTimeout = true;
+
         public bool AutoCheckUpdates = true;
         public string ApiFolder = "", RemoteFolder = "disk:/";
         [ScriptIgnore] public string ApiToken = "";
         public string GitHubReleasesUrl = "https://github.com/fefenke/Yandex-Disk-Rescue/releases", SupportUrl = "https://yoomoney.ru/fundraise/1KS67440FP0.261012";
+        public void ApplyTransferDefaults() {
+            if(TransferSettingsVersion>=1)return;
+            IdleSeconds=LinkTimeoutSeconds=3;RepeatProblemFiles=true;TransferSettingsVersion=1;
+        }
     }
     public sealed class HistoryRecord {
         public string path, modified, status, message, time;

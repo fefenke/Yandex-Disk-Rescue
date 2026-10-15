@@ -21,7 +21,9 @@ namespace DiskRescue {
         readonly CancellationTokenSource stop=new CancellationTokenSource();
         readonly List<DiskFile> files=new List<DiskFile>();
         readonly HashSet<string> remotePaths=new HashSet<string>(StringComparer.Ordinal);
-        readonly SemaphoreSlim apiGate=new SemaphoreSlim(1,1);
+        internal const int LinkConcurrency=7,DownloadConcurrency=20,ReadyLinkCapacity=20;
+        readonly object launchSync=new object();
+        Task launchTail=Task.FromResult(true);
         DateTime lastPublish=DateTime.MinValue;
         string lastPhase="";
         DateTime catalogTime=DateTime.MinValue;List<BrowserFile> catalog;
@@ -40,7 +42,8 @@ namespace DiskRescue {
         RunMode runMode;
         bool queueReady;
         int checkFilesChecked;long checkFileBytes,checkFileLength;DateTime checkFileStarted;
-        sealed class Job { public DiskFile File; public Task<Result> Task; public long Bytes; }
+        sealed class Job { public DiskFile File; public Task<Result> Task; public Task<LinkResult> LinkTask; public Uri Link; public long Bytes; }
+        sealed class LinkResult { public Uri Link; public Result Completed; }
         sealed class Result { public string Status,Message; public long Bytes; }
         public ApiEngine(string data,Action<Snapshot> publish){this.data=data;this.publish=publish;}
         internal ApiEngine(string data,Action<Snapshot> publish,HttpMessageHandler apiHandler,HttpMessageHandler fileHandler):this(data,publish){this.apiHandler=apiHandler;this.fileHandler=fileHandler;}
@@ -67,8 +70,18 @@ namespace DiskRescue {
             if(!path.StartsWith(fullRoot,StringComparison.OrdinalIgnoreCase))throw new IOException("Destination outside download folder.");
             return path;
         }
-        async Task<Dictionary<string,object>> Json(string route,CancellationToken cancellation){
-            await apiGate.WaitAsync(cancellation).ConfigureAwait(false);try{await Task.Delay(50,cancellation).ConfigureAwait(false);}finally{apiGate.Release();}
+        async Task WaitForLaunch(CancellationToken cancellation){
+            Task previous;TaskCompletionSource<bool> done=new TaskCompletionSource<bool>();
+            lock(launchSync){previous=launchTail;launchTail=done.Task;}
+            try{await previous.ConfigureAwait(false);cancellation.ThrowIfCancellationRequested();await Task.Delay(Math.Max(25,Math.Min(1000,settings.ApiRequestIntervalMs)),cancellation).ConfigureAwait(false);}
+            finally{done.TrySetResult(true);}
+        }
+        async Task<Dictionary<string,object>> Json(string route,CancellationToken cancellation,int timeoutSeconds=0){
+            await WaitForLaunch(cancellation).ConfigureAwait(false);
+            using(CancellationTokenSource requestTimeout=CancellationTokenSource.CreateLinkedTokenSource(cancellation)){
+            if(timeoutSeconds>0)requestTimeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            cancellation=requestTimeout.Token;
+            try{
             using(HttpRequestMessage request=new HttpRequestMessage(HttpMethod.Get,Endpoint+route)){
                 request.Headers.Authorization=new AuthenticationHeaderValue("OAuth",settings.ApiToken);
                 using(HttpResponseMessage response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,cancellation).ConfigureAwait(false)){
@@ -81,12 +94,13 @@ namespace DiskRescue {
                     }
                 }
             }
+            }catch(Exception){if(requestTimeout.IsCancellationRequested)throw new OperationCanceledException(cancellation);throw;}
+            }
         }
         Dictionary<string,object> Listing(string route){
             int failures=0;
             while(true){stop.Token.ThrowIfCancellationRequested();using(CancellationTokenSource timeout=CancellationTokenSource.CreateLinkedTokenSource(stop.Token)){
-                timeout.CancelAfter(TimeSpan.FromSeconds(30));
-                try{var result=Json(route,timeout.Token).GetAwaiter().GetResult();if(failures>0)Snapshot(route==""?"preparing":"scanning","",false);return result;}
+                try{var result=Json(route,timeout.Token,30).GetAwaiter().GetResult();if(failures>0)Snapshot(route==""?"preparing":"scanning","",false);return result;}
                 catch(Exception ex){
                     stop.Token.ThrowIfCancellationRequested();ApiException http=ex as ApiException;
                     bool temporary=timeout.IsCancellationRequested||ex is OperationCanceledException||ex is HttpRequestException||ex is System.Net.WebException||(http!=null&&(http.Code==408||http.Code==429||http.Code>=500));
@@ -170,22 +184,34 @@ namespace DiskRescue {
         static void SafeDestination(string path){
             for(string current=path;!String.IsNullOrEmpty(current);current=Path.GetDirectoryName(current))if((File.Exists(current)||Directory.Exists(current))&&(File.GetAttributes(current)&FileAttributes.ReparsePoint)!=0)throw new IOException("Download destination contains a link or cloud placeholder.");
         }
-        async Task<Result> Download(Job job){
+        async Task<LinkResult> PrepareLink(Job job){
             string partial=job.File.Destination+".ydr-part";
             string metadata=Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(job.File.Path)+".txt");
             string identity=job.File.Path+"\n"+job.File.Modified+"\n"+job.File.Length;
             long offset=0;
-            using(CancellationTokenSource idle=CancellationTokenSource.CreateLinkedTokenSource(stop.Token)){
-                try{
+            try{stop.Token.ThrowIfCancellationRequested();
                     SafeDestination(partial);SafeDestination(job.File.Destination);Directory.CreateDirectory(Path.GetDirectoryName(partial));
                     if(File.Exists(partial)&&((File.Exists(metadata)&&File.ReadAllText(metadata)==identity)||(!File.Exists(metadata)&&job.File.ResumeEligible))){offset=new FileInfo(partial).Length;if(offset>job.File.Length)offset=0;}
                     if(offset==0&&File.Exists(partial)){using(FileStream reset=new FileStream(partial,FileMode.Create,FileAccess.Write)){} }
                     Directory.CreateDirectory(Path.GetDirectoryName(metadata));File.WriteAllText(metadata,identity);
-                    if(offset==job.File.Length&&offset>0){if(Verified(partial,job.File.Length,job.File.Md5,stop.Token)){stop.Token.ThrowIfCancellationRequested();if(File.Exists(job.File.Destination))File.Replace(partial,job.File.Destination,null);else File.Move(partial,job.File.Destination);File.Delete(metadata);return new Result{Status="success",Bytes=offset,Message=""};}offset=0;}
+                    if(offset==job.File.Length&&offset>0){if(Verified(partial,job.File.Length,job.File.Md5,stop.Token)){stop.Token.ThrowIfCancellationRequested();if(File.Exists(job.File.Destination))File.Replace(partial,job.File.Destination,null);else File.Move(partial,job.File.Destination);File.Delete(metadata);return new LinkResult{Completed=new Result{Status="success",Bytes=offset,Message=""}};}offset=0;}
                     job.Bytes=offset;
+                Dictionary<string,object> link=await Json("/resources/download?path="+Uri.EscapeDataString(job.File.Path),stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
+                Uri uri;if(!Uri.TryCreate(Text(link,"href"),UriKind.Absolute,out uri)||uri.Scheme!="https"||!String.IsNullOrEmpty(uri.UserInfo))throw new IOException("Invalid HTTPS download link.");
+                return new LinkResult{Link=uri};
+            }catch(OperationCanceledException){return new LinkResult{Completed=new Result{Status=stop.IsCancellationRequested?"cancelled_user":"timeout",Message=stop.IsCancellationRequested?"Stopped by user.":"Download link request timed out.",Bytes=job.Bytes}};}
+            catch(ApiException ex){return new LinkResult{Completed=new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="Link HTTP "+ex.Code,Bytes=job.Bytes}};}
+            catch(Exception ex){return new LinkResult{Completed=new Result{Status=stop.IsCancellationRequested?"cancelled_user":"failed",Message=stop.IsCancellationRequested?"Stopped by user.":"Link preparation failed: "+ex.GetType().Name+" (0x"+ex.HResult.ToString("X8")+")",Bytes=job.Bytes}};}
+        }
+        async Task<Result> Download(Job job){
+            string partial=job.File.Destination+".ydr-part";
+            string metadata=Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(job.File.Path)+".txt");
+            long offset=job.Bytes;
+            using(CancellationTokenSource idle=CancellationTokenSource.CreateLinkedTokenSource(stop.Token)){
+                try{
+                    stop.Token.ThrowIfCancellationRequested();SafeDestination(partial);SafeDestination(job.File.Destination);
                     idle.CancelAfter(TimeSpan.FromSeconds(settings.IdleSeconds));
-                    Dictionary<string,object> link=await Json("/resources/download?path="+Uri.EscapeDataString(job.File.Path),idle.Token).ConfigureAwait(false);
-                    Uri uri;if(!Uri.TryCreate(Text(link,"href"),UriKind.Absolute,out uri)||uri.Scheme!="https"||!String.IsNullOrEmpty(uri.UserInfo))throw new IOException("Invalid HTTPS download link.");
+                    Uri uri=job.Link;
                     // No OAuth header is sent to the signed download URL.
                     using(HttpRequestMessage request=new HttpRequestMessage(HttpMethod.Get,uri)){
                     if(offset>0)request.Headers.Range=new RangeHeaderValue(offset,null);
@@ -220,10 +246,13 @@ namespace DiskRescue {
             settings=options;runMode=mode;clock.Start();string phase="completed",error="";
             try{
                 string missing=Validation(settings);if(missing!="")throw new IOException("Missing required API field: "+missing);
+                int linkConcurrency=Math.Max(1,Math.Min(30,settings.ApiLinkConcurrency));
+                int downloadConcurrency=Math.Max(1,Math.Min(30,settings.ApiDownloadConcurrency));
+                int waitingCapacity=Math.Max(ReadyLinkCapacity,linkConcurrency);
                 string destination=Path.GetFullPath(settings.ApiFolder);settings.ApiFolder=destination;Directory.CreateDirectory(destination);
                 if(File.GetAttributes(destination).HasFlag(FileAttributes.ReparsePoint))throw new IOException("Choose an ordinary local download folder, not a cloud placeholder or link.");
                 ServicePointManager.SecurityProtocol|=SecurityProtocolType.Tls12;
-                ServicePointManager.DefaultConnectionLimit=Math.Max(10,ServicePointManager.DefaultConnectionLimit);
+                ServicePointManager.DefaultConnectionLimit=Math.Max(linkConcurrency+downloadConcurrency,Math.Max(40,ServicePointManager.DefaultConnectionLimit));
                 // Automatic redirects are disabled so authorization never crosses hosts.
                 client=new HttpClient(apiHandler??new HttpClientHandler{AllowAutoRedirect=false}){Timeout=Timeout.InfiniteTimeSpan};
                 downloadClient=new HttpClient(fileHandler??new HttpClientHandler{AllowAutoRedirect=true}){Timeout=Timeout.InfiniteTimeSpan};
@@ -239,17 +268,40 @@ namespace DiskRescue {
                     checkFilesChecked++;Snapshot("checking_local","",false);
                 }
                 List<DiskFile> queue=FileRules.Order(files.Where(f=>mode==RunMode.Continue ? f.Status=="pending"||f.Status=="cancelled_user" : FileRules.Select(f,history.Find(f.Path),mode)));selected=queue.Count;skipped=files.Count-selected;queueReady=true;int next=0;Stopwatch reportClock=Stopwatch.StartNew();
+                Queue<Job> readyJobs=new Queue<Job>();
                 while(next<queue.Count||jobs.Count>0){
-                    while(!stop.IsCancellationRequested&&jobs.Count<5&&next<queue.Count){DiskFile f=queue[next++];if(f.Local){processed++;continue;}Job job=new Job{File=f};jobs.Add(job);job.Task=Download(job);}
-                    foreach(Job job in jobs.ToArray())if(job.Task.IsCompleted){Result result=job.Task.GetAwaiter().GetResult();job.File.DownloadedBytes=result.Bytes;history.SaveApi(job.File,result.Status,result.Message);processed++;if(result.Status=="success")downloaded.Add(job.File.Path);if(result.Status=="cloud_error")errors.Add(job.File.Path);Event(job.File.Path+"  ·  "+result.Status+(result.Message==""?"":"  ·  "+result.Message));jobs.Remove(job);}
+                    foreach(Job job in jobs.ToArray())if(job.Task!=null&&job.Task.IsCompleted)Finish(job,job.Task.GetAwaiter().GetResult());
+                    foreach(Job job in jobs.ToArray())if(job.LinkTask!=null&&job.LinkTask.IsCompleted){
+                        LinkResult link=job.LinkTask.GetAwaiter().GetResult();job.LinkTask=null;
+                        if(link.Completed!=null)Finish(job,link.Completed);
+                        else if(stop.IsCancellationRequested)Finish(job,new Result{Status="cancelled_user",Message="Stopped before download started.",Bytes=job.Bytes});
+                        else{job.Link=link.Link;readyJobs.Enqueue(job);}
+                    }
+                    if(stop.IsCancellationRequested){
+                        while(readyJobs.Count>0){Job job=readyJobs.Dequeue();Finish(job,new Result{Status="cancelled_user",Message="Stopped before download started.",Bytes=job.Bytes});}
+                        if(jobs.Count==0){phase="stopped";break;}
+                    }else{
+                        while(readyJobs.Count>0&&jobs.Count(j=>j.Task!=null)<downloadConcurrency){Job job=readyJobs.Dequeue();job.Task=Task.Run(()=>Download(job));}
+                        while(next<queue.Count&&jobs.Count(j=>j.LinkTask!=null)<linkConcurrency&&jobs.Count(j=>j.Task==null)<waitingCapacity){
+                            DiskFile f=queue[next++];if(f.Local){processed++;continue;}
+                            Job job=new Job{File=f};jobs.Add(job);job.LinkTask=PrepareLink(job);
+                        }
+                    }
                     Snapshot(stop.IsCancellationRequested?"stopping":"running","",false);
                     if(reportClock.Elapsed.TotalSeconds>=120){Reports.Write(report,destination,files,latest);reportClock.Restart();}
-                    if(stop.IsCancellationRequested&&jobs.Count==0){phase="stopped";break;}Thread.Sleep(100);
+                    Thread.Sleep(50);
                 }
+
             }catch(OperationCanceledException){retryableError=!stop.IsCancellationRequested;phase=stop.IsCancellationRequested?"stopped":"error";error=stop.IsCancellationRequested?"":"API listing request timed out.";}
             catch(ApiException ex){retryableError=ex.Code>=500||ex.Code==429||ex.Code==408;phase="error";error=ex.Code==401?"OAuth token is invalid or expired.":ex.Code==403?"Token has no access to these files.":"Yandex API returned HTTP "+ex.Code;Event(error);}
             catch(Exception ex){retryableError=ex is HttpRequestException||ex is System.Net.WebException;phase=stop.IsCancellationRequested?"stopped":"error";error=stop.IsCancellationRequested?"":ex is IOException||ex is ArgumentException?ex.Message:"API request failed or timed out.";Event(error);}
-            finally{stop.Cancel();foreach(Job job in jobs)try{Result r=job.Task.GetAwaiter().GetResult();job.File.DownloadedBytes=r.Bytes;history.SaveApi(job.File,r.Status,r.Message);}catch{}jobs.Clear();clock.Stop();Snapshot(phase,error,true);if(history!=null){try{Reports.Write(report,settings.ApiFolder,files,latest);}catch(Exception reportError){retryableError=false;string reportMessage="Could not save reports: "+reportError.GetType().Name;Event(reportMessage);Snapshot("error",String.IsNullOrEmpty(error)?reportMessage:error+"\n"+reportMessage,true);}history.Dispose();}if(client!=null)client.Dispose();if(downloadClient!=null)downloadClient.Dispose();stop.Dispose();}
+            finally{stop.Cancel();foreach(Job job in jobs.ToArray())try{Result r=job.Task!=null?job.Task.GetAwaiter().GetResult():job.LinkTask!=null?job.LinkTask.GetAwaiter().GetResult().Completed:null;if(r==null)r=new Result{Status="cancelled_user",Message="Stopped before download started.",Bytes=job.Bytes};job.File.DownloadedBytes=r.Bytes;history.SaveApi(job.File,r.Status,r.Message);}catch{}jobs.Clear();clock.Stop();Snapshot(phase,error,true);if(history!=null){try{Reports.Write(report,settings.ApiFolder,files,latest);}catch(Exception reportError){retryableError=false;string reportMessage="Could not save reports: "+reportError.GetType().Name;Event(reportMessage);Snapshot("error",String.IsNullOrEmpty(error)?reportMessage:error+"\n"+reportMessage,true);}history.Dispose();}if(client!=null)client.Dispose();if(downloadClient!=null)downloadClient.Dispose();stop.Dispose();}
+
+        }
+        void Finish(Job job,Result result){
+            job.File.DownloadedBytes=result.Bytes;history.SaveApi(job.File,result.Status,result.Message);processed++;
+            if(result.Status=="success")downloaded.Add(job.File.Path);if(result.Status=="cloud_error")errors.Add(job.File.Path);
+            Event(job.File.Path+"  ?  "+result.Status+(result.Message==""?"":"  ?  "+result.Message));jobs.Remove(job);
         }
         bool retryableError; Snapshot latest;
         void Snapshot(string phase,string error,bool finished){

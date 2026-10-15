@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -7,7 +7,7 @@ namespace DiskRescue {
         readonly Timer updateTimer=new Timer{Interval=6*60*60*1000};UpdateRelease pendingUpdate;bool checkingUpdate,installingUpdate,offeredUpdate;
         CheckBox autoCheck;Button checkRelease,installRelease;Label releaseStatus;
         Control UpdateSettingsPanel(){
-            TableLayoutPanel panel=Table(1);panel.Padding=new Padding(18,4,0,0);panel.RowStyles.Add(new RowStyle(SizeType.Absolute,28));panel.RowStyles.Add(new RowStyle(SizeType.Absolute,50));panel.RowStyles.Add(new RowStyle(SizeType.Absolute,26));
+            TableLayoutPanel panel=Table(1);panel.Padding=new Padding(18,20,0,0);panel.RowStyles.Add(new RowStyle(SizeType.Absolute,28));panel.RowStyles.Add(new RowStyle(SizeType.Absolute,50));panel.RowStyles.Add(new RowStyle(SizeType.Absolute,26));
             autoCheck=new CheckBox{Dock=DockStyle.Fill,Checked=settings.AutoCheckUpdates};panel.Controls.Add(autoCheck,0,0);
             FlowLayoutPanel buttons=new FlowLayoutPanel{Dock=DockStyle.Fill,WrapContents=false,Margin=Padding.Empty};checkRelease=new SoftButton{Width=220,Height=36,Margin=new Padding(0,6,10,6)};installRelease=new SoftButton{Primary=true,Width=132,Height=36,Margin=new Padding(0,6,0,6),Enabled=false};buttons.Controls.Add(checkRelease);buttons.Controls.Add(installRelease);panel.Controls.Add(buttons,0,1);releaseStatus=Label("",9,false);panel.Controls.Add(releaseStatus,0,2);
             autoCheck.CheckedChanged+=delegate{settings.AutoCheckUpdates=autoCheck.Checked;SaveSettings();if(autoCheck.Checked)updateTimer.Start();else{updateTimer.Stop();pendingUpdate=null;offeredUpdate=true;}TranslateUpdateSettings();};checkRelease.Click+=async delegate{await CheckUpdates(true);};installRelease.Click+=delegate{offeredUpdate=false;OfferUpdate();};TranslateUpdateSettings();return panel;

@@ -71,7 +71,7 @@ namespace DiskRescue {
             }
         }
         static void ResumeTests(string root){
-            for(int variant=0;variant<4;variant++){
+            for(int variant=0;variant<5;variant++){
                 string folder=Path.Combine(root,"resume-"+variant),data=Path.Combine(root,"resume-data-"+variant);Directory.CreateDirectory(Path.Combine(folder,"a"));
                 string destination=Path.Combine(folder,"a","same.jpg");File.WriteAllText(destination+".ydr-part","te");
                 DiskFile file=new DiskFile{Path="disk:/a/same.jpg",Destination=destination,Length=4,Modified=(variant==3?"different":"2026-01-01T00:00:00Z|"+Md5("test")),DownloadedBytes=2};
@@ -83,7 +83,40 @@ namespace DiskRescue {
                 else{Assert(File.ReadAllText(destination)=="test"&&result.Downloaded==1,"Resume or full-response fallback failed.");Assert(mock.Requested==(variant==3?-1:2),"Resume ignored cloud version or byte offset.");}
             }
         }
+        sealed class PipelineApiMock:HttpMessageHandler {
+            public int DelayMs,Active,Peak;
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancellation){
+                if(request.RequestUri.AbsolutePath.EndsWith("/download")){
+                    int active=Interlocked.Increment(ref Active);int previous;do{previous=Peak;if(previous>=active)break;}while(Interlocked.CompareExchange(ref Peak,active,previous)!=previous);
+                    try{await Task.Delay(DelayMs,cancellation);return new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("{\"href\":\"https://download.example/file\"}")};}finally{Interlocked.Decrement(ref Active);}
+                }
+                string text=request.RequestUri.AbsolutePath.EndsWith("/resources")?new JavaScriptSerializer().Serialize(new{type="dir",_embedded=new{items=Enumerable.Range(0,30).Select(i=>new{path="disk:/pipeline/f"+i+".txt",type="file",size=4,md5=Md5("test"),modified="v"}).ToArray()}}):"{\"user\":{\"uid\":\"pipeline-account\"}}";
+                return new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(text)};
+            }
+        }
+        sealed class PipelineDownloadMock:HttpMessageHandler {
+            public int DelayMs,Active,Peak;public Action Started;
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancellation){
+                Assert(request.Headers.Authorization==null,"Pipeline sent OAuth to download host.");
+                int active=Interlocked.Increment(ref Active);int previous;do{previous=Peak;if(previous>=active)break;}while(Interlocked.CompareExchange(ref Peak,active,previous)!=previous);
+                try{if(Started!=null)Started();await Task.Delay(DelayMs,cancellation);return new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("test")};}finally{Interlocked.Decrement(ref Active);}
+            }
+        }
+        static void PipelineTests(string root){
+            for(int variant=0;variant<4;variant++){
+                string folder=Path.Combine(root,"pipeline-"+variant),data=Path.Combine(root,"pipeline-data-"+variant);Directory.CreateDirectory(folder);
+                PipelineApiMock api=new PipelineApiMock{DelayMs=variant==4?2000:variant==0?850:200};PipelineDownloadMock downloads=new PipelineDownloadMock{DelayMs=variant==0||variant==3?350:1800};
+                Snapshot last=null;ApiEngine engine=new ApiEngine(data,x=>last=x,api,downloads);if(variant==2)downloads.Started=engine.Stop;
+                engine.Run(new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",LinkTimeoutSeconds=variant==4?3:1,IdleSeconds=variant==0?1:3,ApiLinkConcurrency=variant==4?30:variant==3?2:7,ApiDownloadConcurrency=variant==4?30:variant==3?3:20},RunMode.Remaining);
+                Assert(api.Peak<=(variant==4?30:variant==3?2:ApiEngine.LinkConcurrency)&&api.Peak>1&&downloads.Peak<=(variant==4?30:variant==3?3:ApiEngine.DownloadConcurrency),"Configured pipeline limits exceeded.");
+                if(variant==4)Assert(api.Peak>20&&downloads.Peak>20,"30 + 30 settings remained capped at the old hardcoded limits.");
+                Assert(api.Active==0&&downloads.Active==0,"Stop or completion left requests running.");
+                if(variant==2){Assert(last.Phase=="stopped"&&last.Finished,"Pipeline Stop did not finish cleanly.");using(HistoryStore history=new HistoryStore(data,folder,"pipeline-account|disk:/|"+folder.ToUpperInvariant()))Assert(history.Records.Count>0&&history.Records.Values.All(x=>x.status=="cancelled_user"),"Stopped pipeline lost or misclassified history.");}
+                else{Assert(last.Phase=="completed"&&last.Downloaded==30&&last.Processed==30,"Queue wait consumed API timeout, download reused API budget, or pipeline lost files.");Assert(Directory.GetFiles(Path.Combine(folder,"pipeline")).Length==30,"Pipeline left missing or partial files.");if(variant==1)Assert(downloads.Peak>ApiEngine.LinkConcurrency,"Link and download queues did not run independently.");}
+            }
+        }
         public static void Run(string root){
+            PipelineTests(root);
             ResumeTests(root);
             string folder=Path.Combine(root,"api-downloads"),data=Path.Combine(root,"api-history");Directory.CreateDirectory(folder);
             Settings s=new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",IdleSeconds=5};
@@ -94,8 +127,6 @@ namespace DiskRescue {
             retryRecord.status="timeout";Assert(FileRules.Select(retryFile,retryRecord,RunMode.ErrorsAndZero)&&!FileRules.Select(retryFile,retryRecord,RunMode.CloudErrors),"Zero download missing from combined retry.");
             retryFile.DownloadedBytes=5;Assert(FileRules.Select(retryFile,retryRecord,RunMode.ErrorsAndZero),"Partial timeout missing from incomplete downloads.");
             Assert(FileRules.Select(retryFile,null,RunMode.NewFiles)&&!FileRules.Select(retryFile,null,RunMode.ErrorsAndZero),"New file counted as a prior failure.");
-            Assert(PassHistory.IdleForPass(1,0,true,true)==1&&PassHistory.IdleForPass(1,1,true,true)==1&&PassHistory.IdleForPass(1,2,true,true)==3&&PassHistory.IdleForPass(1,4,true,true)==5,"Idle escalation schedule incorrect.");
-            Assert(PassHistory.IdleForPass(3,2,true,true)==5&&PassHistory.IdleForPass(7,8,true,true)==7&&PassHistory.IdleForPass(1,8,false,true)==1&&PassHistory.IdleForPass(1,8,true,false)==1,"Idle escalation ignored initial value or checkboxes.");
             Assert(FileRules.Select(retryFile,null,RunMode.Remaining)&&FileRules.Select(retryFile,retryRecord,RunMode.Remaining),"All remaining skipped untested or failed files.");retryFile.Local=true;Assert(!FileRules.Select(retryFile,retryRecord,RunMode.Remaining),"All remaining included a valid local file.");retryFile.Local=false;
             retryRecord.status="failed";Assert(FileRules.Select(retryFile,retryRecord,RunMode.ProblemFiles),"Automatic retry missed an integrity failure.");retryFile.Local=true;Assert(!FileRules.Select(retryFile,retryRecord,RunMode.ProblemFiles),"Automatic retry selected a local file.");
             Snapshot repeatSnapshot=new Snapshot{Phase="completed",Finished=true,Selected=5,Downloaded=2,Available=3,Total=7,CloudErrors=1,CloudErrorsThisPass=1};
@@ -106,7 +137,7 @@ namespace DiskRescue {
             Assert(FileRules.Category("disk:/Фото/фото \"1\".jpg")=="photos"&&FileRules.Category("disk:/Фото/a|b.png")=="photos","Cloud filename rejected by category detection.");
             bool rejected=false;try{ApiEngine.LocalPath(folder,"disk:/../outside.jpg");}catch(IOException){rejected=true;}Assert(rejected,"Traversal accepted.");
             Snapshot last=null;DownloadMock downloads=new DownloadMock();ApiEngine engine=new ApiEngine(data,x=>last=x,new ApiMock(),downloads);engine.Run(s,RunMode.Continue);
-            Assert(last.Finished&&last.Phase=="completed"&&last.Total==7&&last.Downloaded==4,"API pass results incorrect.");Assert(last.CloudErrorsThisPass==1&&last.Deferred==2,"Timeout, HTTP error or integrity failure missing.");Assert(downloads.Peak<=5&&downloads.Peak>1,"Download concurrency incorrect.");
+            Assert(last.Finished&&last.Phase=="completed"&&last.Total==7&&last.Downloaded==4,"API pass results incorrect.");Assert(last.CloudErrorsThisPass==1&&last.Deferred==2,"Timeout, HTTP error or integrity failure missing.");Assert(downloads.Peak<=ApiEngine.DownloadConcurrency&&downloads.Peak>1,"Download concurrency incorrect.");
             System.Collections.Generic.List<BrowserFile> savedBrowser=BrowserCatalog.Load(data,true,folder,"disk:/");Assert(savedBrowser.Count==7&&savedBrowser.Count(f=>f.Ready)==4,"Offline dashboard ignored saved list/history.");Assert(savedBrowser.Single(f=>f.Path=="Case.JPG").LocalPath!=savedBrowser.Single(f=>f.Path=="case.JPG").LocalPath,"Dashboard mixed case-colliding download locations.");
             Assert(File.Exists(Path.Combine(folder,"a","same.jpg"))&&File.Exists(Path.Combine(folder,"b","same.jpg")),"Same-name files collided.");Assert(Directory.GetFiles(folder,"*",SearchOption.AllDirectories).Count(x=>Path.GetFileName(x).StartsWith("case",StringComparison.OrdinalIgnoreCase)&&!x.EndsWith(".ydr-part"))==2,"Case-sensitive cloud files collided.");
             Assert(!File.Exists(Path.Combine(folder,"bad.jpg")),"Corrupt download promoted to final file.");

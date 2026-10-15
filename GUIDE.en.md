@@ -1,4 +1,4 @@
-# User guide
+# Guide
 
 IMPORTANT: Unlimited photo/video auto-upload files are NOT counted or downloaded. Only the regular Files section is supported.
 
@@ -21,10 +21,28 @@ PASS MODES
 • Resume partial downloads · API: nonempty .ydr-part files only. Automatic retries stay in this mode; otherwise one pass runs.
 
 AUTOMATIC RETRIES AND TIMING
-Repeat problem files starts later problem passes after 30-second pauses. Normal modes switch to problem-file retries; the cloud list is not refreshed on every pass. Partial-file mode keeps its own queue. Stop, an empty matching queue or a nonrecoverable error ends the series.
-Idle timeout limits waiting without new bytes, not total download duration. Initially API waiting also includes obtaining the link and first response. New data resets it. Start with 1 second for a quick pass; try 3–5 seconds for repeated timeouts. Short waits can cancel slow but working downloads.
-Increase idle wait up to 5 sec is active only with automatic retries. Every two completed nonempty passes add 2 seconds up to 5: 1,1,3,3,5 or 3,3,5. Initial values of 5 or more stay unchanged. Each new session restarts from its initial value. Connection failures, incomplete scans and empty passes do not advance the schedule.
+Continuous passes starts later problem passes after 30-second pauses. Normal modes switch to problem-file retries; the cloud list is not refreshed on every pass. Partial-file mode keeps its own queue. Stop, an empty matching queue or a nonrecoverable error ends the series.
+TWO INDEPENDENT API TIMEOUTS
+Link timeout, sec: how long to wait for the API download-link response after sending the request. Default: 3 seconds. Queueing and the chosen interval between request launches do not count. A timed-out file remains eligible for another pass.
+File idle timeout, sec: wait for the download response, then for new data. Default: 3 seconds. Starts only when downloading begins and resets on response headers and each new block of bytes. Waiting in the ready-link queue does not count. This is not a total download-duration limit. In desktop-client mode it controls time without file-retrieval progress; link timeout is API-only.
+Both fields accept 1–60 seconds. With 3 + 3, the API request gets three seconds after sending, then downloading has a fresh three-second idle budget.
+
+CONCURRENT WORK
+By default, up to 7 link requests and up to 20 downloads run simultaneously and independently. Links for subsequent files are obtained while other files download. These are ceilings, not guaranteed active-transfer counts. Ready links wait in a bounded queue. The API launch interval defaults to 50 ms.
+Defaults: repeat problem files indefinitely, both timeouts fixed at 3 seconds, automatic increases disabled. Stop cancels the whole series. Manual choices persist. When migrating to this pipeline, defaults reset once to 3 + 3 with repeat enabled; history, inventory and token are retained.
 Temporary API connection/listing failures retry independently at the current folder/page: first immediately, then 1/2/up to 5 seconds and server Retry-After. Invalid tokens and access denial require attention.
+
+CONCURRENCY: WHAT THE TWO FIELDS CONTROL
+Link requests: how many tasks can request download links simultaneously. Default 7; range 1–30. This is in-flight task count, not requests per second. Try increasing it when downloads wait for links; try reducing it if link timeouts, connection failures or HTTP 429 responses increase. More requests do not guarantee more successful downloads.
+Downloads: how many files can wait for a server response or receive data using ready links simultaneously. Default 20; range 1–30. Other files can download while some wait. A timed-out attempt frees its slot. If few links are ready, some slots remain idle.
+7 + 20 is the best balance in our tests and our starting recommendation, not a Yandex limit or a universal optimum. You may choose 30 + 30. The app caps each field at 30 to bound connection and memory use. Queues remain bounded instead of spawning a task for every file.
+On a slow connection, try fewer downloads, for example 5–10. Files share your total bandwidth; more transfers do not increase it. If the link is already saturated, increasing concurrency usually adds no overall speed. If server waits leave bandwidth idle, increasing it may help. A few large-file transfers may fill the link, while small files depend more on link acquisition.
+Change one setting at a time and compare several passes with equal timeouts: successful files, completed data and elapsed time. A fast pass with more failures is not necessarily better. All five transfer settings persist and are locked throughout passes and automatic-retry pauses. Concurrency and link timeout are API-only; Windows and the official desktop client control transfers in client mode.
+
+REQUEST LAUNCH INTERVAL
+API launch interval, ms: time between API request launches. Range 25–1000 ms; default 50 ms. Approximate maximum launch rates: 25 ms → 40/s; 50 ms → 20/s; 100 ms → 10/s; 200 ms → 5/s; 1000 ms → 1/s. Requests can wait for responses concurrently without waiting for the preceding response before launching.
+Reduce the interval to try a higher launch rate and compare results. Increase it if rate restrictions, HTTP 429 or API instability occur. A lower interval does not guarantee better speed or success. Queueing and the chosen interval do not consume link response time. This setting persists and is locked while running.
+Section 2.2 of the official Disk API terms specifies 40 requests per second: https://yandex.ru/legal/disk_api/ru/ . This limits frequency, not the number of tasks waiting concurrently. The default 50 ms leaves headroom below that rate.
 
 RESUME AND INTEGRITY
 API resumes nonempty .ydr-part files through HTTP Range when the server accepts the requested range and the cloud version matches. Full responses restart downloading. Size and available MD5 are checked before the temporary file becomes complete. Size-only verification is weaker; damaged cloud originals cannot be repaired.
@@ -42,8 +60,14 @@ Downloaded total counts completed files; this pass counts new successes. Remaini
 UPDATES
 Check for updates automatically enables startup and 6-hour public GitHub checks. Uncheck it to disable background checks; the setting persists. Manual Check for updates and Update remain available. Installation requires approval while idle.
 The architecture-specific ZIP is checked against the GitHub SHA-256 digest. The app exits, replaces program files only and restarts. The data folder with history, inventory, settings and encrypted token is retained. Failed replacement is rolled back. Offline checks do not interrupt downloads. Versions without the updater need one manual update.
-Version 1.0.1 supports in-app updates while preserving user data.
+Version 1.0.2 supports in-app updates while preserving user data.
 
 SECURITY AND LIMITATIONS
 Windows DPAPI encrypts the saved token for your Windows account. It is decrypted in memory for use; storage encryption does not replace trust in the application. Do not share tokens; revoke unused access in Yandex ID. Never publish your data folder. Preserve it when updating and do not overwrite the history of a running app.
 Independent unofficial project, unaffiliated with Yandex. It does not repair server failures, recover deleted data or guarantee every download. Unlimited auto-upload is unsupported.
+
+
+ERROR MESSAGES
+Download link request timed out. means the API did not return a link within Link timeout; downloading has not started in that attempt. A file idle timeout means the download response or more data did not arrive in time. A timeout alone does not imply HTTP 500 or file corruption.
+HTTP 429 means too many requests: increase the API launch interval and try later. HTTP 503 means temporarily unavailable; HTTP 500 means an internal server error. Retrying may help temporary failures but cannot guarantee availability.
+Continuous passes retain the selected timeouts without automatic increases.
