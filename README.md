@@ -3,15 +3,15 @@
 <a href="https://yoomoney.ru/fundraise/1KS67440FP0.261012"><img alt="Поддержать_автора" src="https://img.shields.io/badge/Поддержать_автора-ЮMoney-7556D9?style=for-the-badge"></a>
 </div>
 
-![Yandex Disk Rescue](assets/readme-cover.svg)
+![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 <div align="center">
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![0.9.9 prerelease](https://img.shields.io/badge/0.9.9-prerelease-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.9.9)
+[![1.0.0 release](https://img.shields.io/badge/1.0.0-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.0)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-**Русский** · [English](README.en.md) · [Подробный гайд](GUIDE.md)
+**Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md)
 
 </div>
 
@@ -22,14 +22,14 @@
 
 ## Скачать
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_бит-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.9.9/YandexDiskRescue-win-x64.zip)
-[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.9.9/YandexDiskRescue-win-x86.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_бит-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.0/YandexDiskRescue-win-x64.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.0/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11** · .NET Framework **4.7.1+** · RU / EN · без установки.
 
-**0.9.9 — тестовый предрелиз**, в том числе для проверки обновления с 0.9.8. Версия 1.0.0 появится после проверки. Распакуйте ZIP целиком в постоянную папку и запустите **Start Yandex Disk Rescue.cmd**.
+**Версия 1.0.0.** Распакуйте ZIP целиком в постоянную папку и запустите **Start Yandex Disk Rescue.cmd**.
 
-![Файлы и папки: прогресс, докачка и состояние файлов](assets/preview-current-ru.png)
+![Файлы и папки: прогресс, докачка и состояние файлов](assets/preview-api.png)
 
 *Демонстрационные данные; личных файлов на скриншоте нет.*
 
@@ -79,7 +79,7 @@ API продолжает временный файл через HTTP Range, ес
 
 Токен хранится локально через **Windows DPAPI**, с привязкой к учётной записи Windows; при работе расшифровывается в памяти. Это защита хранения, а не гарантия безопасности любого кода. Не публикуйте свою папку `data`, не передавайте токен другим людям и отзывайте доступ, когда он больше не нужен.
 
-[Подробный гайд](GUIDE.md) · [Сообщить об ошибке](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [Заметки выпуска](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.9.9)
+[Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Сообщить об ошибке](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [Заметки выпуска](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.0)
 
 К сообщению об ошибке приложите версию, способ скачивания и текст ошибки. Не прикладывайте токены, личные пути или всю историю.
 

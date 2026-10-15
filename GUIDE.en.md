@@ -39,7 +39,7 @@ Downloaded total counts completed files; this pass counts new successes. Remaini
 UPDATES
 Check for updates automatically enables startup and 6-hour public GitHub checks. Uncheck it to disable background checks; the setting persists. Manual Check for updates and Update remain available. Installation requires approval while idle.
 The architecture-specific ZIP is checked against the GitHub SHA-256 digest. The app exits, replaces program files only and restarts. The data folder with history, inventory, settings and encrypted token is retained. Failed replacement is rolled back. Offline checks do not interrupt downloads. Versions without the updater need one manual update.
-0.9.8 and 0.9.9 are for testing a real update transition. 1.0.0 is not published yet.
+Version 1.0.0 supports in-app updates while preserving user data.
 
 SECURITY AND LIMITATIONS
 Windows DPAPI encrypts the saved token for your Windows account. It is decrypted in memory for use; storage encryption does not replace trust in the application. Do not share tokens; revoke unused access in Yandex ID. Never publish your data folder. Preserve it when updating and do not overwrite the history of a running app.

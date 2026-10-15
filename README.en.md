@@ -3,15 +3,15 @@
 <a href="https://yoomoney.ru/fundraise/1KS67440FP0.261012"><img alt="Support_the_author" src="https://img.shields.io/badge/Support_the_author-ЮMoney-7556D9?style=for-the-badge"></a>
 </div>
 
-![Yandex Disk Rescue](assets/readme-cover.svg)
+![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 <div align="center">
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![0.9.9 prerelease](https://img.shields.io/badge/0.9.9-prerelease-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.9.9)
+[![1.0.0 release](https://img.shields.io/badge/1.0.0-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.0)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-[Русский](README.md) · **English** · [Full guide](GUIDE.en.md)
+[Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md)
 
 </div>
 
@@ -22,14 +22,14 @@ Free Windows app for downloading available Yandex Disk files, keeping history an
 
 ## Download
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.9.9/YandexDiskRescue-win-x64.zip)
-[![Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v0.9.9/YandexDiskRescue-win-x86.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.0/YandexDiskRescue-win-x64.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.0/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11** · .NET Framework **4.7.1+** · RU / EN · portable.
 
-**0.9.9 is a test prerelease**, including the update transition from 0.9.8. Version 1.0.0 will follow testing. Extract the complete ZIP to a permanent folder and run **Start Yandex Disk Rescue.cmd**.
+**Version 1.0.0.** Extract the complete ZIP to a permanent folder and run **Start Yandex Disk Rescue.cmd**.
 
-![Folder progress and download states](assets/preview-current-en.png)
+![Folder progress and download states](assets/preview-api-en.png)
 
 *Synthetic demonstration data, no personal files.*
 
@@ -77,7 +77,7 @@ Disable automatic update checks in Settings if preferred; manual Check for updat
 
 The token is stored locally using **Windows DPAPI**, bound to your Windows account, and decrypted in memory when needed. Storage encryption does not replace trust in the code. Never publish your `data` folder or share tokens; revoke access when no longer needed.
 
-[Full guide](GUIDE.en.md) · [Report a bug](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [Release notes](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v0.9.9)
+[Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [Report a bug](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [Release notes](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.0)
 
 Include the app version, download method and error text. Exclude tokens, personal paths and your full history.
 

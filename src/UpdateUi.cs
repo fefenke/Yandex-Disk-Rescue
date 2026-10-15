@@ -22,7 +22,7 @@ namespace DiskRescue {
         }
         async void OfferUpdate(){
             if(pendingUpdate==null||offeredUpdate||busy||installingUpdate||closeWhenStopped||!Visible)return;offeredUpdate=true;UpdateRelease release=pendingUpdate;
-            if(MessageBox.Show(this,String.Format(T("Доступна версия {0}. Скачать и установить?\nПриложение перезапустится. История, настройки и токен останутся в вашей папке data.","Version {0} is available. Download and install?\nThe app will restart. History, settings and token stay in your data folder."),release.Version),Text,MessageBoxButtons.YesNo,MessageBoxIcon.Information)!=DialogResult.Yes)return;
+            if(MessageBox.Show(this,String.Format(T("Доступна версия {0}. Скачать и установить?\nПриложение перезапустится. Ваши настройки и история загрузок сохранятся.","Version {0} is available. Download and install?\nThe app will restart. Your settings and download history will be preserved."),release.Version),Text,MessageBoxButtons.YesNo,MessageBoxIcon.Information)!=DialogResult.Yes)return;
             installingUpdate=true;start.Enabled=false;update.Enabled=false;TranslateUpdateSettings();
             try{footer.Text=T("Скачиваем и проверяем обновление…","Downloading and verifying update…");string package=await AppUpdater.Download(release);if(IsDisposed)return;AppUpdater.Launch(package);Close();}
             catch(Exception ex){if(!IsDisposed){footer.Text=T("Обновление не установлено.","Update was not installed.");MessageBox.Show(this,T("Не удалось обновиться: ","Update failed: ")+ex.GetType().Name,Text);}}
