@@ -8,7 +8,7 @@
 <div align="center">
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.0.2 release](https://img.shields.io/badge/1.0.2-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.2)
+[![1.0.3 release](https://img.shields.io/badge/1.0.3-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.3)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
 **Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md)
@@ -22,12 +22,12 @@
 
 ## Скачать
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_бит-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.2/YandexDiskRescue-win-x64.zip)
-[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.2/YandexDiskRescue-win-x86.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_бит-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.3/YandexDiskRescue-win-x64.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.3/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11** · .NET Framework **4.7.1+** · RU / EN · без установки.
 
-**Версия 1.0.2.** Распакуйте ZIP целиком в постоянную папку и запустите **Start Yandex Disk Rescue.cmd**.
+**Версия 1.0.3.** Распакуйте ZIP целиком в постоянную папку и запустите **Start Yandex Disk Rescue.cmd**.
 
 ![Файлы и папки: прогресс, докачка и состояние файлов](assets/preview-api.png)
 
@@ -81,7 +81,7 @@ API продолжает временный файл через HTTP Range, ес
 
 Токен хранится локально через **Windows DPAPI**, с привязкой к учётной записи Windows; при работе расшифровывается в памяти. Это защита хранения, а не гарантия безопасности любого кода. Не публикуйте свою папку `data`, не передавайте токен другим людям и отзывайте доступ, когда он больше не нужен.
 
-[Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Сообщить об ошибке](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [Заметки выпуска](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.2)
+[Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Сообщить об ошибке](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [Заметки выпуска](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.3)
 
 К сообщению об ошибке приложите версию, способ скачивания и текст ошибки. Не прикладывайте токены, личные пути или всю историю.
 
@@ -129,3 +129,6 @@ API продолжает временный файл через HTTP Range, ес
 В пункте 2.2 официальных условий API Яндекс Диска указан предел 40 запросов в секунду: https://yandex.ru/legal/disk_api/ru/ . Это ограничение частоты, а не числа одновременно ожидающих задач. Начальные 50 мс оставляют запас до указанного предела.
 
 </details>
+
+
+Крупные файлы через API: по умолчанию 4 потока на файл от 256 МБ. Можно выбрать 1–8 потоков и порог 64–4096 МБ. Все части учитываются в общем лимите соединений скачивания. Недокачанные части сохраняются для следующих проходов; после сборки проверяются размер и MD5. Подробнее — во встроенном гайде.

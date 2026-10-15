@@ -116,6 +116,7 @@ namespace DiskRescue {
             }
         }
         public static void Run(string root){
+            SegmentTests.Run(root);
             PipelineTests(root);
             ResumeTests(root);
             string folder=Path.Combine(root,"api-downloads"),data=Path.Combine(root,"api-history");Directory.CreateDirectory(folder);

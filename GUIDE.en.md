@@ -28,16 +28,16 @@ File idle timeout, sec: wait for the download response, then for new data. Defau
 Both fields accept 1–60 seconds. With 3 + 3, the API request gets three seconds after sending, then downloading has a fresh three-second idle budget.
 
 CONCURRENT WORK
-By default, up to 7 link requests and up to 20 downloads run simultaneously and independently. Links for subsequent files are obtained while other files download. These are ceilings, not guaranteed active-transfer counts. Ready links wait in a bounded queue. The API launch interval defaults to 50 ms.
+By default, up to 7 link requests and up to 20 download connections run simultaneously and independently. Links for subsequent files are obtained while other files download. These are ceilings, not guaranteed active-transfer counts. Ready links wait in a bounded queue. The API launch interval defaults to 50 ms.
 Defaults: repeat problem files indefinitely, both timeouts fixed at 3 seconds, automatic increases disabled. Stop cancels the whole series. Manual choices persist. When migrating to this pipeline, defaults reset once to 3 + 3 with repeat enabled; history, inventory and token are retained.
 Temporary API connection/listing failures retry independently at the current folder/page: first immediately, then 1/2/up to 5 seconds and server Retry-After. Invalid tokens and access denial require attention.
 
 CONCURRENCY: WHAT THE TWO FIELDS CONTROL
 Link requests: how many tasks can request download links simultaneously. Default 7; range 1–30. This is in-flight task count, not requests per second. Try increasing it when downloads wait for links; try reducing it if link timeouts, connection failures or HTTP 429 responses increase. More requests do not guarantee more successful downloads.
-Downloads: how many files can wait for a server response or receive data using ready links simultaneously. Default 20; range 1–30. Other files can download while some wait. A timed-out attempt frees its slot. If few links are ready, some slots remain idle.
+Download connections: shared active HTTP data request limit for all files and segments combined. Default 20; range 1–30. Queue time does not consume network idle timeout.
 7 + 20 is the best balance in our tests and our starting recommendation, not a Yandex limit or a universal optimum. You may choose 30 + 30. The app caps each field at 30 to bound connection and memory use. Queues remain bounded instead of spawning a task for every file.
 On a slow connection, try fewer downloads, for example 5–10. Files share your total bandwidth; more transfers do not increase it. If the link is already saturated, increasing concurrency usually adds no overall speed. If server waits leave bandwidth idle, increasing it may help. A few large-file transfers may fill the link, while small files depend more on link acquisition.
-Change one setting at a time and compare several passes with equal timeouts: successful files, completed data and elapsed time. A fast pass with more failures is not necessarily better. All five transfer settings persist and are locked throughout passes and automatic-retry pauses. Concurrency and link timeout are API-only; Windows and the official desktop client control transfers in client mode.
+Change one setting at a time and compare several passes with equal timeouts: successful files, completed data and elapsed time. A fast pass with more failures is not necessarily better. All transfer settings persist and are locked throughout passes and automatic-retry pauses. Concurrency and link timeout are API-only; Windows and the official desktop client control transfers in client mode.
 
 REQUEST LAUNCH INTERVAL
 API launch interval, ms: time between API request launches. Range 25–1000 ms; default 50 ms. Approximate maximum launch rates: 25 ms → 40/s; 50 ms → 20/s; 100 ms → 10/s; 200 ms → 5/s; 1000 ms → 1/s. Requests can wait for responses concurrently without waiting for the preceding response before launching.
@@ -60,7 +60,7 @@ Downloaded total counts completed files; this pass counts new successes. Remaini
 UPDATES
 Check for updates automatically enables startup and 6-hour public GitHub checks. Uncheck it to disable background checks; the setting persists. Manual Check for updates and Update remain available. Installation requires approval while idle.
 The architecture-specific ZIP is checked against the GitHub SHA-256 digest. The app exits, replaces program files only and restarts. The data folder with history, inventory, settings and encrypted token is retained. Failed replacement is rolled back. Offline checks do not interrupt downloads. Versions without the updater need one manual update.
-Version 1.0.2 supports in-app updates while preserving user data.
+Version 1.0.3 supports in-app updates while preserving user data.
 
 SECURITY AND LIMITATIONS
 Windows DPAPI encrypts the saved token for your Windows account. It is decrypted in memory for use; storage encryption does not replace trust in the application. Do not share tokens; revoke unused access in Yandex ID. Never publish your data folder. Preserve it when updating and do not overwrite the history of a running app.
@@ -71,3 +71,12 @@ ERROR MESSAGES
 Download link request timed out. means the API did not return a link within Link timeout; downloading has not started in that attempt. A file idle timeout means the download response or more data did not arrive in time. A timeout alone does not imply HTTP 500 or file corruption.
 HTTP 429 means too many requests: increase the API launch interval and try later. HTTP 503 means temporarily unavailable; HTTP 500 means an internal server error. Retrying may help temporary failures but cannot guarantee availability.
 Continuous passes retain the selected timeouts without automatic increases.
+
+
+MULTI-STREAM LARGE-FILE DOWNLOADS · API
+Streams per large file: 1–8, default 4. For files from, MB: size threshold 64–4096 MB, default 256. One MB equals 1,000,000 bytes. New files at or above this threshold with known MD5 are split into byte ranges. Small files use one stream. Set 1 to disable splitting new files. Saved parts retain their layout and resume with the selected concurrency even after the threshold changes.
+The API link comes first. The first range request checks server support; after valid response headers, remaining parts enter the shared download queue. All streams count toward Download connections: a limit of 20 never permits 20 files with four active connections each. Actual concurrency may be lower.
+The file idle timeout applies separately to each stream, starts after queueing when its request is sent, and resets on response headers and new data. Three seconds limits idle time, not the total duration of a part. A stalled stream stops while other parts continue. Saved parts retry on later passes; without continuous passes, start the next pass manually.
+Parts are stored beside the destination in its .ydr-segments directory. Keep it and .ydr-part until completion. Completed parts are reused and incomplete parts resume at their saved offsets. A changed cloud version discards old parts. Interrupted merging rolls back on the next pass and reuses the saved parts.
+Size and MD5 are checked before promoting the assembled file and removing parts. If Range is ignored or rejected, downloading falls back to a single response. Invalid ranges and MD5 mismatches are never treated as success.
+More streams may help large files but cannot fix unavailable originals or link errors. On slow connections try 1–2 streams or increase file idle timeout if active downloads keep timing out. Merging temporarily needs extra disk space up to the size being assembled, in addition to saved parts. Settings persist and lock while running. This feature applies to API mode.

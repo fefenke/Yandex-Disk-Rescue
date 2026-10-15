@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 
 namespace DiskRescue {
-    public sealed class ApiEngine {
+    public sealed partial class ApiEngine {
         const string Endpoint="https://cloud-api.yandex.net/v1/disk";
         readonly string data;
         readonly Action<Snapshot> publish;
@@ -191,7 +191,12 @@ namespace DiskRescue {
             long offset=0;
             try{stop.Token.ThrowIfCancellationRequested();
                     SafeDestination(partial);SafeDestination(job.File.Destination);Directory.CreateDirectory(Path.GetDirectoryName(partial));
-                    if(File.Exists(partial)&&((File.Exists(metadata)&&File.ReadAllText(metadata)==identity)||(!File.Exists(metadata)&&job.File.ResumeEligible))){offset=new FileInfo(partial).Length;if(offset>job.File.Length)offset=0;}
+                    bool samePartial=(File.Exists(metadata)&&File.ReadAllText(metadata)==identity)||(!File.Exists(metadata)&&job.File.ResumeEligible);
+                    if(!samePartial)ClearSegments(job.File);
+                    if(File.Exists(partial)&&samePartial){offset=new FileInfo(partial).Length;if(offset>job.File.Length)offset=0;}
+                    SegmentPlan plan=ReadSegmentPlan(job.File);
+                    if(plan!=null){if(samePartial&&File.Exists(partial)&&new FileInfo(partial).Length>=plan.Offset){offset=plan.Offset;using(FileStream rollback=new FileStream(partial,FileMode.Open,FileAccess.Write))rollback.SetLength(offset);}else ClearSegments(job.File);}
+                    else if(Directory.Exists(SegmentFolder(job.File)))ClearSegments(job.File);
                     if(offset==0&&File.Exists(partial)){using(FileStream reset=new FileStream(partial,FileMode.Create,FileAccess.Write)){} }
                     Directory.CreateDirectory(Path.GetDirectoryName(metadata));File.WriteAllText(metadata,identity);
                     if(offset==job.File.Length&&offset>0){if(Verified(partial,job.File.Length,job.File.Md5,stop.Token)){stop.Token.ThrowIfCancellationRequested();if(File.Exists(job.File.Destination))File.Replace(partial,job.File.Destination,null);else File.Move(partial,job.File.Destination);File.Delete(metadata);return new LinkResult{Completed=new Result{Status="success",Bytes=offset,Message=""}};}offset=0;}
@@ -203,7 +208,7 @@ namespace DiskRescue {
             catch(ApiException ex){return new LinkResult{Completed=new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="Link HTTP "+ex.Code,Bytes=job.Bytes}};}
             catch(Exception ex){return new LinkResult{Completed=new Result{Status=stop.IsCancellationRequested?"cancelled_user":"failed",Message=stop.IsCancellationRequested?"Stopped by user.":"Link preparation failed: "+ex.GetType().Name+" (0x"+ex.HResult.ToString("X8")+")",Bytes=job.Bytes}};}
         }
-        async Task<Result> Download(Job job){
+        async Task<Result> DownloadSingle(Job job){
             string partial=job.File.Destination+".ydr-part";
             string metadata=Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(job.File.Path)+".txt");
             long offset=job.Bytes;
@@ -248,6 +253,7 @@ namespace DiskRescue {
                 string missing=Validation(settings);if(missing!="")throw new IOException("Missing required API field: "+missing);
                 int linkConcurrency=Math.Max(1,Math.Min(30,settings.ApiLinkConcurrency));
                 int downloadConcurrency=Math.Max(1,Math.Min(30,settings.ApiDownloadConcurrency));
+                downloadSlots=new SemaphoreSlim(downloadConcurrency,downloadConcurrency);
                 int waitingCapacity=Math.Max(ReadyLinkCapacity,linkConcurrency);
                 string destination=Path.GetFullPath(settings.ApiFolder);settings.ApiFolder=destination;Directory.CreateDirectory(destination);
                 if(File.GetAttributes(destination).HasFlag(FileAttributes.ReparsePoint))throw new IOException("Choose an ordinary local download folder, not a cloud placeholder or link.");

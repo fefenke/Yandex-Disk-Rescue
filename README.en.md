@@ -8,7 +8,7 @@
 <div align="center">
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.0.2 release](https://img.shields.io/badge/1.0.2-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.2)
+[![1.0.3 release](https://img.shields.io/badge/1.0.3-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.3)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
 [Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md)
@@ -22,12 +22,12 @@ Free Windows app for downloading available Yandex Disk files, keeping history an
 
 ## Download
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.2/YandexDiskRescue-win-x64.zip)
-[![Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.2/YandexDiskRescue-win-x86.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.3/YandexDiskRescue-win-x64.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.3/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11** · .NET Framework **4.7.1+** · RU / EN · portable.
 
-**Version 1.0.2.** Extract the complete ZIP to a permanent folder and run **Start Yandex Disk Rescue.cmd**.
+**Version 1.0.3.** Extract the complete ZIP to a permanent folder and run **Start Yandex Disk Rescue.cmd**.
 
 ![Folder progress and download states](assets/preview-api-en.png)
 
@@ -79,7 +79,7 @@ Disable automatic update checks in Settings if preferred; manual Check for updat
 
 The token is stored locally using **Windows DPAPI**, bound to your Windows account, and decrypted in memory when needed. Storage encryption does not replace trust in the code. Never publish your `data` folder or share tokens; revoke access when no longer needed.
 
-[Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [Report a bug](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [Release notes](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.2)
+[Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [Report a bug](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [Release notes](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.3)
 
 Include the app version, download method and error text. Exclude tokens, personal paths and your full history.
 
@@ -127,3 +127,6 @@ Reduce the interval to try a higher launch rate and compare results. Increase it
 Section 2.2 of the official Disk API terms specifies 40 requests per second: https://yandex.ru/legal/disk_api/ru/ . This limits frequency, not the number of tasks waiting concurrently. The default 50 ms leaves headroom below that rate.
 
 </details>
+
+
+Large API downloads: default 4 streams per file from 256 MB. Choose 1–8 streams and a threshold of 64–4096 MB. All parts count toward the shared download connection limit. Incomplete parts are retained for later passes; assembled files are checked by size and MD5. See the built-in guide.

@@ -17,6 +17,9 @@ namespace DiskRescue {
         public int ApiLinkConcurrency = 7;
         public int ApiDownloadConcurrency = 20;
         public int ApiRequestIntervalMs = 50;
+        public int StreamsPerFile = 4;
+        public int MultiStreamThresholdMB = 256;
+        public int MultiStreamThresholdMiB; // Legacy setting read once during migration.
         public bool RepeatProblemFiles = true;
         public int TransferSettingsVersion;
         public bool RestartClient = true;
@@ -28,6 +31,7 @@ namespace DiskRescue {
         [ScriptIgnore] public string ApiToken = "";
         public string GitHubReleasesUrl = "https://github.com/fefenke/Yandex-Disk-Rescue/releases", SupportUrl = "https://yoomoney.ru/fundraise/1KS67440FP0.261012";
         public void ApplyTransferDefaults() {
+            if(MultiStreamThresholdMiB>0){MultiStreamThresholdMB=(int)Math.Max(64,Math.Min(4096,((long)MultiStreamThresholdMiB*1048576+999999)/1000000));MultiStreamThresholdMiB=0;}
             if(TransferSettingsVersion>=1)return;
             IdleSeconds=LinkTimeoutSeconds=3;RepeatProblemFiles=true;TransferSettingsVersion=1;
         }
@@ -106,7 +110,7 @@ namespace DiskRescue {
             string status = same ? NormalizeStatus(old) : "pending";
             if (mode == RunMode.All) return true;
             if (mode == RunMode.Remaining) return !file.Local;
-            if (mode == RunMode.PartialFiles) return !file.Local && !String.IsNullOrEmpty(file.Destination) && File.Exists(file.Destination+".ydr-part") && new FileInfo(file.Destination+".ydr-part").Length>0;
+            if (mode == RunMode.PartialFiles) return !file.Local && HasPartialData(file.Destination);
             if (mode == RunMode.ProblemFiles) return same && !file.Local && (status=="cloud_error"||status=="failed"||status=="timeout");
             if (mode == RunMode.NewFiles) return !same;
             if (mode == RunMode.ErrorsAndZero) return Select(file,old,RunMode.CloudErrors)||Select(file,old,RunMode.ZeroDownload);
@@ -115,6 +119,12 @@ namespace DiskRescue {
             if(!same)return true;
             if(Success(status))return !file.Local;
             return status=="pending"||status=="cancelled_user";
+        }
+        public static bool HasPartialData(string destination){
+            if(String.IsNullOrEmpty(destination))return false;
+            if(File.Exists(destination+".ydr-part")&&new FileInfo(destination+".ydr-part").Length>0)return true;
+            string folder=destination+".ydr-segments";
+            return Directory.Exists(folder)&&Enumerable.Range(0,8).Any(i=>File.Exists(Path.Combine(folder,i+".part"))&&new FileInfo(Path.Combine(folder,i+".part")).Length>0);
         }
         public static List<DiskFile> Order(IEnumerable<DiskFile> files) {
             return files.OrderBy(f => f.Status == "pending" || Success(f.Status) ? 0 : 1).ToList();
