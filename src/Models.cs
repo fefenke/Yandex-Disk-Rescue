@@ -17,6 +17,7 @@ namespace DiskRescue {
         public bool UseApi;
         public bool UseCachedApiList = true;
         public bool IncreaseIdleTimeout = true;
+        public bool AutoCheckUpdates = true;
         public string ApiFolder = "", RemoteFolder = "disk:/";
         [ScriptIgnore] public string ApiToken = "";
         public string GitHubReleasesUrl = "https://github.com/fefenke/Yandex-Disk-Rescue/releases", SupportUrl = "https://yoomoney.ru/fundraise/1KS67440FP0.261012";
@@ -53,6 +54,7 @@ namespace DiskRescue {
         public int ProgressChecked, ProgressTotal;
         public List<CategoryStats> Categories = new List<CategoryStats>();
         public List<ActiveFile> Files = new List<ActiveFile>();
+        [ScriptIgnore] public List<BrowserFile> Catalog;
         public List<string> Events = new List<string>();
     }
     public static class FileRules {

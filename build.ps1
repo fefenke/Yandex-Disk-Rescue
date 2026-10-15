@@ -1,4 +1,4 @@
-param([switch]$Package, [string]$OutputDirectory = 'dist\YandexDiskRescue', [ValidateSet('x64','x86')][string]$Platform = 'x64')
+﻿param([switch]$Package, [string]$OutputDirectory = 'dist\YandexDiskRescue', [ValidateSet('x64','x86')][string]$Platform = 'x64')
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $frameworkDirectory=if($Platform -eq 'x86'){'Framework'}else{'Framework64'}
@@ -27,7 +27,7 @@ $iconPath = Join-Path $root 'assets\app.ico'
 $stream = [IO.File]::Create($iconPath)
 try { $icon.Save($stream) } finally { $stream.Dispose(); $icon.Dispose(); $pen.Dispose(); $white.Dispose(); $graphics.Dispose(); $bitmap.Dispose() }
 $executable = Join-Path $output 'YandexDiskRescue.exe'
-$arguments = @('/nologo','/target:winexe',('/platform:'+ $Platform),'/optimize+','/codepage:65001',('/out:' + $executable),('/win32manifest:' + (Join-Path $root 'app.manifest')),('/win32icon:' + $iconPath),'/reference:System.dll','/reference:System.Net.Http.dll','/reference:System.Security.dll','/reference:System.Core.dll','/reference:System.Drawing.dll','/reference:System.Windows.Forms.dll','/reference:System.Web.Extensions.dll')
+$arguments = @('/nologo','/target:winexe',('/platform:'+ $Platform),'/optimize+','/codepage:65001',('/out:' + $executable),('/win32manifest:' + (Join-Path $root 'app.manifest')),('/win32icon:' + $iconPath),'/reference:System.dll','/reference:System.Net.Http.dll','/reference:System.IO.Compression.dll','/reference:System.IO.Compression.FileSystem.dll','/reference:System.Security.dll','/reference:System.Core.dll','/reference:System.Drawing.dll','/reference:System.Windows.Forms.dll','/reference:System.Web.Extensions.dll')
 $arguments += @(Get-ChildItem -LiteralPath (Join-Path $root 'src') -Filter '*.cs' | ForEach-Object { $_.FullName })
 & $compiler @arguments
 if ($LASTEXITCODE -ne 0) { throw 'Compilation failed.' }

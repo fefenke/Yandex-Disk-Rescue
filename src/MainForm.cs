@@ -33,7 +33,7 @@ namespace DiskRescue {
             TextRenderer.DrawText(e.Graphics,Text,Font,ClientRectangle,ForeColor,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
         }
     }
-    public sealed class MainForm : Form {
+    public sealed partial class MainForm : Form {
         readonly Color ink = Color.FromArgb(30,38,59), muted = Color.FromArgb(110,120,143), accent = Color.FromArgb(89,101,233);
         readonly string dataFolder, settingsPath;
         Settings settings;
@@ -42,7 +42,7 @@ namespace DiskRescue {
         bool ru, busy, closeWhenStopped;
         readonly Timer timer = new Timer();
         System.Threading.CancellationTokenSource sessionStop;
-        bool waitingForRetry;
+        bool waitingForRetry,renderingFailed;
         CheckBox repeatProblems, increaseIdle;
         DataGridView passes;
         readonly System.Collections.Generic.List<PassResult> passRows=new System.Collections.Generic.List<PassResult>();
@@ -62,7 +62,7 @@ namespace DiskRescue {
         Label[] metricTitle = new Label[5], metricValue = new Label[5];
         DataGridView categories;
         TabControl tabs;
-        TextBox log;
+        TextBox log;FileDashboard dashboard;
         ProgressBar progress;
         ToolTip tip = new ToolTip();
         public MainForm(string data) {
@@ -76,7 +76,7 @@ namespace DiskRescue {
             Size=new Size(1120,1000); MinimumSize=new Size(1000,950); StartPosition=FormStartPosition.CenterScreen;
             AutoScaleMode=AutoScaleMode.Dpi;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
-            Build(); Translate(); engine=new Engine(dataFolder);
+            Build(); BuildShell(); Translate(); engine=new Engine(dataFolder);SetupUpdates();
             timer.Interval=400; timer.Tick += delegate { Render(engine.Latest); };
             FormClosing += delegate(object sender, FormClosingEventArgs args) {
                 if (busy) { args.Cancel=true; closeWhenStopped=true; if(sessionStop!=null)sessionStop.Cancel(); engine.Stop(); start.Enabled=false; phase.Text=T("Останавливаем запросы перед выходом…","Stopping requests before exit…"); }
@@ -160,19 +160,20 @@ namespace DiskRescue {
             TabPage cat=new TabPage();cat.BackColor=Color.White;cat.Controls.Add(categories);tabs.TabPages.Add(cat);
             TabPage events=new TabPage();events.BackColor=Color.White;events.Controls.Add(log);tabs.TabPages.Add(events);
             passes=Grid();TabPage passTab=new TabPage();passTab.BackColor=Color.White;passTab.Controls.Add(passes);tabs.TabPages.Add(passTab);passRows.AddRange(PassHistory.Load(Path.Combine(dataFolder,"passes.jsonl")));
+            dashboard=new FileDashboard();TabPage fileTab=new TabPage();fileTab.BackColor=Color.White;fileTab.Controls.Add(dashboard);tabs.TabPages.Add(fileTab);tabs.SelectedIndexChanged+=delegate{if(tabs.SelectedIndex==3){if(engine!=null&&busy&&engine.Latest.Catalog!=null)dashboard.Live(engine.Latest.Catalog,settings.UseApi?settings.ApiFolder:settings.Folder);else dashboard.LoadSaved(dataFolder,settings.UseApi,folder.Text,remoteFolder.Text);}};
             body.Controls.Add(tabs);page.Controls.Add(body,0,5);
             TableLayoutPanel bottom=Table(3);bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,150));bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,190));
             bottom.RowCount=1;bottom.RowStyles.Add(new RowStyle(SizeType.Percent,100));
             footer=Label("",8.5f,false);footer.ForeColor=muted;
             update=new FlatButton { Dock=DockStyle.Fill,Fill=Color.FromArgb(234,237,247),ForeColor=ink,Margin=new Padding(0,5,8,0),Font=new Font("Segoe UI",9,FontStyle.Bold) };
             support=new FlatButton { Dock=DockStyle.Fill,Fill=Color.FromArgb(234,237,247),ForeColor=ink,Margin=new Padding(0,5,0,0),Font=new Font("Segoe UI",9,FontStyle.Bold) };
-            update.Click+=delegate { if(!busy&&!String.IsNullOrEmpty(settings.GitHubReleasesUrl))System.Diagnostics.Process.Start(settings.GitHubReleasesUrl); };
+            update.Click+=async delegate { await CheckUpdates(true); };
             support.Click+=delegate { if(!String.IsNullOrEmpty(settings.SupportUrl))System.Diagnostics.Process.Start(settings.SupportUrl); };
             bottom.Controls.Add(footer,0,0);bottom.Controls.Add(update,1,0);bottom.Controls.Add(support,2,0);page.Controls.Add(bottom,0,6);
             Render(new Snapshot());
         }
         DataGridView Grid() {
-            DataGridView g=new DataGridView { Dock=DockStyle.Fill,ReadOnly=true,AllowUserToAddRows=false,AllowUserToDeleteRows=false,AllowUserToResizeRows=false,RowHeadersVisible=false,BackgroundColor=Color.White,BorderStyle=BorderStyle.None,CellBorderStyle=DataGridViewCellBorderStyle.SingleHorizontal,ColumnHeadersBorderStyle=DataGridViewHeaderBorderStyle.None,AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill,SelectionMode=DataGridViewSelectionMode.FullRowSelect,MultiSelect=false,EnableHeadersVisualStyles=false };
+            DataGridView g=new BufferedGrid { Dock=DockStyle.Fill,ReadOnly=true,AllowUserToAddRows=false,AllowUserToDeleteRows=false,AllowUserToResizeRows=false,RowHeadersVisible=false,BackgroundColor=Color.White,BorderStyle=BorderStyle.None,CellBorderStyle=DataGridViewCellBorderStyle.SingleHorizontal,ColumnHeadersBorderStyle=DataGridViewHeaderBorderStyle.None,AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill,SelectionMode=DataGridViewSelectionMode.FullRowSelect,MultiSelect=false,EnableHeadersVisualStyles=false };
             g.ColumnHeadersDefaultCellStyle=new DataGridViewCellStyle { BackColor=Color.FromArgb(246,247,251),ForeColor=muted,Font=new Font("Segoe UI",9,FontStyle.Bold),Padding=new Padding(6) };
             g.DefaultCellStyle=new DataGridViewCellStyle { BackColor=Color.White,ForeColor=ink,SelectionBackColor=Color.FromArgb(232,236,255),SelectionForeColor=ink,Font=new Font("Segoe UI",9),Padding=new Padding(6,2,6,2) };
             g.RowTemplate.Height=31;g.ColumnHeadersHeight=34;g.GridColor=Color.FromArgb(241,243,249);return g;
@@ -196,10 +197,10 @@ namespace DiskRescue {
             start.Text=busy?T("Остановить","Stop"):T("Начать проход","Start pass");update.Text=T("Обновление","Updates");support.Text=T("Поддержать автора","Support the author");support.Enabled=!String.IsNullOrEmpty(settings.SupportUrl);
             metricTitle[0].Text=T("Найдено файлов","Files found");metricTitle[1].Text=T("Скачано всего","Downloaded total");metricTitle[2].Text=T("Скачано за проход","Downloaded this pass");metricTitle[3].Text=T("Осталось скачать","Remaining to download");metricTitle[4].Text=T("Ошибки синхронизации · за проход","Sync errors · this pass");
             increaseIdle.Text=T("Увеличивать ожидание до 5 сек","Increase idle wait up to 5 sec");repeatProblems.Text=T("Повторять проблемные файлы","Repeat problem files");tip.SetToolTip(repeatProblems,T("Повтор ошибок и таймаутов с паузой 30 секунд. Стоп отменяет и проход, и ожидание.","Retry errors and timeouts with a 30-second pause. Stop cancels both the pass and the wait."));tabs.TabPages[2].Text=T("Проходы","Pass history");RenderPasses();
-            tabs.TabPages[0].Text=T("Категории","Categories");tabs.TabPages[1].Text=T("Журнал","Activity log");
+            tabs.TabPages[3].Text=T("Файлы и папки","Files and folders");dashboard.Translate(ru);tabs.TabPages[0].Text=T("Категории","Categories");tabs.TabPages[1].Text=T("Журнал","Activity log");
             categories.Columns.Clear();foreach(string c in new string[]{T("Тип","Type"),T("Всего","Total"),T("Скачаны","Downloaded total"),T("Скачано за текущий проход","Downloaded this pass"),T("Осталось","Remaining"),T("Нет ответа / сбой загрузки","Timeout / download failure"),T("Ошибки синхронизации","Sync errors")})categories.Columns.Add(c,c);
             categories.Columns[0].FillWeight=145;categories.Columns[3].FillWeight=155;categories.Columns[5].FillWeight=110;categories.Columns[6].FillWeight=145;categories.ColumnHeadersDefaultCellStyle.WrapMode=DataGridViewTriState.True;categories.ColumnHeadersHeightSizeMode=DataGridViewColumnHeadersHeightSizeMode.EnableResizing;categories.ColumnHeadersHeight=48;
-            footer.Text="";ApplyMethod();
+            footer.Text="";ApplyMethod();TranslateShell();
         }
                 void ApplyMethod(){
             bool api=settings.UseApi;credentials.Visible=api;tokenHelp.Visible=api;methodReadout.Text=Convert.ToString(method.SelectedItem);setupGrid.RowStyles[2].Height=api?112:0;pageGrid.RowStyles[2].Height=api?317:205;
@@ -209,10 +210,8 @@ namespace DiskRescue {
         void ShowGuide(){
             using(Form window=new Form{Text=T("Как пользоваться Yandex Disk Rescue","Yandex Disk Rescue guide"),Size=new Size(820,760),MinimumSize=new Size(640,500),StartPosition=FormStartPosition.CenterParent,Font=Font,BackColor=BackColor}){
                 RichTextBox text=new RichTextBox{Dock=DockStyle.Fill,ReadOnly=true,BorderStyle=BorderStyle.None,BackColor=Color.White,Font=new Font("Segoe UI",11),ScrollBars=RichTextBoxScrollBars.Vertical};
-                text.Text=T("ВАЖНО: файлы безлимитной автозагрузки НЕ учитываются и НЕ скачиваются. Только обычный раздел «Файлы».\n\nДОКАЧКА В API\nНачатые файлы дописываются с сохранённого места, если сервер принимает Range. Если сервер возвращает весь файл, загрузка начинается с нуля. Размер и MD5 проверяются перед сохранением. Режим «Докачать начатые файлы» повторяет только непустые .ydr-part; автоповтор сохраняет этот режим. Без автоповтора выполняется один проход. Серверные ошибки не блокируют очередь.\n\n","IMPORTANT: Unlimited photo/video auto-upload files are NOT counted or downloaded. Only the regular Files section is supported.\n\nAPI RESUME\nPartial files resume with HTTP Range when supported. A full response restarts the file. Size and MD5 are checked before completion. Resume partial downloads selects nonempty .ydr-part files; automatic retries stay in this mode. Without automatic retries it runs once. Server errors do not block the queue.\n\n")+T(
-"ВАЖНО: файлы безлимитной автозагрузки НЕ учитываются и НЕ скачиваются. Только обычный раздел «Файлы».\n\nПОДГОТОВКА\nРаспакуйте ZIP целиком в постоянную папку. История и отчёты сохраняются рядом с программой в data. Не удаляйте эту папку при обновлении.\n\nЧЕРЕЗ API\nПолучите OAuth-токен по ссылке в приложении, вставьте его и выберите папку сохранения. Токен хранится зашифрованно. disk:/ означает весь Диск; disk:/Фото — конкретную папку. Клиент Яндекс Диска не нужен. Структура подпапок сохраняется.\n\nЧЕРЕЗ КЛИЕНТ ДИСКА\nУстановите клиент, войдите в аккаунт и дождитесь окончания синхронизации. Выберите локальную папку Диска. При ошибках синхронизации клиент может перезапускаться.\n\nВЕРХНИЙ ВЫБОР СПИСКА API\n«Обновить список» — найти новые и изменённые файлы в облаке.\n«Продолжить по сохранённому списку» — использовать готовый список без повторного обхода. Незавершённый скан продолжается с сохранённой позиции.\n\nРЕЖИМЫ ПРОХОДА\n• Продолжить незавершённый проход — непроверенные файлы и прерванные пользователем попытки; завершённые ошибки пропускаются.\n• Повторить ошибки сервера / синхронизации — файлы с такими записанными ошибками.\n• Повторить таймауты и сбои — нет ответа/прогресса, нулевые и частичные загрузки, другие неуспешные попытки.\n• Повторить все нескачанные — все отсутствующие или не скачанные файлы, включая непроверенные, ошибки и таймауты.\n• Начать проход с нуля — пройти весь список с начала, включая прежние попытки. Уже скачанные корректные файлы не скачиваются повторно.\n\nПОЛЕЗНЫЕ СОЧЕТАНИЯ\nПо умолчанию: сохранённый список + повторить все нескачанные + автоповтор. Если списка ещё нет, он создаётся один раз.\nПосле остановки: сохранённый список + продолжить.\nПовтор проблемных: сохранённый список + повторить все нескачанные.\nФайлы добавились или изменились на Диске: обновить список + повторить все нескачанные.\nНачать заново: сохранённый список + начать проход с нуля. Автоповтор не обновляет список заново на каждом проходе.\n\nАВТОПОВТОР\nС галкой сначала выполняется выбранный режим, затем проблемные файлы повторяются с паузой 30 секунд. Даже если «Продолжить» не нашёл непроверенных файлов, цикл перейдёт к оставшимся проблемным. Временные ошибки соединения и сканирования API повторяются внутри текущего запроса, независимо от проходов. В API последующие проходы используют сохранённый список. Если проблемных файлов нет, цикл завершается. Неверный токен, отсутствие прав, критические локальные ошибки и неподтверждённая отмена требуют исправления. «Стоп» отменяет запросы и ожидание.\n\nПОВТОРЫ СОЕДИНЕНИЯ И СКАНА API\nВременные ошибки сети и HTTP 408/429/5xx повторяются внутри текущего запроса с сохранением папки и страницы. Первая попытка сразу, далее паузы 1, 2 и до 5 секунд; при Retry-After учитывается ожидание сервера. Это действует независимо от автоповтора файлов и поля «Без прогресса». Скан не обрывается из-за временной ошибки. Стоп отменяет ожидание, неверный токен и отсутствие прав требуют исправления.\n\nПОСТЕПЕННОЕ УВЕЛИЧЕНИЕ ОЖИДАНИЯ\nРаботает только с галкой автоповтора. Начальное значение берётся из поля «Без прогресса». После каждых двух завершённых непустых проходов оно увеличивается на 2 секунды до 5: 1 → 1 → 3 → 3 → 5; при старте с 3: 3 → 3 → 5. Значение 5 или больше остаётся неизменным. Ошибки подключения, незавершённый скан и пустые проходы не повышают ожидание. Новый запуск начинает последовательность заново с выбранного значения. Фактическое время отображается над полем и записывается в «Проходы».\n\nБЕЗ ПРОГРЕССА, СЕК\nЭто ожидание без новых данных, а не ограничение времени скачивания всего файла. Для быстрого прохода можно оставить 1 секунду. При повторении таймаутов попробуйте 3–5 секунд: слишком короткое ожидание может отменять медленные, но рабочие загрузки. Большее ожидание замедляет перебор зависших файлов. Чтобы изменить значение во время автоповтора, нажмите «Стоп», задайте новое значение и начните снова. Без галки увеличения ожидание постоянно. Это практические ориентиры, а не гарантия скачивания.\n\nСТАТИСТИКА\n«Осталось» — все ещё не скачанные файлы; число выбранных для прохода зависит от режима. «Скачано за проход» — новые успешные загрузки. Вкладка «Проходы» хранит итоги каждого запуска, «Категории» показывает группы файлов. Подробные отчёты сохраняются автоматически в data. Одинаковые имена в разных папках учитываются отдельно.",
-"IMPORTANT: unlimited auto-upload files are NOT counted or downloaded. Only regular Disk files are supported.\n\nSETUP\nExtract the complete ZIP to a permanent folder. Keep data beside the app when updating: it stores history and reports.\n\nAPI\nUse the OAuth link to obtain a token, enter it and choose a download folder. Tokens are encrypted. disk:/ means the whole Disk; disk:/Photos selects a folder. The desktop client is not required. Folder structure is preserved.\n\nDESKTOP CLIENT\nInstall Yandex Disk, sign in and wait for synchronization to finish. Select the local Disk folder. The client may restart on synchronization errors.\n\nUPPER API LIST SELECTOR\nRefresh list: discover new and changed cloud files.\nSaved list: reuse inventory without rescanning; unfinished scans resume from their checkpoint.\n\nPASS MODES\n• Resume unfinished pass: unchecked files and user-interrupted attempts; completed errors are skipped.\n• Retry server/sync errors: retry recorded server or synchronization failures.\n• Retry timeouts and failures: no response/progress, zero-byte and partial transfers, other failures.\n• Retry all unsuccessful downloads: every file not downloaded, including unchecked files, errors and timeouts.\n• Start pass from the beginning: process the entire list again; valid local files are not downloaded again.\n\nCOMBINATIONS\nDefault: saved list + retry all files not downloaded + automatic retry. A missing list is created once.\nAfter Stop: saved list + resume.\nRetry problems: saved list + retry all unsuccessful downloads.\nCloud files were added or changed: refresh list + retry all files not downloaded.\nStart again: saved list + start pass from the beginning. Automatic retries never refresh the inventory on every pass.\n\nAUTOMATIC RETRIES\nThe selected mode runs first, followed by problem-file passes with a 30-second pause. An empty initial Resume still proceeds to existing problem files. Temporary API connection and scan errors retry within the current request, independently of file passes. Later API passes use cached inventory. No remaining problems ends the loop. Invalid tokens, denied access, critical local errors or uncertain cancellation need attention. Stop cancels downloads and waiting.\n\nAPI CONNECTION AND SCAN RETRIES\nTemporary network errors and HTTP 408/429/5xx retry the same request, folder and page. First retry is immediate, then delays of 1, 2 and up to 5 seconds; server Retry-After is respected. Independent of automatic file passes and download idle timeout. Stop cancels waiting; invalid tokens and denied access require attention.\n\nINCREASING DOWNLOAD WAIT\nOnly active with automatic file retries. Every two completed nonempty passes increases initial idle wait by 2 seconds up to 5: starting at 1 gives 1,1,3,3,5; starting at 3 gives 3,3,5. Values of 5 or more are unchanged. Connection errors, incomplete scans and empty passes do not count. Each new session restarts from your initial value. Actual wait appears above the field and in Pass history.\n\nIDLE TIMEOUT, SEC\nThis limits waiting without new data, not the total download duration. Use 1 second for a quick pass. For retrying timeouts, try 3–5 seconds: short waits can cancel slow but working downloads. Longer waits slow down attempts on stalled files. To change this during automatic retries, press Stop, adjust the value and start again. Without the increase checkbox, download waiting stays constant. These are practical starting points, not a download guarantee.\n\nSTATISTICS\nRemaining means all files not yet downloaded; the pass denominator depends on its mode. Downloaded this pass counts new successful downloads. Pass history stores each run's results. Categories groups file types; detailed reports are generated in data. Identical names in different folders remain separate.");
-                int warningEnd=text.Text.IndexOf("\n\n",StringComparison.Ordinal);if(warningEnd>0){text.Select(0,warningEnd);text.SelectionColor=Color.FromArgb(145,43,58);text.SelectionFont=new Font("Segoe UI",11,FontStyle.Bold);text.Select(0,0);}window.Padding=new Padding(20);window.Controls.Add(text);window.ShowDialog(this);
+                text.Text=ru?GuideText.Ru:GuideText.En;
+                int warningStart=text.Text.IndexOf(T("ВАЖНО:","IMPORTANT:"),StringComparison.Ordinal);int warningEnd=warningStart<0?-1:text.Text.IndexOf("\n\n",warningStart,StringComparison.Ordinal);if(warningEnd>warningStart&&warningStart>=0){text.Select(warningStart,warningEnd-warningStart);text.SelectionColor=Color.FromArgb(145,43,58);text.SelectionFont=new Font("Segoe UI",11,FontStyle.Bold);text.Select(0,0);}window.Padding=new Padding(20);window.Controls.Add(text);window.ShowDialog(this);
             }
         }
         void ChooseFolder(object sender,EventArgs args) {
@@ -235,14 +234,14 @@ namespace DiskRescue {
                 return;
             }
             if(settings.UseApi){settings.UseCachedApiList=apiList.SelectedIndex==1;settings.ApiFolder=Path.GetFullPath(folder.Text);settings.ApiToken=apiToken.Text.Trim();try{settings.RemoteFolder=ApiEngine.NormalizeRemote(remoteFolder.Text);TokenVault.Save(dataFolder,settings.ApiToken);}catch(Exception){MessageBox.Show(this,T("Проверьте облачный путь и доступ к хранилищу токена.","Check the cloud path and token storage permissions."),Text);return;}}else settings.Folder=Path.GetFullPath(folder.Text);settings.Concurrency=5;settings.IdleSeconds=(int)idle.Value;settings.RestartClient=true;settings.IncreaseIdleTimeout=increaseIdle.Checked;SaveSettings();
-            busy=true;SetBusy(true);phase.Text=T("Подготовка…","Preparing…");progress.Style=ProgressBarStyle.Marquee;timer.Start();
             if(mode.SelectedIndex==5&&!settings.UseApi){MessageBox.Show(this,T("Докачка доступна только через API.","Resuming partial downloads requires API mode."),Text);return;}
+            busy=true;SetBusy(true);phase.Text=T("Подготовка…","Preparing…");progress.Style=ProgressBarStyle.Marquee;timer.Start();
             RunMode runMode=new[]{RunMode.Continue,RunMode.CloudErrors,RunMode.ZeroDownload,RunMode.Remaining,RunMode.All,RunMode.PartialFiles}[mode.SelectedIndex];
             sessionStop=new System.Threading.CancellationTokenSource();work=RunSession(runMode);
             work.ContinueWith(delegate(Task completed){
                 if(!IsDisposed)BeginInvoke(new Action(delegate {
                     timer.Stop();waitingForRetry=false;busy=false;SetBusy(false);Render(engine.Latest);sessionStop.Dispose();sessionStop=null;
-                    if(completed.IsFaulted)MessageBox.Show(this,completed.Exception.GetBaseException().Message,Text,MessageBoxButtons.OK,MessageBoxIcon.Error);
+                    if(completed.IsFaulted){string diagnostic=CrashDiagnostics.Save(completed.Exception.GetBaseException());MessageBox.Show(this,completed.Exception.GetBaseException().GetType().Name+"\n"+diagnostic,Text,MessageBoxButtons.OK,MessageBoxIcon.Error);}
                     if(closeWhenStopped)Close();
                 }));
             });
@@ -271,10 +270,11 @@ namespace DiskRescue {
         }
         string PassModeName(string modeName){switch(modeName){case"Continue":return T("Продолжить","Resume");case"All":return T("Все файлы","All files");case"CloudErrors":return T("Ошибки","Errors");case"ZeroDownload":return T("Нет ответа / сбой загрузки","Timeout / download failures");case"ErrorsAndZero":return T("Ошибки + незавершённые","Errors + incomplete");case"NewFiles":return T("Новые / изменённые","New / changed");case"ProblemFiles":return T("Автоповтор проблемных","Automatic retry");default:return modeName;}}
         void SetBusy(bool value) {
+            if(settingsCard!=null)settingsCard.Enabled=!value;
             repeatProblems.Enabled=!value;increaseIdle.Enabled=!value&&repeatProblems.Checked;
             folder.ReadOnly=value;apiToken.ReadOnly=remoteFolder.ReadOnly=value;browse.Enabled=mode.Enabled=method.Enabled=apiList.Enabled=idle.Enabled=!value;
             apiList.Visible=!value;apiListReadout.Visible=value;apiListReadout.Text=Convert.ToString(apiList.SelectedItem);if(value)apiListReadout.BringToFront();method.Visible=!value;methodReadout.Visible=value;methodReadout.Text=Convert.ToString(method.SelectedItem);if(value)methodReadout.BringToFront();mode.Visible=!value;modeReadout.Visible=value;modeReadout.Text=Convert.ToString(mode.SelectedItem);if(value)modeReadout.BringToFront();
-            start.Enabled=true;start.Fill=value?Color.FromArgb(217,94,108):accent;start.Text=value?T("Остановить","Stop"):T("Начать проход","Start pass");start.Invalidate();
+            start.Enabled=!renderingFailed;start.Fill=value?Color.FromArgb(217,94,108):accent;start.Text=value?T("Остановить","Stop"):T("Начать проход","Start pass");start.Invalidate();
         }
         string Category(string key) {
             switch(key){case"photos":return T("Фото и изображения","Photos & images");case"videos":return T("Видео","Videos");case"documents":return T("Документы","Documents");case"archives":return T("Архивы и образы","Archives & images");case"audio":return T("Аудио","Audio");default:return T("Другое","Other");}
@@ -283,23 +283,51 @@ namespace DiskRescue {
             switch(key){case"api_retry":return T("API не отвечает · повторяем текущий запрос…","API unavailable · retrying the current request…");case"preparing":return T("Готовим историю и список файлов…","Preparing history and file list…");case"checking_local":return T("Сверяем историю и локальные файлы…","Checking history and local files…");case"scanning":return T("Сканируем папки…","Scanning folders…");case"running":return T("Проход выполняется","Pass in progress");case"restarting":return T("Проход выполняется","Pass in progress");case"stopping":return T("Завершаем запросы…","Finishing requests…");case"completed":return T("Проход завершён","Pass completed");case"stopped":return T("Остановлено · история сохранена","Stopped · history saved");case"error":return T("Остановлено с ошибкой","Stopped with an error");default:return T("Готово к запуску","Ready to start");}
         }
         static string Bytes(long value){if(value>=1073741824)return(value/1073741824.0).ToString("0.0")+" GB";if(value>=1048576)return(value/1048576.0).ToString("0.0")+" MB";return(value/1024.0).ToString("0")+" KB";}
+        internal void HandleUiFailure(string path){
+            renderingFailed=true;start.Enabled=false;timer.Stop();if(sessionStop!=null)sessionStop.Cancel();if(engine!=null)engine.Stop();
+            phase.Text=T("Ошибка интерфейса · загрузка останавливается","Interface error · stopping downloads");
+            MessageBox.Show(this,T("Произошла ошибка интерфейса. Загрузка останавливается. История и скачанные файлы не удаляются.\nДиагностика сохранена локально:\n","An interface error occurred. Downloads are stopping. History and downloaded files are retained.\nLocal diagnostic file:\n")+path,Text,MessageBoxButtons.OK,MessageBoxIcon.Error);
+        }
         void Render(Snapshot s) {
+            if(renderingFailed)return;
+            try{RenderCore(s);}catch(Exception ex){HandleUiFailure(CrashDiagnostics.Save(ex));}
+        }
+        void RenderCore(Snapshot s) {
+            if(!busy&&s.Phase=="idle"&&s.Total==0&&idleView!=null)s=idleView;
+            RenderShell(s);
+            if(dashboard!=null&&(section==1||dashboard.Detached)&&s.Catalog!=null&&(s.Phase=="running"||s.Phase=="completed"||s.Phase=="stopped")&&(s.Catalog.Count>0||s.Phase=="completed"))dashboard.Live(s.Catalog,settings.UseApi?settings.ApiFolder:settings.Folder);
             if(waitingForRetry){phase.Text=T("Пауза перед повтором · 30 секунд","Waiting to retry · 30 seconds");return;}
             metricValue[0].Text=s.Total.ToString("N0");metricValue[1].Text=s.Available.ToString("N0");metricValue[2].Text=s.Downloaded.ToString("N0");metricValue[3].Text=Math.Max(0,s.Total-s.Available).ToString("N0");metricValue[4].Text=s.CloudErrorsThisPass.ToString("N0");
             phase.Text=Phase(s.Phase);phase.ForeColor=s.Phase=="error"?Color.FromArgb(193,75,85):ink;
             if(!String.IsNullOrEmpty(s.Error))detail.Text=s.Error;
             else if(s.Phase=="api_retry"||s.Phase=="scanning"||s.Phase=="preparing"||s.Phase=="checking_local")detail.Text=s.Current;
-            else if(s.Selected>0||s.ProgressTotal>0){string eta=s.PerHour>0?String.Format("{0}:{1:00}",(int)(s.RemainingSeconds/3600),(int)((s.RemainingSeconds%3600)/60)):"—";detail.Text=String.Format(T("Обработано {0}/{1} · скачано всего {2:N0} · {3:N0} файлов/ч · осталось ≈ {4}","Processed {0}/{1} · total downloaded {2:N0} · {3:N0} files/h · remaining ≈ {4}"),s.ProgressTotal>0?s.ProgressChecked:s.Processed,s.ProgressTotal>0?s.ProgressTotal:s.Selected,s.Available,s.PerHour,eta);}
+            else if(s.Selected>0||s.ProgressTotal>0){string eta=s.PerHour>0?String.Format("{0}:{1:00}",(int)(s.RemainingSeconds/3600),(int)((s.RemainingSeconds%3600)/60)):"—";detail.Text=String.Format(T("Обработано {0}/{1} · {3:N0} файлов/ч · осталось ≈ {4}","Processed {0}/{1} · {3:N0} files/h · remaining ≈ {4}"),s.ProgressTotal>0?s.ProgressChecked:s.Processed,s.ProgressTotal>0?s.ProgressTotal:s.Selected,s.Available,s.PerHour,eta);}
             else if(s.Finished&&s.Selected==0)detail.Text=T("Для этого режима нет файлов. Для новых файлов обновите список и выберите «Продолжить незавершённый проход».","No files match this mode. Refresh the list and choose Continue for new files.");
             else detail.Text=T("Мониторинг начнётся автоматически вместе с проходом.","Monitoring starts automatically with the pass.");
             available.Text=String.Format(T("Скачано за проход {0:N0} · пропущено {1:N0}","Downloaded this pass {0:N0} · skipped {1:N0}"),s.Downloaded,s.Skipped);
             if(s.Phase=="api_retry"||s.Phase=="scanning"||s.Phase=="preparing"||s.Phase=="checking_local")progress.Style=ProgressBarStyle.Marquee;
             else{progress.Style=ProgressBarStyle.Continuous;progress.Maximum=Math.Max(1,s.ProgressTotal>0?s.ProgressTotal:s.Selected);progress.Value=Math.Min(progress.Maximum,s.ProgressTotal>0?s.ProgressChecked:s.Processed);}
-            categories.Rows.Clear();foreach(CategoryStats c in s.Categories)categories.Rows.Add(Category(c.Category),c.Total,c.Available,c.Downloaded,c.Remaining,c.ZeroDownload,c.CloudErrors);
+            var visibleCategories=s.Categories.Where(c=>c.Total>0).ToList();
+            if(categories.Rows.Count!=visibleCategories.Count){categories.Rows.Clear();foreach(CategoryStats c in visibleCategories)categories.Rows.Add(Category(c.Category),c.Total,c.Available,c.Downloaded,c.Remaining,c.ZeroDownload,c.CloudErrors);}else for(int i=0;i<visibleCategories.Count;i++){CategoryStats c=visibleCategories[i];object[] values={Category(c.Category),c.Total,c.Available,c.Downloaded,c.Remaining,c.ZeroDownload,c.CloudErrors};for(int j=0;j<values.Length;j++)if(!Object.Equals(categories.Rows[i].Cells[j].Value,values[j]))categories.Rows[i].Cells[j].Value=values[j];}
             ((StableLog)log).UpdateEvents(s.Events);
-            update.Enabled=!busy&&!String.IsNullOrEmpty(settings.GitHubReleasesUrl);
+            update.Enabled=!busy&&!installingUpdate&&!String.IsNullOrEmpty(settings.GitHubReleasesUrl);if(!busy)OfferUpdate();
             if(s.RecoveryRequired){start.Enabled=false;detail.Text=T("Отмена не подтверждена. Перезапустите Яндекс Диск и это приложение перед новым проходом.","Cancellation not acknowledged. Restart Yandex Disk and this application before another pass.");}
             if(s.ScanErrors>0)footer.Text=String.Format(T("Недоступных папок/файлов при сканировании: {0}. Подробности в журнале.","Scan access errors: {0}. See the activity log."),s.ScanErrors);
+        }
+        public void PreviewDashboard(){PreviewDashboard(false);}
+        public void PreviewDashboard(bool english){
+            PreviewApi(english);SelectSection(1);
+            dashboard.Live(new System.Collections.Generic.List<BrowserFile>{
+                new BrowserFile{Path="Фотографии/2024/Лето.jpg",LocalPath=@"E:\Downloads\Фотографии\2024\Лето.jpg",Length=3200000,Bytes=3200000,Status="success"},
+                new BrowserFile{Path="Фотографии/2025/Море.jpg",LocalPath=@"E:\Downloads\Фотографии\2025\Море.jpg",Length=5100000,Bytes=2300000,Status="timeout"},
+                new BrowserFile{Path="Видео/Поездка.mp4",LocalPath=@"E:\Downloads\Видео\Поездка.mp4",Length=236000000,Bytes=225000000,Status="timeout"},
+                new BrowserFile{Path="Видео/Готовое видео.mp4",LocalPath=@"E:\Downloads\Видео\Готовое видео.mp4",Length=14000000,Bytes=14000000,Status="success"},
+                new BrowserFile{Path="Видео/Праздник.mov",LocalPath=@"E:\Downloads\Видео\Праздник.mov",Length=150000000,Status="cloud_error"},
+                new BrowserFile{Path="Документы/Инструкция.pdf",LocalPath=@"E:\Downloads\Документы\Инструкция.pdf",Length=250000,Bytes=250000,Status="success"}
+            },@"E:\Downloads");dashboard.SelectFolder("Видео");
+            Snapshot demo=new Snapshot{Phase="running",Total=6,Selected=4,Processed=2,Downloaded=1,Available=3,CloudErrorsThisPass=1,PerHour=120,RemainingSeconds=60};
+            demo.Categories.Add(new CategoryStats{Category="photos",Total=2,Available=1,Remaining=1,ZeroDownload=1});demo.Categories.Add(new CategoryStats{Category="videos",Total=3,Available=1,Downloaded=1,Remaining=2,ZeroDownload=1,CloudErrors=1});demo.Categories.Add(new CategoryStats{Category="documents",Total=1,Available=1});
+            demo.Events.Add("12:00:01  demo.mp4  ·  success");demo.Events.Add("12:00:02  sample.mov  ·  cloud_error  ·  HTTP 500");Render(demo);
         }
         public void Preview(){
             folder.Text=@"E:\Yandex.Disk";

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -21,14 +21,15 @@ namespace DiskRescue {
         string report = "", current = "";
         int processed, selected, skipped, scanErrors;
         RunMode currentMode;
-        bool queueReady;
+        bool queueReady;string browserRoot="";DateTime catalogTime=DateTime.MinValue;List<BrowserFile> catalog;
         public string DataFolder { get; private set; }
         public bool RecoveryRequired { get; private set; }
         sealed class Job { public DiskFile File; public YandexCloudNative.Operation Operation; }
         public Engine(string dataFolder) { DataFolder = dataFolder; }
-        public void Stop() { stopping = true; if(apiEngine!=null)apiEngine.Stop(); }
+        public void Stop() { stopping = true; ApiEngine current=apiEngine;if(current!=null)current.Stop(); }
         void Event(string text) { events.Add(DateTime.Now.ToString("HH:mm:ss") + "  " + text); if (events.Count > 160) events.RemoveAt(0); }
         public void Run(Settings settings, RunMode mode) {
+            browserRoot=settings.Folder;catalog=null;
             if(settings.UseApi){apiEngine=new ApiEngine(DataFolder,delegate(Snapshot s){Latest=s;});try{apiEngine.Run(settings,mode);}finally{apiEngine=null;}return;}
             if(RecoveryRequired){Latest=new Snapshot{Phase="error",Finished=true,RecoveryRequired=true,Error="Restart Yandex Disk and this application before starting another pass."};return;}
             stopping = false; processed = selected = skipped = scanErrors = 0;currentMode=mode;queueReady=false;
@@ -176,6 +177,7 @@ namespace DiskRescue {
             s.PerHour = s.Seconds > 0 ? processed * 3600.0 / s.Seconds : 0;
             s.RemainingSeconds = s.PerHour > 0 ? Math.Max(0, selected - processed) * 3600.0 / s.PerHour : 0;
             foreach (Job job in active) s.Files.Add(new ActiveFile { Path = job.File.Path, Category = job.File.Category, Bytes = job.Operation.ProgressBytes, Length = job.File.Length, State = job.Operation.CancelRequested ? "cancelling" : "downloading" });
+            if(catalog==null||finished||(DateTime.UtcNow-catalogTime).TotalSeconds>=2){catalog=BrowserCatalog.Capture(inventory,browserRoot);catalogTime=DateTime.UtcNow;}s.Catalog=catalog;
             s.Events = events.ToList(); Latest = s;
         }
         void RestartClient() {

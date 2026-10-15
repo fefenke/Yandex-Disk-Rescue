@@ -24,6 +24,7 @@ namespace DiskRescue {
         readonly SemaphoreSlim apiGate=new SemaphoreSlim(1,1);
         DateTime lastPublish=DateTime.MinValue;
         string lastPhase="";
+        DateTime catalogTime=DateTime.MinValue;List<BrowserFile> catalog;
         readonly List<string> events=new List<string>();
         readonly HashSet<string> downloaded=new HashSet<string>(StringComparer.Ordinal);
         readonly HashSet<string> errors=new HashSet<string>(StringComparer.Ordinal);
@@ -42,7 +43,7 @@ namespace DiskRescue {
         sealed class Result { public string Status,Message; public long Bytes; }
         public ApiEngine(string data,Action<Snapshot> publish){this.data=data;this.publish=publish;}
         internal ApiEngine(string data,Action<Snapshot> publish,HttpMessageHandler apiHandler,HttpMessageHandler fileHandler):this(data,publish){this.apiHandler=apiHandler;this.fileHandler=fileHandler;}
-        public void Stop(){stop.Cancel();}
+        public void Stop(){try{stop.Cancel();}catch(ObjectDisposedException){ /* Run has already finished. */ }}
         static string Text(IDictionary<string,object> o,string key){object v;return o.TryGetValue(key,out v)?Convert.ToString(v):"";}
         static long Number(IDictionary<string,object> o,string key){object v;return o.TryGetValue(key,out v)?Convert.ToInt64(v):0;}
         void Event(string message){events.Add(DateTime.Now.ToString("HH:mm:ss")+"  "+message);if(events.Count>160)events.RemoveAt(0);}
@@ -118,9 +119,12 @@ namespace DiskRescue {
             SaveInventory(cachePath,account,root,true,folders,null,0);
         }
         void AssignDestinations(){
+            AssignDestinations(files,settings.ApiFolder);
+        }
+        internal static void AssignDestinations(List<DiskFile> files,string root){
             HashSet<string> destinations=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach(DiskFile f in files.OrderBy(x=>x.Path,StringComparer.Ordinal)){
-                f.Destination=LocalPath(settings.ApiFolder,f.Path);
+                f.Destination=LocalPath(root,f.Path);
                 if(!destinations.Add(f.Destination)){string ext=Path.GetExtension(f.Destination);f.Destination=Path.Combine(Path.GetDirectoryName(f.Destination),Path.GetFileNameWithoutExtension(f.Destination)+"_"+Suffix(f.Path)+ext);if(!destinations.Add(f.Destination))throw new IOException("Conflicting file destinations.");}
                 f.Folder=Path.GetDirectoryName(f.Destination);
             }
@@ -249,6 +253,7 @@ namespace DiskRescue {
             Snapshot s=new Snapshot{Phase=phase,Error=error,RetryableError=retryableError,Finished=finished,Total=files.Count,Selected=selected,Processed=processed,Skipped=skipped,ScanErrors=scanErrors,Report=report,Current=current,Seconds=clock.Elapsed.TotalSeconds,Active=jobs.Count,Downloaded=downloaded.Count,CloudErrorsThisPass=errors.Count};
             foreach(string category in new[]{"photos","videos","documents","archives","audio","other"}){List<DiskFile> items=files.Where(f=>f.Category==category).ToList();s.Categories.Add(new CategoryStats{Category=category,Total=items.Count,Available=items.Count(f=>FileRules.Success(f.Status)),Downloaded=items.Count(f=>downloaded.Contains(f.Path)),Remaining=items.Count(f=>!FileRules.Success(f.Status)),ZeroDownload=items.Count(FileRules.CancelledZero),CloudErrors=items.Count(f=>f.Status=="cloud_error"),Deferred=items.Count(f=>f.Status=="timeout"||f.Status=="failed"||f.Status=="cancelled_user")});}
             s.Available=s.Categories.Sum(c=>c.Available);s.CloudErrors=s.Categories.Sum(c=>c.CloudErrors);s.Deferred=s.Categories.Sum(c=>c.Deferred);s.PerHour=s.Seconds>0?processed*3600.0/s.Seconds:0;s.RemainingSeconds=s.PerHour>0?Math.Max(0,selected-processed)*3600.0/s.PerHour:0;s.Events=events.ToList();
+            if(catalog==null||finished||(DateTime.UtcNow-catalogTime).TotalSeconds>=2){catalog=BrowserCatalog.Capture(files,settings.ApiFolder);foreach(Job job in jobs){BrowserFile item=catalog.FirstOrDefault(f=>f.LocalPath==job.File.Destination);if(item!=null){item.Bytes=Interlocked.Read(ref job.Bytes);item.Status="downloading";}}catalogTime=DateTime.UtcNow;}s.Catalog=catalog;
             if(queueReady){s.ProgressTotal=runMode==RunMode.Continue?files.Count:selected;s.ProgressChecked=runMode==RunMode.Continue?skipped+processed:processed;}latest=s;publish(s);
         }
         sealed class ApiException:Exception {public readonly int Code;public readonly double RetryAfterSeconds;public ApiException(int code,double retryAfterSeconds=0){Code=code;RetryAfterSeconds=retryAfterSeconds;}}
