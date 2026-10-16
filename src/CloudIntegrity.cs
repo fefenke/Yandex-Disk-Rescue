@@ -9,7 +9,8 @@ namespace DiskRescue {
     }
     internal static class CloudIntegrity {
         public static bool HasHash(DiskFile f){return !String.IsNullOrEmpty(f.Md5)||!String.IsNullOrEmpty(f.Sha256);}
-        public static string Version(DiskFile f){return f.Path+"\n"+f.Modified+"\n"+f.Length+"\n"+(f.Sha256??"");}
+        public static string Version(DiskFile f){return f.Path+"\n"+f.Modified+"\n"+f.Length+"\n"+(String.IsNullOrEmpty(f.Md5)?f.Sha256??"":"");}
+        internal static bool LegacyVersion(string saved,string current){return saved!=null&&current.EndsWith("\n",StringComparison.Ordinal)&&saved.StartsWith(current,StringComparison.Ordinal)&&saved.Length==current.Length+64&&System.Linq.Enumerable.All(saved.Substring(current.Length),Uri.IsHexDigit);}
         public static void Validate(string value,int length){if(!String.IsNullOrEmpty(value)&&(value.Length!=length||System.Linq.Enumerable.Any(value,c=>!Uri.IsHexDigit(c))))throw new IOException("Invalid cloud checksum metadata.");}
         public static IntegrityResult Check(string path,DiskFile f,CancellationToken token,Action<long,long> progress=null){
             token.ThrowIfCancellationRequested();Validate(f.Md5,32);Validate(f.Sha256,64);

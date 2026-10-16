@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 <p><strong>Приложение помогло забрать файлы? Можно поддержать автора 💜</strong><br>Это необязательно. Приложение остаётся бесплатным.</p>
 <a href="https://yoomoney.ru/fundraise/1KS67440FP0.261012"><img alt="Поддержать автора" src="https://img.shields.io/badge/Поддержать_автора-ЮMoney-7556D9?style=for-the-badge"></a>
 </div>
@@ -6,10 +6,10 @@
 ![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.0.5](https://img.shields.io/badge/1.0.5-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.5)
+[![1.0.6](https://img.shields.io/badge/1.0.6-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.6)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-**Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Изменения 1.0.5](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
+**Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Изменения 1.0.6](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
 
 Бесплатное приложение для Windows, которое скачивает доступные файлы с Яндекс Диска, сохраняет прогресс и повторяет неудачные попытки. Использует технологию API Яндекс Диска либо официальный клиент на компьютере. Независимый неофициальный проект, не связанный с Яндексом.
 
@@ -18,9 +18,9 @@
 
 ## Скачать
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_бита-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.5/YandexDiskRescue-win-x64.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_бита-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.6/YandexDiskRescue-win-x64.zip)
 
-[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.5/YandexDiskRescue-win-x86.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.6/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, без установки. Для 64-битной Windows обычно выбирайте x64; x86 предназначен для 32-битной Windows и также работает на x64.
 
@@ -39,12 +39,11 @@ Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, без устан
 
 Другой способ — через официальный клиент: дождитесь синхронизации и выберите его локальную папку Диска. Токен в это приложение не нужен; скачиванием управляют Windows и клиент. Новая защита частей и HTTP-докачка относятся к API-режиму.
 
-## Что изменилось в 1.0.5
+## Что изменилось в 1.0.6
 
-- **Единый файл и карта докачки.** Диапазоны пишутся сразу на свои места; на NTFS финальная сборка не нужна.
-- **Сохранение копий.** Прежние и не прошедшие проверку файлы сохраняются отдельно; плохая облачная версия не скачивается бесконечно.
-- **Проверка SHA-256.** Используется, когда у облака нет MD5; без обоих хешей проверка по размеру обозначена явно.
-- **Возобновление сканирования.** Незавершённая папка перечитывается с первой страницы, чтобы найти новые файлы перед прежним смещением.
+- Исправлено определение версии файла при обновлении облачных хешей и сохранение новой копии при проверке только размера.
+- Добавлена тихая очистка пустых служебных заготовок предыдущей версии.
+- Ускорена остановка во время подготовки истории и списка файлов.
 
 Сохранены возможности предыдущих выпусков:
 

@@ -12,6 +12,8 @@
 | Сохранение копий / Preservation | [SafeDownloadTests](src/SafeDownloadTests.cs) | Прежний файл остаётся до окончания загрузки; архивы; recovery между перемещениями |
 | Ошибочные версии / Failure ledger | [SafeDownloadTests](src/SafeDownloadTests.cs) | Пересканирование, удалённая копия, ручной повтор, дедупликация, новая облачная версия |
 | Карта / Range map | [RangeMapTests](src/RangeMapTests.cs) | Параллельные позиции, неподтверждённые данные, повреждённые участки и JSON, границы старого плана |
+| Очистка последствий 1.0.5 / Cleanup | [PreservedCleanupTests](src/PreservedCleanupTests.cs) | Только пустые принадлежащие программе sparse-заготовки; защита непустых, неподтверждённых, чужих и занятых файлов; одноразовый запуск, отмена и продолжение |
+| Остановка подготовки / Preparation Stop | [PreparationStopTests](src/PreparationStopTests.cs) | Отмена между записями истории, сохранность журнала и отсутствие лишних полных отчётов при остановке до очереди загрузок |
 | Аварийное завершение / Process kill | [RangeMapTests](src/RangeMapTests.cs), [DurablePartialTests](src/DurablePartialTests.cs) | Убитый дочерний процесс; доверие подтверждённым байтам |
 | Старые части / Legacy migration | [SegmentTests](src/SegmentTests.cs), [ApiTests](src/ApiTests.cs) | Докачка, смена версии, сохранение прогресса, неподдерживаемый Range |
 | Ссылки / Signed links | [SignedLinkTests](src/SignedLinkTests.cs) | Свежие сведения начатого файла, подтверждение ссылки данными, отказ ссылки и изоляция контекстов |

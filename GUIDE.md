@@ -1,4 +1,4 @@
-# Yandex Disk Rescue 1.0.5 — руководство
+﻿# Yandex Disk Rescue 1.0.6 — руководство
 
 [На главную](README.md) · [English](GUIDE.en.md) · [Релизы](https://github.com/fefenke/Yandex-Disk-Rescue/releases)
 

@@ -17,10 +17,10 @@ namespace DiskRescue {
             if(!same&&File.Exists(metadata)&&!String.IsNullOrEmpty(f.Sha256)&&String.IsNullOrEmpty(f.Md5)){string previous=f.Modified.Split(new[]{"|sha256:"},StringSplitOptions.None)[0];same=File.ReadAllText(metadata)==f.Path+"\n"+previous+"\n"+f.Length;}
             if(!same){preserver.PreservePartial(f,partial,partial+".ydr-state");preserver.PreservePartial(f,SegmentFolder(f),null);}
             SegmentPlan old=same?ReadSegmentPlan(f):null;
-            if(RangeMap.Exists(f.Destination)&&!RangeMap.Matches(f.Destination,identity,f.Length))preserver.PreservePartial(f,f.Destination+".ydr-download",f.Destination+".ydr-map");
+            if(RangeMap.Exists(f.Destination)&&!RangeMap.Matches(f.Destination,identity,f.Length,!String.IsNullOrEmpty(f.Md5)))preserver.PreservePartial(f,f.Destination+".ydr-download",f.Destination+".ydr-map");
             int count=old!=null?old.Parts:CloudIntegrity.HasHash(f)&&f.Length>=Math.Max(64,Math.Min(4096,settings.MultiStreamThresholdMB))*1000000L?Math.Max(1,Math.Min(8,settings.StreamsPerFile)):1;
             long[] boundaries=null;if(old!=null){boundaries=new long[old.Parts+1];for(int i=1;i<=old.Parts;i++)boundaries[i]=SegmentStart(old,i);}
-            try{job.Map=RangeMap.OpenPlanned(f.Destination,identity,f.Length,count,boundaries,stop.Token);}catch(RangeMap.SparseUnavailable){if(!File.Exists(f.Destination+".ydr-map")&&File.Exists(f.Destination+".ydr-download")&&new FileInfo(f.Destination+".ydr-download").Length==0)File.Delete(f.Destination+".ydr-download");return false;}
+            try{job.Map=RangeMap.OpenPlanned(f.Destination,identity,f.Length,count,boundaries,stop.Token,!String.IsNullOrEmpty(f.Md5));}catch(RangeMap.SparseUnavailable){if(!File.Exists(f.Destination+".ydr-map")&&File.Exists(f.Destination+".ydr-download")&&new FileInfo(f.Destination+".ydr-download").Length==0)File.Delete(f.Destination+".ydr-download");return false;}
             if(same&&File.Exists(partial)){
                 long bytes=DurablePartial.Recover(partial,legacyIdentity,CloudIntegrity.HasHash(f),stop.Token);if(old!=null)bytes=Math.Min(bytes,old.Offset);bytes=Math.Min(bytes,f.Length);
                 if(bytes>0)job.Map.Import(partial,0,0,bytes,stop.Token);

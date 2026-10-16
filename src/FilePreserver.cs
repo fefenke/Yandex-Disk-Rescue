@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,14 +12,16 @@ namespace DiskRescue {
     internal sealed class FilePreserver {
         readonly object sync=new object();readonly string state,root,owner;readonly string[] destinations;
         readonly HashSet<string> recoveryBlocked=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        readonly Dictionary<string,List<Ledger>> legacy=new Dictionary<string,List<Ledger>>(StringComparer.Ordinal);
         readonly JavaScriptSerializer json=new JavaScriptSerializer();
         sealed class Artifact {public string Path,Hash;public long Length;}
         sealed class Ledger {public string Version;public bool Blocked;public List<Artifact> Copies=new List<Artifact>();}
         sealed class Operation {public string LedgerPath,Version,Source,Target,OldSource,OldTarget,Hash,Destination,Expected,Algorithm;public long Length;public bool Blocked,Directory;}
-        public FilePreserver(string directory,string root,IEnumerable<string> destinations){this.root=Path.GetFullPath(root);state=Path.Combine(directory,"preservation");owner=HistoryStore.IdentityKey(directory);this.destinations=destinations.ToArray();DurablePartial.SafePath(state);Directory.CreateDirectory(state);Recover();}
+        public FilePreserver(string directory,string root,IEnumerable<string> destinations,CancellationToken token=default(CancellationToken)){this.root=Path.GetFullPath(root);state=Path.Combine(directory,"preservation");owner=HistoryStore.IdentityKey(directory);this.destinations=destinations.ToArray();DurablePartial.SafePath(state);Directory.CreateDirectory(state);Recover();if(recoveryBlocked.Count==0)PreservedCleanup.Run(state,this.root,directory,owner,token);foreach(string path in Directory.GetFiles(state,"api-*.json")){Ledger l=Read(path);if(l.Version==null)continue;int end=l.Version.LastIndexOf('\n');if(end<0)continue;string key=l.Version.Substring(0,end+1);if(!CloudIntegrity.LegacyVersion(l.Version,key))continue;List<Ledger> entries;if(!legacy.TryGetValue(key,out entries))legacy[key]=entries=new List<Ledger>();entries.Add(l);}}
         string LedgerPath(DiskFile f){return Path.Combine(state,HistoryStore.IdentityKey(CloudIntegrity.Version(f))+".json");}
         Ledger Read(string path){DurablePartial.SafePath(path);return File.Exists(path)?json.Deserialize<Ledger>(File.ReadAllText(path)):new Ledger();}
-        public bool Blocked(DiskFile f){lock(sync){Ledger l=Read(LedgerPath(f));if(!l.Blocked||l.Version!=CloudIntegrity.Version(f))return false;f.PreservedPath=l.Copies.Count==0?"":l.Copies.Last().Path;return true;}}
+        Ledger Read(DiskFile f){string path=LedgerPath(f);if(File.Exists(path))return Read(path);string version=CloudIntegrity.Version(f);List<Ledger> entries;if(!String.IsNullOrEmpty(f.Md5)&&legacy.TryGetValue(version,out entries))return new Ledger{Version=version,Blocked=entries.Any(l=>l.Blocked),Copies=entries.SelectMany(l=>l.Copies).ToList()};return new Ledger();}
+        public bool Blocked(DiskFile f){lock(sync){Ledger l=Read(f);if(!l.Blocked||l.Version!=CloudIntegrity.Version(f))return false;f.PreservedPath=l.Copies.Count==0?"":l.Copies.Last().Path;return true;}}
         string ArchiveRoot(string title){
             string config=Path.Combine(state,title+".root");DurablePartial.SafePath(config);if(File.Exists(config)){string saved=File.ReadAllText(config);EnsureInside(saved,root);DurablePartial.SafePath(saved);if(!Directory.Exists(saved)){Directory.CreateDirectory(saved);DurablePartial.AtomicText(Path.Combine(saved,".ydr-owner"),owner);return saved;}string marker=Path.Combine(saved,".ydr-owner");DurablePartial.SafePath(marker);if(File.Exists(marker)&&File.ReadAllText(marker)==owner)return saved;}
             string candidate=Path.Combine(root,title);
@@ -39,12 +41,13 @@ namespace DiskRescue {
         }
         public bool Complete(DiskFile f,string payload,IntegrityResult check){lock(sync){
             if(!check.Match&&String.IsNullOrEmpty(check.Actual)){check.Actual=Fingerprint(payload,"sha256");check.Algorithm="sha256";f.ActualHash=check.Actual;}
-            CheckDestination(f.Destination);string ledgerPath=LedgerPath(f);Ledger ledger=Read(ledgerPath);
+            CheckDestination(f.Destination);string ledgerPath=LedgerPath(f);Ledger ledger=Read(f);
             Operation op=new Operation{LedgerPath=ledgerPath,Version=CloudIntegrity.Version(f),Source=payload,Target=f.Destination,Destination=f.Destination,Expected=check.Expected,Algorithm=check.Algorithm,Blocked=!check.Match,Hash=check.Actual,Length=new FileInfo(payload).Length};
             if(File.Exists(f.Destination)){
                 IntegrityResult old=CloudIntegrity.Check(f.Destination,f,CancellationToken.None);
                 if(!old.Match){op.OldSource=f.Destination;op.OldTarget=ArchivePath(f,old.Kind=="size_mismatch"?"Сохранённые прежние файлы":"Файлы с ошибкой проверки",old.Actual);}
-                else if(check.Match){File.Delete(payload);return true;}
+                else if(check.Match&&old.Kind!="size_only"){File.Delete(payload);return true;}
+                else if(check.Match){op.OldSource=f.Destination;op.OldTarget=ArchivePath(f,"Сохранённые прежние файлы",old.Actual);}
             }
             if(op.Blocked){
                 Artifact duplicate=ledger.Copies.FirstOrDefault(a=>a.Hash==check.Actual&&a.Length==op.Length&&File.Exists(a.Path)&&new FileInfo(a.Path).Length==a.Length&&Fingerprint(a.Path,check.Algorithm)==a.Hash);

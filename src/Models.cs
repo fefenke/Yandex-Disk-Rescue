@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Web.Script.Serialization;
 
 namespace DiskRescue {
@@ -144,20 +145,28 @@ namespace DiskRescue {
         public readonly Dictionary<string, HistoryRecord> Records;
         public readonly string DirectoryPath;
         public HistoryStore(string dataFolder, string root) : this(dataFolder,root,null) { }
-        public HistoryStore(string dataFolder, string root, string identity) {
+        public HistoryStore(string dataFolder, string root, string identity,CancellationToken token=default(CancellationToken)) {
+            token.ThrowIfCancellationRequested();
             Records=new Dictionary<string,HistoryRecord>(identity==null?StringComparer.OrdinalIgnoreCase:StringComparer.Ordinal);
             DirectoryPath = System.IO.Path.Combine(dataFolder, identity == null ? RootKey(root) : IdentityKey(identity));
             Directory.CreateDirectory(DirectoryPath);
             string path = System.IO.Path.Combine(DirectoryPath, "history.jsonl");
-            if (File.Exists(path)) foreach (string line in File.ReadLines(path, Encoding.UTF8)) {
-                try {
-                    HistoryRecord record = json.Deserialize<HistoryRecord>(line);
-                    if (record != null && !String.IsNullOrEmpty(record.path)) Records[record.path] = record;
-                } catch { /* A torn final journal line does not discard older results. */ }
-            }
+            if(File.Exists(path))ReadRecords(Records,File.ReadLines(path,Encoding.UTF8),token);
+            token.ThrowIfCancellationRequested();
             FileStream stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
             writer = new StreamWriter(stream, new UTF8Encoding(false));
             writer.AutoFlush = true;
+        }
+        internal static void ReadRecords(Dictionary<string,HistoryRecord> records,IEnumerable<string> lines,CancellationToken token){
+            var json=new JavaScriptSerializer();token.ThrowIfCancellationRequested();
+            foreach(string line in lines){
+                token.ThrowIfCancellationRequested();
+                try {
+                    HistoryRecord record = json.Deserialize<HistoryRecord>(line);
+                    if (record != null && !String.IsNullOrEmpty(record.path)) records[record.path] = record;
+                } catch { /* A torn final journal line does not discard older results. */ }
+            }
+            token.ThrowIfCancellationRequested();
         }
         public static string RootKey(string root) {
             string normalized = System.IO.Path.GetFullPath(root).TrimEnd('\\').ToUpperInvariant();
