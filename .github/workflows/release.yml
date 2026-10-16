@@ -1,0 +1,115 @@
+name: Publish verified Windows release
+
+on:
+  workflow_run:
+    workflows: [Build Windows portable app]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-windows-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Check release version
+        id: version
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $source = Get-Content src/AssemblyInfo.cs -Raw
+          $match = [regex]::Match($source, 'AssemblyVersion\("(\d+\.\d+\.\d+)\.0"\)')
+          if (-not $match.Success) { throw 'Invalid release version.' }
+          $version = $match.Groups[1].Value
+          $tag = 'v' + $version
+          "number=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          $existing = & gh release view $tag --repo $env:GITHUB_REPOSITORY --json isDraft --jq .isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            if ($existing -eq 'true') { throw 'An existing draft requires review; refusing to overwrite it.' }
+            'needed=false' >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          # A failed lookup must not be mistaken for a missing release after auth/network failure.
+          & gh api ('repos/' + $env:GITHUB_REPOSITORY) --silent
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot access release repository.' }
+          'needed=true' >> $env:GITHUB_OUTPUT
+      - name: Download tested packages
+        if: steps.version.outputs.needed == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: YandexDiskRescue-win-*
+          merge-multiple: true
+          path: release-assets
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Verify package contents and checksums
+        if: steps.version.outputs.needed == 'true'
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.number }}
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $allowed = @('YandexDiskRescue.exe','YandexDiskRescue.exe.config','Start Yandex Disk Rescue.cmd','README.md','README.en.md','LICENSE','assets/preview.png','assets/preview-en.png','assets/preview-api.png','assets/preview-api-en.png')
+          $sums = @()
+          foreach ($platform in @('x64','x86')) {
+            $name = "YandexDiskRescue-win-$platform.zip"
+            $path = Join-Path release-assets $name
+            if (-not (Test-Path -LiteralPath $path)) { throw "Missing tested package: $name" }
+            $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $path))
+            try {
+              $names = @($archive.Entries | Where-Object { $_.Name -ne '' } | ForEach-Object { $_.FullName.Replace('\','/') })
+              if ($names.Count -ne $allowed.Count -or @(Compare-Object ($allowed | Sort-Object) ($names | Sort-Object)).Count -ne 0) { throw 'Unexpected ZIP contents; refusing publication.' }
+              $entry = $archive.GetEntry('YandexDiskRescue.exe')
+              $probe = Join-Path $env:RUNNER_TEMP "ydr-release-$platform.exe"
+              [IO.Compression.ZipFileExtensions]::ExtractToFile($entry,$probe,$true)
+              $actual = [Reflection.AssemblyName]::GetAssemblyName($probe).Version.ToString()
+              if ($actual -ne ($env:RELEASE_VERSION + '.0')) { throw 'Package executable version differs from source version.' }
+            } finally { $archive.Dispose() }
+            $sums += (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $name
+          }
+          # The prefix places the checksum file after the two ZIPs in the asset list.
+          [IO.File]::WriteAllLines((Join-Path (Get-Location) 'release-assets/z-SHA256SUMS.txt'),[string[]]$sums,[Text.UTF8Encoding]::new($false))
+      - name: Publish release from verified artifacts
+        if: steps.version.outputs.needed == 'true'
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.number }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $reference = & gh api ('repos/' + $env:GITHUB_REPOSITORY + '/git/ref/tags/' + $env:RELEASE_TAG) 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            & gh api --method POST ('repos/' + $env:GITHUB_REPOSITORY + '/git/refs') -f ('ref=refs/tags/' + $env:RELEASE_TAG) -f ('sha=' + $env:VERIFIED_SHA) --silent
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the verified release tag.' }
+            $reference = & gh api ('repos/' + $env:GITHUB_REPOSITORY + '/git/ref/tags/' + $env:RELEASE_TAG)
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot verify release tag.' }
+          }
+          $target = ($reference | ConvertFrom-Json).object
+          for ($depth = 0; $target.type -eq 'tag' -and $depth -lt 8; $depth++) {
+            $annotated = & gh api ('repos/' + $env:GITHUB_REPOSITORY + '/git/tags/' + $target.sha)
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve annotated release tag.' }
+            $target = ($annotated | ConvertFrom-Json).object
+          }
+          if ($target.type -ne 'commit' -or $target.sha -ne $env:VERIFIED_SHA) { throw 'Release tag does not identify the tested commit.' }
+          & gh release create $env:RELEASE_TAG release-assets/YandexDiskRescue-win-x64.zip release-assets/YandexDiskRescue-win-x86.zip release-assets/z-SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $env:VERIFIED_SHA --title ('Yandex Disk Rescue ' + $env:RELEASE_VERSION) --notes-file RELEASE-NOTES.md --draft
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to create draft release; nothing has been published.' }
+          & gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release remains draft; publication failed.' }

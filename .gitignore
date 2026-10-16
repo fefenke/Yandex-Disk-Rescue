@@ -12,6 +12,9 @@ obj/
 *.ydr-state
 *.ydr-state.tmp
 *.ydr-segments/
+*.ydr-download
+*.ydr-map
+*.ydr-map.tmp
 api-token.bin
 history.jsonl
 crash-*.txt
