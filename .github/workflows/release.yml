@@ -125,3 +125,16 @@ jobs:
             & gh release edit $release.tagName --repo $env:GITHUB_REPOSITORY --title $shortTitle
             if ($LASTEXITCODE -ne 0) { throw 'Cannot update release title.' }
           }
+      - name: Remove retired draft releases
+        if: steps.version.outputs.number == '1.0.8'
+        shell: pwsh
+        run: |
+          $retired = @('v1.0.0','v0.9.9','v0.2.7','v0.2.6','v0.2.5','v0.2.4','v0.2.3','v0.2.2','v0.2.1','v0.2.0','v0.1.0')
+          $json = & gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName,isDraft
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect retired drafts.' }
+          foreach ($release in ($json | ConvertFrom-Json)) {
+            if (-not $release.isDraft -or $retired -notcontains $release.tagName) { continue }
+            # Owner requested deletion of these obsolete drafts and their assets. Keep Git tags.
+            & gh release delete $release.tagName --repo $env:GITHUB_REPOSITORY --yes
+            if ($LASTEXITCODE -ne 0) { throw 'Could not delete a retired draft.' }
+          }

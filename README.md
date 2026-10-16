@@ -6,21 +6,23 @@
 ![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.0.7](https://img.shields.io/badge/1.0.7-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.7)
+[![1.0.8](https://img.shields.io/badge/1.0.8-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.8)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-**Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Изменения 1.0.7](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
+**Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Изменения 1.0.8](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
 
-Бесплатное приложение для Windows, которое скачивает доступные файлы с Яндекс Диска, сохраняет прогресс и повторяет неудачные попытки. Использует технологию API Яндекс Диска либо официальный клиент на компьютере. Независимый неофициальный проект, не связанный с Яндексом.
+Бесплатное приложение для Windows, которое скачивает доступные файлы с Яндекс Диска, сохраняет прогресс и повторяет неудачные попытки. Использует технологию API Яндекс Диска. Независимый неофициальный проект, не связанный с Яндексом.
+
+**Для скачивания файлов через API подписка Яндекс 360 не нужна.** Нужны аккаунт Яндекса и OAuth-токен.
 
 > [!IMPORTANT]
 > Программа обходит обычные **папки Диска**. Если нужные фото есть только в безлимитной автозагрузке, сначала скопируйте отсутствующие в папках файлы через сайт Яндекс Диска в обычную папку, затем обновите список в программе. Подробнее — в [гайде](GUIDE.md#фотографии-из-безлимитной-автозагрузки). Программа не исправляет недоступные облачные оригиналы и не гарантирует скачивание каждого файла.
 
 ## Скачать
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_бита-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.7/YandexDiskRescue-win-x64.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_бита-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.8/YandexDiskRescue-win-x64.zip)
 
-[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.7/YandexDiskRescue-win-x86.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.8/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, без установки. Для 64-битной Windows обычно выбирайте x64; x86 предназначен для 32-битной Windows и также работает на x64.
 
@@ -31,18 +33,16 @@ Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, без устан
 
 ## Начало работы
 
-1. Откройте «Настройки». По умолчанию выбран API; официальный клиент для него не нужен.
+1. Откройте «Настройки». Скачивание работает через API; устанавливать клиент Яндекс Диска не нужно.
 2. Получите токен по OAuth-ссылке в приложении, войдя в нужный аккаунт, и вставьте его в поле.
 3. Выберите обычную локальную папку сохранения. `disk:/` означает весь обычный раздел Диска; `disk:/Фото` — выбранную папку.
 4. Оставьте сохранённый список и выберите **«Повторить все нескачанные»**, затем начните проход. В первый раз список будет получен автоматически.
 5. После изменений в облаке обновите список. Перед каждым повтором пересканирование не требуется.
 
-Другой способ — через официальный клиент: дождитесь синхронизации и выберите его локальную папку Диска. Токен в это приложение не нужен; скачиванием управляют Windows и клиент. Новая защита частей и HTTP-докачка относятся к API-режиму.
+## Что изменилось в 1.0.8
 
-## Что изменилось в 1.0.7
-
-- После очистки служебного архива автоматически удаляются его пустые вложенные папки.
-- Управление обновлениями осталось в настройках; обновлены скриншоты интерфейса.
+- Ускорено чтение большой истории при повторных запусках и автоматических проходах.
+- Исправлены обработка отсутствующего размера в API и полная проверка готовых файлов.
 
 Как работает загрузка:
 

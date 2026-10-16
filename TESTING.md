@@ -48,3 +48,11 @@
 ## English
 
 The table links each verification aspect to its executable test source. Full local x64/x86 checks passed for the safe-copy/range-map implementation; interrupted-folder enumeration has a separate regression test. The current commit's CI status is visible in Actions. Network responses and credentials are synthetic. HDD testing killed a dedicated child process, not the user's running application. Physical power removal and arbitrary drive/controller durability were not tested. Reports describe their exact scope rather than certifying universal safety or completeness.
+
+## Быстрый повторный запуск и размер из API
+
+[StartupReliabilityTests](src/StartupReliabilityTests.cs) проверяет строгий размер в ответе API (отсутствие, null, строка, дробь, отрицательное значение; настоящий ноль разрешён), исправление старого неизвестного нулевого размера, быструю проверку неизменённого файла и полную проверку изменённого содержимого при сохранённой дате. Проверки индекса включают дописывание журнала, оборванную строку, повреждение индекса, сохранение сведений о проверке и отмену.
+
+`history.latest` содержит последние записи истории и контрольную сумму. Он используется только при совпадении пути, длины и времени изменения исходного `history.jsonl`. При отсутствии или повреждении индекса программа читает исходный журнал. Журнал не сокращается. После первого чтения старой истории индекс сохраняется при закрытии хранилища; следующий запуск может использовать его. Полный режим по-прежнему читает файлы для проверки хешей. Индекс содержит локальные сведения и не входит в публикуемые архивы.
+
+Проверка интерфейса 1.0.8 подтверждает, что старые настройки с выключенным API и смена языка не возвращают скрытый способ в список: доступен только API. Логика официального клиента с перезапуском сохранена в коде.

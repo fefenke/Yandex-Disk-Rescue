@@ -1,10 +1,10 @@
-﻿# Yandex Disk Rescue 1.0.7 — guide
+﻿# Yandex Disk Rescue 1.0.8 — guide
 
 [Home](README.en.md) · [Русский](GUIDE.md) · [Releases](https://github.com/fefenke/Yandex-Disk-Rescue/releases)
 
 ## 1. Scope and requirements
 
-Only the regular Files section of Yandex Disk is supported. Prepare ordinary folders first for media stored only in unlimited auto-upload; see below. The app uses Yandex Disk API technology or the official desktop client, retries available files and records results. It does not repair cloud originals, recover deleted files or guarantee access to unavailable data.
+Only the regular Files section of Yandex Disk is supported. Prepare ordinary folders first for media stored only in unlimited auto-upload; see below. The app uses Yandex Disk API technology, retries available files and records results. It does not repair cloud originals, recover deleted files or guarantee access to unavailable data.
 
 Requires Windows 10 1709+ or Windows 11 and .NET Framework 4.7.1+. Choose x64 for 64-bit Windows, or x86 for 32-bit Windows; x86 also works on x64. There is no separate ARM64 build.
 
@@ -12,12 +12,14 @@ Requires Windows 10 1709+ or Windows 11 and .NET Framework 4.7.1+. Choose x64 fo
 
 1. Download the architecture-specific ZIP and extract the entire archive to a permanent writable folder.
 2. Run YandexDiskRescue.exe. Start Yandex Disk Rescue.cmd is an optional launcher that checks Windows/.NET and explains incompatible environments. Settings opens first.
-3. Choose API or the official desktop client, fill required fields, select a pass mode and press Start pass at the top.
+3. Enter the OAuth token and destination, select a pass mode and press Start pass at the top.
 4. The guide button is always at the top. Transfer settings are locked during passes and automatic retries. Press Stop and wait before changing them.
 
 The data folder beside the executable holds settings, history, inventory, reports and an encrypted token. Each extracted app copy has its own history; a new copy does not automatically use another copy's data.
 
 ## 3. API mode
+
+**API downloads do not require a Yandex 360 subscription.** A Yandex account and OAuth token are sufficient.
 
 The desktop client is unnecessary. Follow the OAuth link in Settings, sign into the intended Yandex account, obtain a token and enter it. Tokens grant account access: never send them to others or include them in bug reports.
 
@@ -25,11 +27,13 @@ Choose an ordinary local destination, such as an HDD backup folder. Cloud placeh
 
 The usual choice is Retry all files not downloaded with the saved list. A missing inventory is fetched automatically.
 
-## 4. Official desktop client mode
+## 4. Faster repeat starts
 
-Install the official client, sign in and wait for the file list to synchronize. Select its local Disk folder. This app does not request your OAuth token in this mode.
+Unchanged completed files use saved cloud-version, size and local-write-time evidence. Start pass from the beginning performs full content verification again.
 
-The app requests file retrieval and monitors results; Windows and the client control network transfers. The optional restart-on-errors setting can restart the client. Link concurrency, HTTP partial resume and 32 MiB / 15-second checkpoints apply to API mode only.
+The latest history records are stored in a compact history.latest index. The first pass after upgrading reads the old journal; later starts and automatic passes can use the index. A missing, corrupted or stale index falls back to the original journal and is rebuilt. The journal is not truncated. New files and results update the history.
+
+Missing or invalid API sizes are no longer treated as zero. An old unconfirmed zero is refreshed before accepting a file as complete. Genuine empty files remain supported.
 
 ## 5. Inventory and pass selection
 
@@ -52,7 +56,7 @@ Pass modes:
 
 Link timeout measures the API response after request dispatch. Default 3 seconds, range 1–60. Queueing, API launch spacing and shared cooldown do not consume it.
 
-File idle timeout measures the download response and further bytes. Default 3 seconds, range 1–60, separately per stream. It resets on response headers and new data. It is not a total-duration limit: a file can download for hours while bytes continue arriving. Saved-data checks run before requests, outside network idle timeout. In client mode this setting measures lack of retrieval progress.
+File idle timeout measures the download response and further bytes. Default 3 seconds, range 1–60, separately per stream. It resets on response headers and new data. It is not a total-duration limit: a file can download for hours while bytes continue arriving. Saved-data checks run before requests, outside network idle timeout.
 
 Up to two extra attempts follow new bytes and a network interruption, idle timeout or incomplete response. Retries use the same link and saved offset, rejoining the tail of the shared connection queue. Both retries use the selected idle timeout +2 seconds: 3 → 5 → 5. Even small new progress may permit the next retry within this cap.
 
@@ -152,3 +156,5 @@ Source, builds and tests are inspectable. Downloads and history processing run l
 Windows DPAPI protects api-token.bin for the current Windows user. The token is used in memory; downloaded files, history and reports are not automatically encrypted. Keep data, tokens, session cookies and signed URLs private. Malware running as the same Windows user remains a risk.
 
 After checking the completed backup, revoke the used application's data access in [Yandex ID security](https://id.yandex.ru/security), then clear the app's local token. Removing a local token does not revoke remote authorization. See [Yandex ID help](https://yandex.ru/support/id/ru/profile). Design details and test coverage are linked in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) and [TESTING.md](TESTING.md).
+
+The official-client method is temporarily hidden following a partial recovery of Yandex Disk functionality. The developer may restore it if stalls return; watch for app updates.

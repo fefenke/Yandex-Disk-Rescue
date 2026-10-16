@@ -122,7 +122,7 @@ namespace DiskRescue {
             method.SelectedIndexChanged+=delegate{
                 if(translating||method.SelectedIndex<0)return;
                 if(settings.UseApi)settings.ApiFolder=folder.Text;else settings.Folder=folder.Text;
-                settings.UseApi=method.SelectedIndex==1;folder.Text=settings.UseApi?settings.ApiFolder:settings.Folder;
+                settings.UseApi=true;folder.Text=settings.UseApi?settings.ApiFolder:settings.Folder;
                 Translate();SaveSettings();
             };
             folderCaption=Label("",9,true); config.Controls.Add(folderCaption,0,3); config.SetColumnSpan(folderCaption,2);
@@ -191,9 +191,9 @@ namespace DiskRescue {
             g.RowTemplate.Height=31;g.ColumnHeadersHeight=34;g.GridColor=Color.FromArgb(241,243,249);return g;
         }
         void Translate() {
-            unlimitedWarning.Text=T("Файлы из безлимитной автозагрузки фото и видео НЕ УЧИТЫВАЮТСЯ И НЕ СКАЧИВАЮТСЯ.\nВ обоих режимах поддерживаются только файлы из обычного раздела «Файлы».","Unlimited photo/video auto-upload files are NOT COUNTED OR DOWNLOADED.\nBoth modes support only files in the regular Files section.");
-            translating=true;method.Items.Clear();method.Items.AddRange(new object[]{T("Через клиент Яндекс Диска","Via Yandex Disk client"),T("Через API · OAuth-токен","Via API · OAuth token")});method.SelectedIndex=settings.UseApi?1:0;translating=false;
-            methodCaption.Text=T("Способ скачивания · Диск на компьютере или API","Download method · desktop Disk or API");apiCaption.Text=T("OAuth-токен · хранится зашифрованно Windows","OAuth token · encrypted by Windows");remoteCaption.Text=T("Облачная папка · disk:/ — весь Диск","Cloud folder · disk:/ — whole Disk");
+            unlimitedWarning.Text=T("Файлы из безлимитной автозагрузки фото и видео НЕ УЧИТЫВАЮТСЯ И НЕ СКАЧИВАЮТСЯ.\nПоддерживаются только файлы из обычного раздела «Файлы».","Unlimited photo/video auto-upload files are NOT COUNTED OR DOWNLOADED.\nOnly files in the regular Files section are supported.");
+            translating=true;method.Items.Clear();method.Items.AddRange(new object[]{T("Через API · OAuth-токен","Via API · OAuth token")});method.SelectedIndex=0;translating=false;
+            methodCaption.Text=T("Способ скачивания","Download method");apiCaption.Text=T("OAuth-токен · хранится зашифрованно Windows","OAuth token · encrypted by Windows");remoteCaption.Text=T("Облачная папка · disk:/ — весь Диск","Cloud folder · disk:/ — whole Disk");
             int selectedList=apiList.SelectedIndex<0?(settings.UseCachedApiList?1:0):apiList.SelectedIndex;apiList.Items.Clear();apiList.Items.AddRange(new object[]{T("Обновить список с Диска · найти новые и изменённые файлы","Refresh list from Disk · find new and changed files"),T("Продолжить по сохранённому списку · без повторного сканирования","Continue with saved list · skip rescanning")});apiList.SelectedIndex=selectedList;apiListCaption.Text=T("Список файлов · только для API","File list · API only");
             int selectedMode=mode.SelectedIndex<0?3:mode.SelectedIndex;
             subtitle.Text=T("Скачать доступные файлы. Сохранить результат. Повторить остальные.","Download available files. Keep results. Retry the rest.");

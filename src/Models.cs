@@ -50,6 +50,7 @@ namespace DiskRescue {
         public long? DownloadedBytes;
         public string Md5 = "", Sha256 = "", Destination = "",Verification="",ActualHash="",PreservedPath="";
         public bool Local;
+        public bool SizeKnown;
         public bool ResumeEligible;
     }
     public sealed class ActiveFile {
@@ -141,6 +142,8 @@ namespace DiskRescue {
     }
     public sealed class HistoryStore : IDisposable {
         readonly StreamWriter writer;
+        readonly string journal;bool dirty,disposed;
+        internal bool LoadedFromIndex{get;private set;}
         readonly JavaScriptSerializer json = new JavaScriptSerializer();
         public readonly Dictionary<string, HistoryRecord> Records;
         public readonly string DirectoryPath;
@@ -151,7 +154,8 @@ namespace DiskRescue {
             DirectoryPath = System.IO.Path.Combine(dataFolder, identity == null ? RootKey(root) : IdentityKey(identity));
             Directory.CreateDirectory(DirectoryPath);
             string path = System.IO.Path.Combine(DirectoryPath, "history.jsonl");
-            if(File.Exists(path))ReadRecords(Records,File.ReadLines(path,Encoding.UTF8),token);
+            journal=path;LoadedFromIndex=HistoryIndex.TryLoad(path,Records,token);
+            if(!LoadedFromIndex&&File.Exists(path))ReadRecords(Records,File.ReadLines(path,Encoding.UTF8),token);
             token.ThrowIfCancellationRequested();
             FileStream stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
             writer = new StreamWriter(stream, new UTF8Encoding(false));
@@ -182,13 +186,14 @@ namespace DiskRescue {
             // Leading newline separates the next record from a previously torn tail.
             writer.WriteLine(); writer.WriteLine(json.Serialize(record));
             Records[file.Path] = record;
+            dirty=true;
         }
-        public void Dispose() { writer.Dispose(); }
+        public void Dispose() {if(disposed)return;disposed=true;long length;try{writer.Flush();length=writer.BaseStream.Length;}finally{writer.Dispose();}if(dirty||!LoadedFromIndex&&Records.Count>0)HistoryIndex.Save(journal,length,Records);}
         public void SaveApi(DiskFile file, string status, string message) {
             file.Status=status;file.Message=message??"";
             HistoryRecord record=new HistoryRecord{path=file.Path,length=file.Length,modified=file.Modified,status=status,message=file.Message,time=DateTimeOffset.Now.ToString("o"),downloadedBytes=file.DownloadedBytes,verification=file.Verification,actualHash=file.ActualHash,expectedHash=!String.IsNullOrEmpty(file.Md5)?file.Md5:file.Sha256,preservedPath=file.PreservedPath};
             if(FileRules.Success(status)&&!String.IsNullOrEmpty(file.Destination)){FileInfo local=new FileInfo(file.Destination);if(local.Exists&&local.Length==file.Length)record.localWriteTicks=local.LastWriteTimeUtc.Ticks;}
-            writer.WriteLine();writer.WriteLine(json.Serialize(record));Records[file.Path]=record;
+            writer.WriteLine();writer.WriteLine(json.Serialize(record));Records[file.Path]=record;dirty=true;
         }
     }
     public static class Reports {

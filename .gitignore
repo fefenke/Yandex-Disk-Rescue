@@ -17,4 +17,6 @@ obj/
 *.ydr-map.tmp
 api-token.bin
 history.jsonl
+history.latest
+history.latest.tmp
 crash-*.txt

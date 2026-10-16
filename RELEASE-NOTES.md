@@ -1,12 +1,18 @@
 ﻿<details>
-<summary>Изменения 1.0.7 · RU / EN</summary>
+<summary>Изменения 1.0.8 · RU / EN</summary>
 
-- Добавлена очистка пустых папок служебного архива.
-- Кнопки обновления оставлены в настройках; обновлены скриншоты и гайд.
+- Ускорено чтение большой истории при повторных запусках и автоматических проходах.
+- Исправлены отсутствующий размер в API и повторная полная проверка файлов.
+- Обновлены гайды и описание скачивания через API без подписки Яндекс 360.
 
 ---
 
-- Added cleanup of empty service-archive folders.
-- Update controls remain in Settings; screenshots and guides refreshed.
+- Faster large-history loading across restarts and automatic passes.
+- Fixed missing API sizes and repeated full file verification.
+- Updated guides and API download information: no Yandex 360 subscription required.
 
 </details>
+
+Способ через официальный клиент временно скрыт после частичного восстановления работы Яндекс Диска; при возвращении зависаний его можно будет вернуть.
+
+The official-client method is temporarily hidden after a partial recovery of Yandex Disk functionality; it may return if stalls recur.

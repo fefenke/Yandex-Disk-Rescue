@@ -56,7 +56,7 @@ namespace DiskRescue {
         void InvalidateLink(Job job){linkCache.Invalidate(job.LinkLease);}
         public void Stop(){try{stop.Cancel();}catch(ObjectDisposedException){ /* Run has already finished. */ }}
         static string Text(IDictionary<string,object> o,string key){object v;return o.TryGetValue(key,out v)?Convert.ToString(v):"";}
-        static long Number(IDictionary<string,object> o,string key){object v;return o.TryGetValue(key,out v)?Convert.ToInt64(v):0;}
+        static long RequiredSize(IDictionary<string,object> entry){object value;if(!entry.TryGetValue("size",out value)||!(value is int||value is long))throw new IOException("Missing or invalid cloud file size.");long length=Convert.ToInt64(value);if(length<0)throw new IOException("Invalid cloud file size.");return length;}
         void Event(string message){events.Add(DateTime.Now.ToString("HH:mm:ss")+"  "+message);if(events.Count>160)events.RemoveAt(0);}
         public static string NormalizeRemote(string path){path=(path??"").Trim().Replace('\\','/');if(path=="")return "disk:/";if(!path.StartsWith("disk:/",StringComparison.Ordinal))path="disk:/"+path.TrimStart('/');if(path.Split('/').Any(x=>x==".."||x=="."))throw new ArgumentException("Invalid cloud folder path.");return path;}
         public static string Validation(Settings s){if(!s.UseApi)return String.IsNullOrWhiteSpace(s.Folder)?"folder":"";if(String.IsNullOrWhiteSpace(s.ApiToken))return "token";if(String.IsNullOrWhiteSpace(s.ApiFolder))return "destination";return "";}
@@ -178,7 +178,7 @@ namespace DiskRescue {
             Event("Saved API list: "+files.Count+" files.");
         }
         static string CloudModified(string modified,string md5,string sha){return modified+"|"+md5+(String.IsNullOrEmpty(md5)&&!String.IsNullOrEmpty(sha)?"|sha256:"+sha:"");}
-        void Add(Dictionary<string,object> entry){string path=Text(entry,"path");if(!remotePaths.Add(path))return;string destination=LocalPath(settings.ApiFolder,path);files.Add(new DiskFile{Path=path,Destination=destination,Folder=Path.GetDirectoryName(destination),Length=Number(entry,"size"),Md5=Text(entry,"md5"),Sha256=Text(entry,"sha256"),Modified=CloudModified(Text(entry,"modified"),Text(entry,"md5"),Text(entry,"sha256")),Category=FileRules.Category(path)});}
+        void Add(Dictionary<string,object> entry){string path=Text(entry,"path");if(!remotePaths.Add(path))return;string destination=LocalPath(settings.ApiFolder,path);files.Add(new DiskFile{Path=path,Destination=destination,Folder=Path.GetDirectoryName(destination),Length=RequiredSize(entry),SizeKnown=true,Md5=Text(entry,"md5"),Sha256=Text(entry,"sha256"),Modified=CloudModified(Text(entry,"modified"),Text(entry,"md5"),Text(entry,"sha256")),Category=FileRules.Category(path)});}
         Result FinishPayload(Job job,string partial){
             stop.Token.ThrowIfCancellationRequested();IntegrityResult check=CloudIntegrity.Check(partial,job.File,stop.Token);job.File.Verification=check.Kind;job.File.ActualHash=check.Actual;
             bool accepted=preserver.Complete(job.File,partial,check);
@@ -213,22 +213,20 @@ namespace DiskRescue {
                     if(ArtifactCollision(job.File))return new LinkResult{Completed=new Result{Status="failed",Message="Temporary filename conflicts with another cloud file; originals retained."}};
                     preserver.CheckDestination(job.File.Destination);SafeDestination(partial);SafeDestination(job.File.Destination);Directory.CreateDirectory(Path.GetDirectoryName(partial));
                     SafeDestination(SegmentFolder(job.File));
-                    if(FileRules.HasPartialData(job.File.Destination)||RangeMap.Exists(job.File.Destination)||File.Exists(job.File.Destination)){
+                    if((job.File.Length==0&&!job.File.SizeKnown)||FileRules.HasPartialData(job.File.Destination)||RangeMap.Exists(job.File.Destination)||File.Exists(job.File.Destination)){
                         SegmentPlan existing=ReadSegmentPlan(job.File);
                         job.Bytes=existing==null?(File.Exists(partial)?Math.Min(new FileInfo(partial).Length,job.File.Length):0):existing.Offset+SegmentBytes(job.File,existing);
                         checkingMetadata=true;
                         var remote=await Json("/resources?path="+Uri.EscapeDataString(job.File.Path)+"&fields=path,type,size,modified,md5,sha256",stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
                         string digest=Text(remote,"md5"),sha=Text(remote,"sha256"),modified=Text(remote,"modified");CloudIntegrity.Validate(digest,32);CloudIntegrity.Validate(sha,64);
-                        object rawSize;long remoteSize;
-                        if(!remote.TryGetValue("size",out rawSize)||!(rawSize is int||rawSize is long))throw new IOException("Invalid cloud file size.");
-                        remoteSize=Convert.ToInt64(rawSize);
+                        long remoteSize=RequiredSize(remote);
                         if(Text(remote,"type")!="file"||Text(remote,"path")!=job.File.Path||remoteSize<0||String.IsNullOrEmpty(modified)||(CloudIntegrity.HasHash(job.File)&&String.IsNullOrEmpty(digest)&&String.IsNullOrEmpty(sha)))throw new IOException("Cloud metadata cannot safely identify the file version.");
                         stop.Token.ThrowIfCancellationRequested();
-                        if(job.File.Length!=remoteSize||job.File.Modified!=CloudModified(modified,digest,sha)||job.File.Sha256!=sha)Interlocked.Exchange(ref refreshedInventory,1);
-                        job.File.Length=remoteSize;job.File.Md5=digest;job.File.Sha256=sha;job.File.Modified=CloudModified(modified,digest,sha);
+                        if(!job.File.SizeKnown||job.File.Length!=remoteSize||job.File.Modified!=CloudModified(modified,digest,sha)||job.File.Sha256!=sha)Interlocked.Exchange(ref refreshedInventory,1);
+                        job.File.SizeKnown=true;job.File.Length=remoteSize;job.File.Md5=digest;job.File.Sha256=sha;job.File.Modified=CloudModified(modified,digest,sha);
                         job.File.ResumeEligible=FileRules.SameVersion(job.File,job.Prior)&&CloudIntegrity.HasHash(job.File);
                         checkingMetadata=false;
-                        if(PreviouslyVerified(job.File,job.Prior)||CloudIntegrity.CheckAndRecord(job.File.Destination,job.File,stop.Token)){
+                        if((runMode!=RunMode.All&&job.File.Verification!="hash_mismatch"&&PreviouslyVerified(job.File,job.Prior))||CloudIntegrity.CheckAndRecord(job.File.Destination,job.File,stop.Token)){
                             job.File.Local=true;return new LinkResult{Completed=new Result{Status="local",Bytes=job.File.Length,Message="Local file matches refreshed cloud metadata."}};
                         }
                     }
@@ -320,7 +318,7 @@ namespace DiskRescue {
                 preserver=new FilePreserver(history.DirectoryPath,settings.ApiFolder,files.Select(f=>f.Destination),stop.Token);
                 foreach(DiskFile f in files){stop.Token.ThrowIfCancellationRequested();current=f.Path;checkFileBytes=checkFileLength=0;checkFileStarted=DateTime.UtcNow;Snapshot("checking_local","",false);HistoryRecord old=history.Find(f.Path);bool same=FileRules.SameVersion(f,old);f.ResumeEligible=same&&CloudIntegrity.HasHash(f);if(same){f.Status=FileRules.NormalizeStatus(old);f.DownloadedBytes=old.downloadedBytes;}
                     try{preserver.CheckDestination(f.Destination);}catch(IOException){f.Local=false;f.Status="failed";f.Message="Destination conflicts with preserved files or pending recovery.";checkFilesChecked++;continue;}
-                    SafeDestination(f.Destination);bool cached=mode!=RunMode.All&&PreviouslyVerified(f,old);if(cached){f.Verification=CloudIntegrity.HasHash(f)?"history":"size_only";f.ActualHash=old.actualHash;}f.Local=cached||CloudIntegrity.CheckAndRecord(f.Destination,f,stop.Token,delegate(long done,long total){checkFileBytes=done;checkFileLength=total;if(done==0)lastPhase="";Snapshot("checking_local","",false);});if(f.Local){f.DownloadedBytes=f.Length;if(!same||!FileRules.Success(old.status)||!old.localWriteTicks.HasValue||old.localWriteTicks.Value!=new FileInfo(f.Destination).LastWriteTimeUtc.Ticks)history.SaveApi(f,"local","");else f.Status="local";}else if(FileRules.Success(f.Status))f.Status="pending";
+                    SafeDestination(f.Destination);bool cached=(f.Length>0||f.SizeKnown)&&mode!=RunMode.All&&PreviouslyVerified(f,old);if(cached){f.Verification=CloudIntegrity.HasHash(f)?"history":"size_only";f.ActualHash=old.actualHash;}f.Local=(f.Length>0||f.SizeKnown)&&(cached||CloudIntegrity.CheckAndRecord(f.Destination,f,stop.Token,delegate(long done,long total){checkFileBytes=done;checkFileLength=total;if(done==0)lastPhase="";Snapshot("checking_local","",false);}));if(f.Local){f.DownloadedBytes=f.Length;if(!same||!FileRules.Success(old.status)||!old.localWriteTicks.HasValue||old.localWriteTicks.Value!=new FileInfo(f.Destination).LastWriteTimeUtc.Ticks)history.SaveApi(f,"local","");else f.Status="local";}else if(FileRules.Success(f.Status))f.Status="pending";
                     if(preserver.Blocked(f)){f.Status="integrity_failed";f.Local=false;f.Message=File.Exists(f.PreservedPath)?"Checksum mismatch; copy preserved.":"Checksum mismatch; preserved copy is missing. Automatic retries remain blocked.";}
                     string partial=f.Destination+".ydr-part";if(RangeMap.Exists(f.Destination))f.DownloadedBytes=RangeMap.Progress(f.Destination);else if(File.Exists(partial))f.DownloadedBytes=new FileInfo(partial).Length;
                     checkFilesChecked++;Snapshot("checking_local","",false);
