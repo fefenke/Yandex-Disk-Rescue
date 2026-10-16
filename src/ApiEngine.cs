@@ -179,6 +179,10 @@ namespace DiskRescue {
         }
         static string CloudModified(string modified,string md5,string sha){return modified+"|"+md5+(String.IsNullOrEmpty(md5)&&!String.IsNullOrEmpty(sha)?"|sha256:"+sha:"");}
         void Add(Dictionary<string,object> entry){string path=Text(entry,"path");if(!remotePaths.Add(path))return;string destination=LocalPath(settings.ApiFolder,path);files.Add(new DiskFile{Path=path,Destination=destination,Folder=Path.GetDirectoryName(destination),Length=RequiredSize(entry),SizeKnown=true,Md5=Text(entry,"md5"),Sha256=Text(entry,"sha256"),Modified=CloudModified(Text(entry,"modified"),Text(entry,"md5"),Text(entry,"sha256")),Category=FileRules.Category(path)});}
+        bool CanRecoverArchived(DiskFile file){
+            if(ArtifactCollision(file)||preserver.Blocked(file))return false;
+            try{preserver.CheckDestination(file.Destination);return true;}catch(IOException){return false;}
+        }
         Result FinishPayload(Job job,string partial){
             stop.Token.ThrowIfCancellationRequested();IntegrityResult check=CloudIntegrity.Check(partial,job.File,stop.Token);job.File.Verification=check.Kind;job.File.ActualHash=check.Actual;
             bool accepted=preserver.Complete(job.File,partial,check);
@@ -316,6 +320,7 @@ namespace DiskRescue {
                 Inventory(account,remote);
                 foreach(DiskFile entry in files){stop.Token.ThrowIfCancellationRequested();string occupied=entry.Destination;while(!String.IsNullOrEmpty(occupied)){occupiedDestinations.Add(occupied);occupied=Path.GetDirectoryName(occupied);}}
                 preserver=new FilePreserver(history.DirectoryPath,settings.ApiFolder,files.Select(f=>f.Destination),stop.Token);
+                RelocatedArchiveRepair.Run(history.DirectoryPath,settings.ApiFolder,files,stop.Token,CanRecoverArchived);
                 foreach(DiskFile f in files){stop.Token.ThrowIfCancellationRequested();current=f.Path;checkFileBytes=checkFileLength=0;checkFileStarted=DateTime.UtcNow;Snapshot("checking_local","",false);HistoryRecord old=history.Find(f.Path);bool same=FileRules.SameVersion(f,old);f.ResumeEligible=same&&CloudIntegrity.HasHash(f);if(same){f.Status=FileRules.NormalizeStatus(old);f.DownloadedBytes=old.downloadedBytes;}
                     try{preserver.CheckDestination(f.Destination);}catch(IOException){f.Local=false;f.Status="failed";f.Message="Destination conflicts with preserved files or pending recovery.";checkFilesChecked++;continue;}
                     SafeDestination(f.Destination);bool cached=(f.Length>0||f.SizeKnown)&&mode!=RunMode.All&&PreviouslyVerified(f,old);if(cached){f.Verification=CloudIntegrity.HasHash(f)?"history":"size_only";f.ActualHash=old.actualHash;}f.Local=(f.Length>0||f.SizeKnown)&&(cached||CloudIntegrity.CheckAndRecord(f.Destination,f,stop.Token,delegate(long done,long total){checkFileBytes=done;checkFileLength=total;if(done==0)lastPhase="";Snapshot("checking_local","",false);}));if(f.Local){f.DownloadedBytes=f.Length;if(!same||!FileRules.Success(old.status)||!old.localWriteTicks.HasValue||old.localWriteTicks.Value!=new FileInfo(f.Destination).LastWriteTimeUtc.Ticks)history.SaveApi(f,"local","");else f.Status="local";}else if(FileRules.Success(f.Status))f.Status="pending";
@@ -354,9 +359,10 @@ namespace DiskRescue {
             catch(ApiException ex){retryableError=ex.Code>=500||ex.Code==429||ex.Code==408;phase="error";error=ex.Code==401?"OAuth token is invalid or expired.":ex.Code==403?"Token has no access to these files.":"Yandex API returned HTTP "+ex.Code;Event(error);}
             catch(Exception ex){retryableError=ex is HttpRequestException||ex is System.Net.WebException;phase=stop.IsCancellationRequested?"stopped":"error";error=stop.IsCancellationRequested?"":ex is IOException||ex is ArgumentException?ex.Message:"API request failed or timed out.";Event(error);}
             finally{
+                bool cleanCompletion=phase=="completed"&&!stop.IsCancellationRequested;
                 stop.Cancel();foreach(Job job in jobs.ToArray())try{Result r=job.Task!=null?job.Task.GetAwaiter().GetResult():job.LinkTask!=null?job.LinkTask.GetAwaiter().GetResult().Completed:null;if(r==null)r=new Result{Status="cancelled_user",Message="Stopped before download started.",Bytes=job.Bytes};job.File.DownloadedBytes=r.Bytes;history.SaveApi(job.File,r.Status,r.Message);}catch{}jobs.Clear();
                 if(refreshedInventory!=0&&!String.IsNullOrEmpty(inventoryPath))try{SaveInventory(inventoryPath,inventoryAccount,inventoryRoot,true,new Stack<string>(),null,0);}catch(Exception cacheError){retryableError=false;phase="error";error="Could not save refreshed cloud metadata: "+cacheError.GetType().Name;}
-                clock.Stop();Snapshot(phase,error,true);if(history!=null){try{if(phase!="stopped"||queueReady)Reports.Write(report,settings.ApiFolder,files,latest);}catch(Exception reportError){retryableError=false;string reportMessage="Could not save reports: "+reportError.GetType().Name;Event(reportMessage);Snapshot("error",String.IsNullOrEmpty(error)?reportMessage:error+"\n"+reportMessage,true);}history.Dispose();}if(client!=null)client.Dispose();if(downloadClient!=null)downloadClient.Dispose();stop.Dispose();
+                clock.Stop();Snapshot(phase,error,true);if(history!=null){try{if(phase!="stopped"||queueReady)Reports.Write(report,settings.ApiFolder,files,latest);}catch(Exception reportError){retryableError=false;string reportMessage="Could not save reports: "+reportError.GetType().Name;Event(reportMessage);Snapshot("error",String.IsNullOrEmpty(error)?reportMessage:error+"\n"+reportMessage,true);}history.Close(cleanCompletion);}if(client!=null)client.Dispose();if(downloadClient!=null)downloadClient.Dispose();stop.Dispose();
             }
 
         }

@@ -30,7 +30,17 @@ namespace DiskRescue {
         static bool Valid(Header h){return h!=null&&h.Version==1&&h.Length>=0&&h.Parts>=1&&h.Parts<=8&&(h.Boundaries==null||(h.Boundaries.Length==h.Parts+1&&h.Boundaries[0]==0&&h.Boundaries[h.Parts]==h.Length&&Enumerable.Range(0,h.Parts).All(i=>h.Boundaries[i]>=0&&h.Boundaries[i]<=h.Boundaries[i+1])));}
         static long Boundary(Header h,int i){return h.Boundaries==null?(h.Length/h.Parts)*i+Math.Min(i,h.Length%h.Parts):h.Boundaries[i];}
         internal static Header EmptyHeader(Stream stream){if(stream.Length>65536)return null;using(StreamReader reader=new StreamReader(stream,Encoding.UTF8,true,1024,true)){Header h=ParseHeader(reader.ReadLine());return Valid(h)&&h.Length>0&&h.Identity!=null&&reader.ReadLine()==null?h:null;}}
-        public static bool Matches(string destination,string identity,long length,bool legacyMd5=false){try{DurablePartial.SafePath(destination+".ydr-map");using(StreamReader s=File.OpenText(destination+".ydr-map")){Header h=ParseHeader(s.ReadLine());return Valid(h)&&(h.Identity==identity||legacyMd5&&CloudIntegrity.LegacyVersion(h.Identity,identity))&&h.Length==length;}}catch(FileNotFoundException){return false;}catch(ArgumentException){return false;}catch(FormatException){return false;}catch(OverflowException){return false;}catch(InvalidOperationException){return false;}}
+        internal static bool SameIdentity(string saved,string current,bool legacyMd5){
+            if(saved==current||legacyMd5&&CloudIntegrity.LegacyVersion(saved,current))return true;
+            if(saved==null||current==null||!current.StartsWith("ydr-context:",StringComparison.Ordinal))return false;
+            int currentEnd=current.IndexOf('\n'),savedEnd=saved.IndexOf('\n');if(currentEnd<12||savedEnd<0)return false;
+            string key=current.Substring(12,currentEnd-12),previous=saved.Substring(0,savedEnd);
+            int separator=Math.Max(previous.LastIndexOf('\\'),previous.LastIndexOf('/'));
+            if(separator<0||previous.Substring(separator+1)!=key)return false;
+            string oldVersion=saved.Substring(savedEnd+1),version=current.Substring(currentEnd+1);
+            return oldVersion==version||legacyMd5&&CloudIntegrity.LegacyVersion(oldVersion,version);
+        }
+        public static bool Matches(string destination,string identity,long length,bool legacyMd5=false){try{DurablePartial.SafePath(destination+".ydr-map");using(StreamReader s=File.OpenText(destination+".ydr-map")){Header h=ParseHeader(s.ReadLine());return Valid(h)&&SameIdentity(h.Identity,identity,legacyMd5)&&h.Length==length;}}catch(FileNotFoundException){return false;}catch(ArgumentException){return false;}catch(FormatException){return false;}catch(OverflowException){return false;}catch(InvalidOperationException){return false;}}
         public static long Progress(string destination){
             try{DurablePartial.SafePath(destination+".ydr-map");using(StreamReader input=new StreamReader(new FileStream(destination+".ydr-map",FileMode.Open,FileAccess.Read,FileShare.ReadWrite))){var json=new JavaScriptSerializer();Header h=ParseHeader(input.ReadLine());if(!Valid(h))return 0;long[] offsets=new long[h.Parts];for(int i=0;i<h.Parts;i++)offsets[i]=Boundary(h,i);long bytes=0;string line;while((line=input.ReadLine())!=null){Extent r;try{r=json.Deserialize<Extent>(line);}catch{break;}if(r==null||r.Index<0||r.Index>=h.Parts)break;long end=Boundary(h,r.Index+1);if(r.Start!=offsets[r.Index]||r.End<=r.Start||r.End>end)break;bytes+=r.End-r.Start;offsets[r.Index]=r.End;}return bytes;}}
             catch(IOException){return 0;}catch(ArgumentException){return 0;}catch(FormatException){return 0;}catch(OverflowException){return 0;}catch(InvalidOperationException){return 0;}
@@ -42,7 +52,7 @@ namespace DiskRescue {
             token.ThrowIfCancellationRequested();payload=destination+".ydr-download";journal=destination+".ydr-map";DurablePartial.SafePath(payload);DurablePartial.SafePath(journal);
             bool hadMap=File.Exists(journal),hadData=File.Exists(payload);
             if(hadMap){using(StreamReader reader=File.OpenText(journal)){try{header=ParseHeader(reader.ReadLine());}catch(ArgumentException){throw new IOException("Unreadable range map.");}}
-                if(!Valid(header)||!(header.Identity==identity||legacyMd5&&CloudIntegrity.LegacyVersion(header.Identity,identity))||header.Length!=length)throw new IOException("Range map does not match cloud version.");
+                if(!Valid(header)||!SameIdentity(header.Identity,identity,legacyMd5)||header.Length!=length)throw new IOException("Range map does not match cloud version.");
             }else{if(hadData)throw new IOException("Range data exists without its map.");header=new Header{Identity=identity,Length=length,Parts=Math.Max(1,Math.Min(8,(int)Math.Min(parts,Math.Max(1,length)))),Boundaries=boundaries};}
             if(header.Boundaries!=null&&(header.Boundaries.Length!=header.Parts+1||header.Boundaries[0]!=0||header.Boundaries[header.Parts]!=length||Enumerable.Range(0,header.Parts).Any(i=>header.Boundaries[i]>header.Boundaries[i+1])))throw new IOException("Invalid saved range boundaries.");
             confirmed=new long[Parts];active=new bool[Parts];for(int i=0;i<Parts;i++)confirmed[i]=Start(i);

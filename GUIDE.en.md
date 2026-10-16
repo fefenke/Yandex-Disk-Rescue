@@ -1,4 +1,4 @@
-﻿# Yandex Disk Rescue 1.0.8 — guide
+﻿# Yandex Disk Rescue 1.0.9 — guide
 
 [Home](README.en.md) · [Русский](GUIDE.md) · [Releases](https://github.com/fefenke/Yandex-Disk-Rescue/releases)
 
@@ -27,13 +27,17 @@ Choose an ordinary local destination, such as an HDD backup folder. Cloud placeh
 
 The usual choice is Retry all files not downloaded with the saved list. A missing inventory is fetched automatically.
 
-## 4. Faster repeat starts
+## 4. Fast starts and bounded history
 
 Unchanged completed files use saved cloud-version, size and local-write-time evidence. Start pass from the beginning performs full content verification again.
 
-The latest history records are stored in a compact history.latest index. The first pass after upgrading reads the old journal; later starts and automatic passes can use the index. A missing, corrupted or stale index falls back to the original journal and is rebuilt. The journal is not truncated. New files and results update the history.
+The history.latest index contains latest records. A missing, corrupt or stale index falls back to history.jsonl. After a successful pass, a journal of at least 16 MiB is compacted when replacement would halve its size. Every file retains its latest state and resume/verification evidence. Separate failed-cloud-version records remain intact; history cleanup never enables automatic retries of those versions.
 
-Missing or invalid API sizes are no longer treated as zero. An old unconfirmed zero is refreshed before accepting a file as complete. Genuine empty files remain supported.
+The pass list retains 1,000 entries; each download context retains 50 detailed reports. Current, busy, unknown and unverified reports are preserved. Journal replacement uses a flushed temporary file and atomic replacement; failure leaves the original intact. User cancellation skips large-journal compaction.
+
+Moving the app together with data retains map identity through the account/folder context rather than installation location. Compatible old maps migrate while rechecking confirmed extents. Preparation can recover compatible extents from the app-owned former-files archive; nonempty originals remain. Only proven empty service placeholders are removed. Foreign, corrupt and ambiguous data is not accepted automatically.
+
+Missing or invalid API sizes are not zero. Old unconfirmed zero sizes are refreshed before accepting completion; genuine empty files remain supported.
 
 ## 5. Inventory and pass selection
 

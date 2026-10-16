@@ -6,10 +6,10 @@
 ![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.0.8](https://img.shields.io/badge/1.0.8-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.8)
+[![1.0.9](https://img.shields.io/badge/1.0.9-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.9)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-[Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [1.0.8 changes](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
+[Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [1.0.9 changes](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
 
 A free Windows app that downloads available files from Yandex Disk, retains progress and retries failed transfers. Uses Yandex Disk API technology. An independent, unofficial project unaffiliated with Yandex.
 
@@ -20,9 +20,9 @@ A free Windows app that downloads available files from Yandex Disk, retains prog
 
 ## Download
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.8/YandexDiskRescue-win-x64.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.9/YandexDiskRescue-win-x64.zip)
 
-[![Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.8/YandexDiskRescue-win-x86.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.9/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, portable. Usually choose x64 for 64-bit Windows. x86 supports 32-bit Windows and also runs on x64.
 
@@ -39,10 +39,10 @@ Extract the **entire** ZIP to a permanent folder and run **YandexDiskRescue.exe*
 4. Keep the saved-list option, choose **Retry all files not downloaded**, and start a pass. A missing list is fetched automatically.
 5. Refresh the list after cloud changes; rescanning before every retry is unnecessary.
 
-## New in 1.0.8
+## New in 1.0.9
 
-- Faster large-history loading across restarts and automatic passes.
-- Fixed missing API sizes and full verification of completed files.
+- Fixed resume after moving the app folder; compatible archived parts can be recovered.
+- Automatic retention keeps latest file states, 1,000 passes and 50 detailed reports.
 
 How downloading works:
 

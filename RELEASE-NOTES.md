@@ -1,15 +1,13 @@
 ﻿<details>
-<summary>Изменения 1.0.8 · RU / EN</summary>
+<summary>Изменения 1.0.9 · RU / EN</summary>
 
-- Ускорено чтение большой истории при повторных запусках и автоматических проходах.
-- Исправлены отсутствующий размер в API и повторная полная проверка файлов.
-- Обновлены гайды и описание скачивания через API без подписки Яндекс 360.
+- Исправлена докачка после переноса программы и восстановление совместимых сохранённых частей.
+- Добавлены автоматическое сокращение истории и ограничение старых проходов и отчётов.
 
 ---
 
-- Faster large-history loading across restarts and automatic passes.
-- Fixed missing API sizes and repeated full file verification.
-- Updated guides and API download information: no Yandex 360 subscription required.
+- Fixed resume after moving the app and recovery of compatible archived parts.
+- Added automatic history compaction and retention limits for passes and reports.
 
 </details>
 

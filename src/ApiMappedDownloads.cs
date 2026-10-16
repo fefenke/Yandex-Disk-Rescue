@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace DiskRescue {
     public sealed partial class ApiEngine {
-        string MapIdentity(DiskFile f){return history.DirectoryPath+"\n"+CloudIntegrity.Version(f);}
+        string MapIdentity(DiskFile f){return "ydr-context:"+Path.GetFileName(history.DirectoryPath)+"\n"+CloudIntegrity.Version(f);}
         bool PrepareMapped(Job job){
             DiskFile f=job.File;string identity=MapIdentity(f),partial=f.Destination+".ydr-part",metadata=Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(f.Path)+".txt");
             SafeDestination(metadata);string legacyIdentity=SegmentIdentity(f);bool same=(File.Exists(metadata)&&File.ReadAllText(metadata)==legacyIdentity)||(!File.Exists(metadata)&&f.ResumeEligible);

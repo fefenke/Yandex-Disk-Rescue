@@ -15,6 +15,9 @@ namespace DiskRescue {
                 PreservedCleanupTests.Run(root);
                 PreparationStopTests.Run(root);
                 StartupReliabilityTests.Run(root);
+                HistoryCompactionTests.Run(root);
+                DataRetentionTests.Run(root);
+                RelocatedArchiveRepairTests.Run(root);
                 RangeMapTests.Run(root);
                 DurablePartialTests.Run(root);
                 SignedLinkTests.Run(root);

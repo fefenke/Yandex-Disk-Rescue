@@ -143,6 +143,7 @@ namespace DiskRescue {
     public sealed class HistoryStore : IDisposable {
         readonly StreamWriter writer;
         readonly string journal;bool dirty,disposed;
+        readonly CancellationToken preparationToken;
         internal bool LoadedFromIndex{get;private set;}
         readonly JavaScriptSerializer json = new JavaScriptSerializer();
         public readonly Dictionary<string, HistoryRecord> Records;
@@ -150,6 +151,7 @@ namespace DiskRescue {
         public HistoryStore(string dataFolder, string root) : this(dataFolder,root,null) { }
         public HistoryStore(string dataFolder, string root, string identity,CancellationToken token=default(CancellationToken)) {
             token.ThrowIfCancellationRequested();
+            preparationToken=token;
             Records=new Dictionary<string,HistoryRecord>(identity==null?StringComparer.OrdinalIgnoreCase:StringComparer.Ordinal);
             DirectoryPath = System.IO.Path.Combine(dataFolder, identity == null ? RootKey(root) : IdentityKey(identity));
             Directory.CreateDirectory(DirectoryPath);
@@ -188,7 +190,14 @@ namespace DiskRescue {
             Records[file.Path] = record;
             dirty=true;
         }
-        public void Dispose() {if(disposed)return;disposed=true;long length;try{writer.Flush();length=writer.BaseStream.Length;}finally{writer.Dispose();}if(dirty||!LoadedFromIndex&&Records.Count>0)HistoryIndex.Save(journal,length,Records);}
+        public void Dispose() {Close(!preparationToken.IsCancellationRequested);}
+        internal void Close(bool allowMaintenance) {
+            if(disposed)return;disposed=true;long length;
+            try{writer.Flush();length=writer.BaseStream.Length;}finally{writer.Dispose();}
+            if(!allowMaintenance)return;
+            long compactedLength=HistoryCompaction.TryCompact(journal,length,Records,CancellationToken.None);
+            if(compactedLength!=length||dirty||!LoadedFromIndex&&Records.Count>0)HistoryIndex.Save(journal,compactedLength,Records);
+        }
         public void SaveApi(DiskFile file, string status, string message) {
             file.Status=status;file.Message=message??"";
             HistoryRecord record=new HistoryRecord{path=file.Path,length=file.Length,modified=file.Modified,status=status,message=file.Message,time=DateTimeOffset.Now.ToString("o"),downloadedBytes=file.DownloadedBytes,verification=file.Verification,actualHash=file.ActualHash,expectedHash=!String.IsNullOrEmpty(file.Md5)?file.Md5:file.Sha256,preservedPath=file.PreservedPath};
@@ -233,6 +242,7 @@ namespace DiskRescue {
                 }
             }
             File.WriteAllText(System.IO.Path.Combine(directory, "summary.json"), new JavaScriptSerializer().Serialize(snapshot), new UTF8Encoding(false));
+            DataRetention.PruneReports(directory);
         }
     }
 }

@@ -79,6 +79,37 @@ namespace DiskRescue {
             using(var store=new HistoryStore(data,folder,"index-test"))Assert(!Indexed(store)&&store.Find(f.Path).status=="timeout","Corrupted but valid-JSON index overrode the original journal.");
             using(var cancel=new CancellationTokenSource()){cancel.Cancel();bool stopped=false;try{new HistoryStore(data,folder,"index-test",cancel.Token);}catch(OperationCanceledException){stopped=true;}Assert(stopped,"Compact history load ignored cancellation.");}
         }
+        public static void Relocation(string root){
+            string oldData=Path.Combine(root,"relocation-old"),newData=Path.Combine(root,"relocation-new"),folder=Path.Combine(root,"relocation-files");Directory.CreateDirectory(folder);
+            var f=new DiskFile{Path="disk:/moved.bin",Destination=Path.Combine(folder,"moved.bin"),Length=8,Modified="v1|abc",Md5="abc"};string context;
+            using(var history=new HistoryStore(oldData,folder,"relocation-account")){
+                context=history.DirectoryPath;
+                RangeMap map=RangeMap.Open(f.Destination,context+"\n"+CloudIntegrity.Version(f),8,1,CancellationToken.None);
+                using(Stream output=map.Writer(0))output.Write(new byte[]{1,2,3,4},0,4);
+            }
+            Directory.Move(oldData,newData);
+            using(var history=new HistoryStore(newData,folder,"relocation-account")){
+                var engine=new ApiEngine(newData,x=>{});var flags=BindingFlags.Instance|BindingFlags.NonPublic;typeof(ApiEngine).GetField("history",flags).SetValue(engine,history);
+                string identity=(string)typeof(ApiEngine).GetMethod("MapIdentity",flags).Invoke(engine,new object[]{f});
+                Assert(identity=="ydr-context:"+Path.GetFileName(context)+"\n"+CloudIntegrity.Version(f),"Map identity still depends on the executable/data directory.");
+                Assert(RangeMap.Matches(f.Destination,identity,8),"Relocated legacy map was treated as another cloud version.");
+                RangeMap migrated=RangeMap.Open(f.Destination,identity,8,1,CancellationToken.None);Assert(migrated.Bytes==4,"Relocation discarded confirmed extents.");
+                Assert(!RangeMap.Matches(f.Destination,identity.Replace(Path.GetFileName(context),"api-000000000000000000000000"),8),"Relocation accepted a different account/root context.");
+                Assert(!RangeMap.Matches(f.Destination,identity+"changed",8),"Relocation accepted another cloud version.");
+                using(var damaged=new FileStream(f.Destination+".ydr-download",FileMode.Open,FileAccess.Write)){damaged.WriteByte(99);}
+                Assert(RangeMap.Open(f.Destination,identity,8,1,CancellationToken.None).Bytes==0,"Relocation trusted a corrupt saved extent.");
+            }
+            ArchiveOwnerRelocation(root);
+        }
+        static void ArchiveOwnerRelocation(string root){
+            string folder=Path.Combine(root,"owner-files"),oldData=Path.Combine(root,"owner-old"),newData=Path.Combine(root,"owner-new");Directory.CreateDirectory(folder);
+            var f=new DiskFile{Path="disk:/owner.bin",Destination=Path.Combine(folder,"owner.bin"),Length=8,Modified="v1"};
+            string context=Path.Combine(oldData,"api-111111111111111111111111");var preserver=new FilePreserver(context,folder,new[]{f.Destination});
+            File.WriteAllText(f.Destination+".ydr-part","saved");preserver.PreservePartial(f,f.Destination+".ydr-part",null);
+            Directory.Move(oldData,newData);context=Path.Combine(newData,Path.GetFileName(context));preserver=new FilePreserver(context,folder,new[]{f.Destination});
+            File.WriteAllText(f.Destination+".ydr-part","saved-again");preserver.PreservePartial(f,f.Destination+".ydr-part",null);
+            Assert(Directory.GetDirectories(folder).Count(p=>File.Exists(Path.Combine(p,".ydr-owner")))==1,"Moving data changed archive ownership and created another archive.");
+        }
         public static void Interface(string root){
             string data=Path.Combine(root,"api-only-shell");Directory.CreateDirectory(data);File.WriteAllText(Path.Combine(data,"settings.json"),"{\"UseApi\":false,\"RestartClient\":false}");
             using(var form=new MainForm(data)){
@@ -90,6 +121,6 @@ namespace DiskRescue {
                 Assert(settings.UseApi&&method.Items.Count==1&&method.SelectedIndex==0,"Language switch restored retired client mode.");
             }
         }
-        public static void Run(string root){Interface(root);Size(root);LegacyZero(root);History(root);FastFiles(root);}
+        public static void Run(string root){Relocation(root);Interface(root);Size(root);LegacyZero(root);History(root);FastFiles(root);}
     }
 }
