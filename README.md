@@ -6,10 +6,10 @@
 ![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.0.6](https://img.shields.io/badge/1.0.6-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.6)
+[![1.0.7](https://img.shields.io/badge/1.0.7-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.7)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-**Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Изменения 1.0.6](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
+**Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Изменения 1.0.7](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
 
 Бесплатное приложение для Windows, которое скачивает доступные файлы с Яндекс Диска, сохраняет прогресс и повторяет неудачные попытки. Использует технологию API Яндекс Диска либо официальный клиент на компьютере. Независимый неофициальный проект, не связанный с Яндексом.
 
@@ -18,9 +18,9 @@
 
 ## Скачать
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_бита-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.6/YandexDiskRescue-win-x64.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_бита-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.7/YandexDiskRescue-win-x64.zip)
 
-[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.6/YandexDiskRescue-win-x86.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.7/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, без установки. Для 64-битной Windows обычно выбирайте x64; x86 предназначен для 32-битной Windows и также работает на x64.
 
@@ -39,15 +39,13 @@ Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, без устан
 
 Другой способ — через официальный клиент: дождитесь синхронизации и выберите его локальную папку Диска. Токен в это приложение не нужен; скачиванием управляют Windows и клиент. Новая защита частей и HTTP-докачка относятся к API-режиму.
 
-## Что изменилось в 1.0.6
+## Что изменилось в 1.0.7
 
-- Исправлено определение версии файла при обновлении облачных хешей и сохранение новой копии при проверке только размера.
-- Добавлена тихая очистка пустых служебных заготовок предыдущей версии.
-- Ускорена остановка во время подготовки истории и списка файлов.
+- После очистки служебного архива автоматически удаляются его пустые вложенные папки.
+- Управление обновлениями осталось в настройках; обновлены скриншоты интерфейса.
 
-Сохранены возможности предыдущих выпусков:
+Как работает загрузка:
 
-- **Без обязательной паузы 30 секунд.** После прохода начинается подготовка следующего. Временные ошибки всего прохода замедляют повтор от 1 до 30 секунд; Стоп отменяет ожидание.
 - **Повторы после прогресса.** После новых байтов и сетевого обрыва — до двух дополнительных попыток по той же ссылке с продолжением данных. Они заново встают в очередь соединений. Таймаут повторов: выбранный +2 секунды, например 3 → 5 → 5. Без новых байтов, при HTTP/MD5/ошибке записи быстрых повторов нет.
 - **Уважение ограничений API.** Общий ограничитель учитывает `Retry-After` при 429, 408 и 5xx, временно снижает частоту запросов и восстанавливает её после успешной работы. Готовые загрузки продолжаются.
 - **Ссылки между проходами.** Подтверждённая данными ссылка хранится в памяти одной серии. Отказ или отсутствие новых байтов требуют свежей ссылки на следующем проходе; произвольный срок жизни не задаётся.

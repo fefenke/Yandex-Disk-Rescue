@@ -23,6 +23,37 @@ namespace DiskRescue {
         static bool Empty(SafeFileHandle file,long length){AllocatedRange input=new AllocatedRange{Length=length},output;int returned;return DeviceIoControl(file,0x940CF,ref input,16,out output,16,out returned,IntPtr.Zero)&&returned==0;}
         static void Delete(SafeFileHandle file){byte yes=1;if(!SetFileInformationByHandle(file,4,ref yes,1))throw new IOException("Archive candidate could not be removed.");}
         public static void Run(string state,string root,string context,string owner,CancellationToken token){
+            CleanFiles(state,root,context,owner,token);
+            CleanDirectories(state,root,owner,token);
+        }
+        static void CleanDirectories(string state,string root,string owner,CancellationToken token){
+            string done=Path.Combine(state,"empty-archive-directories.done"),filesDone=Path.Combine(state,"empty-sparse-105.done"),gate=Path.Combine(state,"empty-sparse-105.lock");
+            try{
+                token.ThrowIfCancellationRequested();DurablePartial.SafePath(done);DurablePartial.SafePath(filesDone);
+                if(File.Exists(done)||!File.Exists(filesDone))return;DurablePartial.SafePath(gate);
+                using(FileStream held=new FileStream(gate,FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None)){
+                    if(File.Exists(done)||Directory.GetFiles(state,"intent-*.json").Length!=0)return;
+                    string config=Path.Combine(state,"Сохранённые прежние файлы.root");DurablePartial.SafePath(config);
+                    if(!File.Exists(config)){DurablePartial.AtomicText(done,"1\n");return;}
+                    string archive=File.ReadAllText(config);if(!Inside(archive,root))return;DurablePartial.SafePath(archive);
+                    if(!Directory.Exists(archive)){DurablePartial.AtomicText(done,"1\n");return;}
+                    string marker=Path.Combine(archive,".ydr-owner");DurablePartial.SafePath(marker);if(!File.Exists(marker)||File.ReadAllText(marker)!=owner)return;
+                    var pending=new Stack<string>();var visited=new List<string>();pending.Push(archive);
+                    while(pending.Count>0){
+                        token.ThrowIfCancellationRequested();string current=pending.Pop();DurablePartial.SafePath(current);
+                        foreach(string child in Directory.GetDirectories(current))if((File.GetAttributes(child)&FileAttributes.ReparsePoint)==0){pending.Push(child);visited.Add(child);}
+                    }
+                    bool complete=true;
+                    for(int i=visited.Count-1;i>=0;i--){
+                        token.ThrowIfCancellationRequested();string candidate=visited[i];if(!Inside(candidate,archive))throw new IOException("Directory outside archive.");
+                        try{DurablePartial.SafePath(candidate);if(!Directory.EnumerateFileSystemEntries(candidate).Any())Directory.Delete(candidate,false);}
+                        catch(IOException){complete=false;}catch(UnauthorizedAccessException){complete=false;}
+                    }
+                    token.ThrowIfCancellationRequested();if(complete)DurablePartial.AtomicText(done,"1\n");
+                }
+            }catch(IOException){}catch(UnauthorizedAccessException){}catch(ArgumentException){}catch(InvalidOperationException){}
+        }
+        static void CleanFiles(string state,string root,string context,string owner,CancellationToken token){
             string done=Path.Combine(state,"empty-sparse-105.done"),gate=Path.Combine(state,"empty-sparse-105.lock");
             try{
                 token.ThrowIfCancellationRequested();DurablePartial.SafePath(done);if(File.Exists(done))return;DurablePartial.SafePath(gate);

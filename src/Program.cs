@@ -21,6 +21,7 @@ namespace DiskRescue {
                 string data=Path.Combine(Path.GetTempPath(),"disk-rescue-preview-"+Guid.NewGuid().ToString("N"));
                 using(MainForm form=new MainForm(data)){
                     if(args[0]=="--render-dashboard"){form.PreviewDashboard(args.Length>2&&args[2]=="en");if(args.Length>2&&args[2]!="en")form.PreviewShellSection(args[2]);}else if(args[0]=="--render-preview-api")form.PreviewApi(args.Length>2&&args[2]=="en");else form.Preview(args.Length>2&&args[2]=="en");
+                    if(args.Length>3)form.PreviewShellSection(args[3]);
                     // Render offscreen: create a hidden native handle first, then
                     // set managed visibility for DrawToBitmap without showing it.
                     IntPtr handle=form.Handle;

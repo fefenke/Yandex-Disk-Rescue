@@ -109,7 +109,19 @@ jobs:
             $target = ($annotated | ConvertFrom-Json).object
           }
           if ($target.type -ne 'commit' -or $target.sha -ne $env:VERIFIED_SHA) { throw 'Release tag does not identify the tested commit.' }
-          & gh release create $env:RELEASE_TAG release-assets/YandexDiskRescue-win-x64.zip release-assets/YandexDiskRescue-win-x86.zip release-assets/z-SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $env:VERIFIED_SHA --title ('Yandex Disk Rescue ' + $env:RELEASE_VERSION) --notes-file RELEASE-NOTES.md --draft
+          & gh release create $env:RELEASE_TAG release-assets/YandexDiskRescue-win-x64.zip release-assets/YandexDiskRescue-win-x86.zip release-assets/z-SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $env:VERIFIED_SHA --title ('YDR ' + $env:RELEASE_VERSION) --notes-file RELEASE-NOTES.md --draft
           if ($LASTEXITCODE -ne 0) { throw 'Failed to create draft release; nothing has been published.' }
           & gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --latest
           if ($LASTEXITCODE -ne 0) { throw 'Release remains draft; publication failed.' }
+      - name: Shorten release list titles
+        shell: pwsh
+        run: |
+          $releasesJson = & gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName,name,isDraft
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read release titles.' }
+          foreach ($release in ($releasesJson | ConvertFrom-Json)) {
+            if ($release.isDraft -or $release.tagName -notmatch '^v?(\d+\.\d+\.\d+)$') { continue }
+            $shortTitle = 'YDR ' + $Matches[1]
+            if ($release.name -eq $shortTitle) { continue }
+            & gh release edit $release.tagName --repo $env:GITHUB_REPOSITORY --title $shortTitle
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot update release title.' }
+          }

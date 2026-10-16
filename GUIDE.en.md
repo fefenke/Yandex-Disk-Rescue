@@ -1,4 +1,4 @@
-﻿# Yandex Disk Rescue 1.0.6 — guide
+﻿# Yandex Disk Rescue 1.0.7 — guide
 
 [Home](README.en.md) · [Русский](GUIDE.md) · [Releases](https://github.com/fefenke/Yandex-Disk-Rescue/releases)
 
@@ -130,6 +130,10 @@ A failed cloud version is blocked from automatic retries, including rescanning a
 
 If a cloud destination collides with another file?s temporary name, the affected download is skipped with a conflict error. The other final file is not used as scratch data; unrelated downloads continue.
 
+
+Check and install updates in Settings; there is no separate sidebar update button. You can update directly to the latest version while retaining data, without installing intermediate releases. Old history records tolerate missing fields; files are checked again when the evidence is insufficient for a fast check.
+
+After updating, the app removes proven-empty service placeholders and empty subfolders from its own archive once. Nonempty files, uncertain objects, the archive root and .ydr-owner remain. Stop or access errors allow cleanup to continue later.
 
 ## Unlimited-upload photos and privacy
 

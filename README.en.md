@@ -6,10 +6,10 @@
 ![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.0.6](https://img.shields.io/badge/1.0.6-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.6)
+[![1.0.7](https://img.shields.io/badge/1.0.7-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.7)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-[Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [1.0.6 changes](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
+[Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [1.0.7 changes](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
 
 A free Windows app that downloads available files from Yandex Disk, retains progress and retries failed transfers. Uses Yandex Disk API technology or the official desktop client. An independent, unofficial project unaffiliated with Yandex.
 
@@ -18,9 +18,9 @@ A free Windows app that downloads available files from Yandex Disk, retains prog
 
 ## Download
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.6/YandexDiskRescue-win-x64.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.7/YandexDiskRescue-win-x64.zip)
 
-[![Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.6/YandexDiskRescue-win-x86.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.7/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, portable. Usually choose x64 for 64-bit Windows. x86 supports 32-bit Windows and also runs on x64.
 
@@ -39,15 +39,13 @@ Extract the **entire** ZIP to a permanent folder and run **YandexDiskRescue.exe*
 
 Alternatively, use the official desktop client: wait for synchronization and select its local Disk folder. No token is entered into this app; Windows and the client control transfers. HTTP resume and the new partial-data protection apply to API mode.
 
-## New in 1.0.6
+## New in 1.0.7
 
-- Fixed file-version detection when cloud hashes are refreshed and preservation of a new copy with size-only evidence.
-- Added silent cleanup of empty service placeholders from the previous version.
-- Faster Stop while preparing history and the file list.
+- Empty subfolders are automatically removed after service-archive cleanup.
+- Update controls remain in Settings; interface screenshots have been refreshed.
 
-Capabilities retained from earlier releases:
+How downloading works:
 
-- **No mandatory 30-second pass pause.** Prepare the next pass immediately. Temporary whole-pass failures back off for 1–30 seconds; Stop cancels waiting.
 - **Retries after progress.** Up to two extra attempts after new bytes and a network interruption, using the same link and saved offset. Retries rejoin the connection queue. Idle timeout is the selected value +2 seconds for both retries, for example 3 → 5 → 5. No quick retries after zero new bytes, HTTP/MD5 failures or disk errors.
 - **API rate handling.** A shared pacer honors `Retry-After` for 429, 408 and 5xx, reduces request frequency and gradually recovers. Ready-link downloads continue.
 - **Links across passes.** Links proven by data remain in memory within one session. Rejection or no new bytes triggers fresh link acquisition on the next pass; no arbitrary expiry time is assumed.

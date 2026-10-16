@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
@@ -55,7 +55,7 @@ namespace DiskRescue {
         bool translating;
         NumericUpDown idle,linkTimeout,linkConcurrency,downloadConcurrency,requestInterval;
         Label parallelCaption,linkConcurrencyCaption,downloadConcurrencyCaption;
-        FlatButton browse, start, update, support, guideButton;
+        FlatButton browse, start, support, guideButton;
         Button language;
         Label subtitle, guideTitle, guideText, unlimitedWarning, folderCaption, modeCaption, idleCaption, linkTimeoutCaption, phase, detail, available, footer;
         Label modeReadout, methodReadout;
@@ -176,14 +176,12 @@ namespace DiskRescue {
             passes=Grid();TabPage passTab=new TabPage();passTab.BackColor=Color.White;passTab.Controls.Add(passes);tabs.TabPages.Add(passTab);passRows.AddRange(PassHistory.Load(Path.Combine(dataFolder,"passes.jsonl")));
             dashboard=new FileDashboard();TabPage fileTab=new TabPage();fileTab.BackColor=Color.White;fileTab.Controls.Add(dashboard);tabs.TabPages.Add(fileTab);tabs.SelectedIndexChanged+=delegate{if(tabs.SelectedIndex==3){if(engine!=null&&busy&&engine.Latest.Catalog!=null)dashboard.Live(engine.Latest.Catalog,settings.UseApi?settings.ApiFolder:settings.Folder);else dashboard.LoadSaved(dataFolder,settings.UseApi,folder.Text,remoteFolder.Text);}};
             body.Controls.Add(tabs);page.Controls.Add(body,0,5);
-            TableLayoutPanel bottom=Table(3);bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,150));bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,190));
+            TableLayoutPanel bottom=Table(2);bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,190));
             bottom.RowCount=1;bottom.RowStyles.Add(new RowStyle(SizeType.Percent,100));
             footer=Label("",8.5f,false);footer.ForeColor=muted;
-            update=new FlatButton { Dock=DockStyle.Fill,Fill=Color.FromArgb(234,237,247),ForeColor=ink,Margin=new Padding(0,5,8,0),Font=new Font("Segoe UI",9,FontStyle.Bold) };
             support=new FlatButton { Dock=DockStyle.Fill,Fill=Color.FromArgb(234,237,247),ForeColor=ink,Margin=new Padding(0,5,0,0),Font=new Font("Segoe UI",9,FontStyle.Bold) };
-            update.Click+=async delegate { await CheckUpdates(true); };
             support.Click+=delegate { if(!String.IsNullOrEmpty(settings.SupportUrl))System.Diagnostics.Process.Start(settings.SupportUrl); };
-            bottom.Controls.Add(footer,0,0);bottom.Controls.Add(update,1,0);bottom.Controls.Add(support,2,0);page.Controls.Add(bottom,0,6);
+            bottom.Controls.Add(footer,0,0);bottom.Controls.Add(support,1,0);page.Controls.Add(bottom,0,6);
             Render(new Snapshot());
         }
         DataGridView Grid() {
@@ -213,7 +211,7 @@ namespace DiskRescue {
             tip.SetToolTip(requestInterval,T("Базовый интервал 25–1000 мс, по умолчанию 50. При ответах API 429, 408 или 5xx программа учитывает Retry-After и временно замедляет новые запросы, затем постепенно восстанавливает частоту. Настройка не меняется. Очередь и пауза не расходуют таймаут ответа; скачивания по готовым ссылкам не отменяются.","Base interval 25–1000 ms; default 50. API HTTP 429, 408 or 5xx triggers Retry-After cooldown and temporary slowdown, followed by gradual recovery. The setting is unchanged. Queueing and cooldown do not consume response timeout; ready-link downloads are not cancelled."));
             tip.SetToolTip(linkConcurrency,T("От 1 до 30 одновременных запросов ссылок. По умолчанию 7. Это независимая очередь; увеличение может ускорить подготовку ссылок, но не гарантирует меньше таймаутов.","1–30 simultaneous link requests. Default 7. Independent queue; more requests can prepare links faster but do not guarantee fewer timeouts."));
             tip.SetToolTip(downloadConcurrency,T("От 1 до 30 соединений скачивания на все файлы и их части вместе. По умолчанию 20. Один крупный файл может использовать несколько соединений. На медленном интернете можно уменьшить.","1–30 download connections shared by all files and segments. Default 20. A large file can use multiple connections. Try fewer on a slow connection."));
-            start.Text=busy?T("Остановить","Stop"):T("Начать проход","Start pass");update.Text=T("Обновление","Updates");support.Text=T("Поддержать автора","Support the author");support.Enabled=!String.IsNullOrEmpty(settings.SupportUrl);
+            start.Text=busy?T("Остановить","Stop"):T("Начать проход","Start pass");support.Text=T("Поддержать автора","Support the author");support.Enabled=!String.IsNullOrEmpty(settings.SupportUrl);
             metricTitle[0].Text=T("Найдено файлов","Files found");metricTitle[1].Text=T("Скачано всего","Downloaded total");metricTitle[2].Text=T("Скачано за проход","Downloaded this pass");metricTitle[3].Text=T("Осталось скачать","Remaining to download");metricTitle[4].Text=T("Ошибки синхронизации · за проход","Sync errors · this pass");
             repeatProblems.Text=T("Бесконечные проходы","Continuous passes");tip.SetToolTip(repeatProblems,T("Следующий проход готовится без фиксированной паузы. Временная ошибка всего прохода вызывает замедление 1–30 секунд. Стоп отменяет и проход, и ожидание.","Prepare the next pass without a fixed pause. Temporary whole-pass failures back off for 1–30 seconds. Stop cancels both the pass and the wait."));tabs.TabPages[2].Text=T("Проходы","Pass history");RenderPasses();
             tabs.TabPages[3].Text=T("Файлы и папки","Files and folders");dashboard.Translate(ru);tabs.TabPages[0].Text=T("Категории","Categories");tabs.TabPages[1].Text=T("Журнал","Activity log");
@@ -352,24 +350,31 @@ namespace DiskRescue {
             var visibleCategories=s.Categories.Where(c=>c.Total>0).ToList();
             if(categories.Rows.Count!=visibleCategories.Count){categories.Rows.Clear();foreach(CategoryStats c in visibleCategories)categories.Rows.Add(Category(c.Category),c.Total,c.Available,c.Downloaded,c.Remaining,c.ZeroDownload,c.CloudErrors);}else for(int i=0;i<visibleCategories.Count;i++){CategoryStats c=visibleCategories[i];object[] values={Category(c.Category),c.Total,c.Available,c.Downloaded,c.Remaining,c.ZeroDownload,c.CloudErrors};for(int j=0;j<values.Length;j++)if(!Object.Equals(categories.Rows[i].Cells[j].Value,values[j]))categories.Rows[i].Cells[j].Value=values[j];}
             ((StableLog)log).UpdateEvents(s.Events);
-            update.Enabled=!busy&&!installingUpdate&&!String.IsNullOrEmpty(settings.GitHubReleasesUrl);if(!busy)OfferUpdate();
+            if(!busy)OfferUpdate();
             if(s.RecoveryRequired){start.Enabled=false;detail.Text=T("Отмена не подтверждена. Перезапустите Яндекс Диск и это приложение перед новым проходом.","Cancellation not acknowledged. Restart Yandex Disk and this application before another pass.");}
             if(s.ScanErrors>0)footer.Text=String.Format(T("Недоступных папок/файлов при сканировании: {0}. Подробности в журнале.","Scan access errors: {0}. See the activity log."),s.ScanErrors);
         }
         public void PreviewDashboard(){PreviewDashboard(false);}
         public void PreviewDashboard(bool english){
             PreviewApi(english);SelectSection(1);
-            dashboard.Live(new System.Collections.Generic.List<BrowserFile>{
-                new BrowserFile{Path="Фотографии/2024/Лето.jpg",LocalPath=@"E:\Downloads\Фотографии\2024\Лето.jpg",Length=3200000,Bytes=3200000,Status="success"},
-                new BrowserFile{Path="Фотографии/2025/Море.jpg",LocalPath=@"E:\Downloads\Фотографии\2025\Море.jpg",Length=5100000,Bytes=2300000,Status="timeout"},
-                new BrowserFile{Path="Видео/Поездка.mp4",LocalPath=@"E:\Downloads\Видео\Поездка.mp4",Length=236000000,Bytes=225000000,Status="timeout"},
-                new BrowserFile{Path="Видео/Готовое видео.mp4",LocalPath=@"E:\Downloads\Видео\Готовое видео.mp4",Length=14000000,Bytes=14000000,Status="success"},
-                new BrowserFile{Path="Видео/Праздник.mov",LocalPath=@"E:\Downloads\Видео\Праздник.mov",Length=150000000,Status="cloud_error"},
-                new BrowserFile{Path="Документы/Инструкция.pdf",LocalPath=@"E:\Downloads\Документы\Инструкция.pdf",Length=250000,Bytes=250000,Status="success"}
-            },@"E:\Downloads");dashboard.SelectFolder("Видео");
-            Snapshot demo=new Snapshot{Phase="running",Total=6,Selected=4,Processed=2,Downloaded=1,Available=3,CloudErrorsThisPass=1,PerHour=120,RemainingSeconds=60};
-            demo.Categories.Add(new CategoryStats{Category="photos",Total=2,Available=1,Remaining=1,ZeroDownload=1});demo.Categories.Add(new CategoryStats{Category="videos",Total=3,Available=1,Downloaded=1,Remaining=2,ZeroDownload=1,CloudErrors=1});demo.Categories.Add(new CategoryStats{Category="documents",Total=1,Available=1});
-            demo.Events.Add("12:00:01  demo.mp4  ·  success");demo.Events.Add("12:00:02  sample.mov  ·  cloud_error  ·  HTTP 500");Render(demo);
+            var sample=new System.Collections.Generic.List<BrowserFile>();
+            int[] counts={21840,7294,620,412,208,136},ready={19680,5920,588,365,196,117},newly={936,248,32,16,12,4};
+            string[] categories={"photos","videos","documents","archives","audio","other"};
+            string[] names=english?new[]{"Photos","Videos","Documents","Archives","Music","Other"}:new[]{"Фотографии","Видео","Документы","Архивы","Музыка","Разное"};
+            string[] extensions={".jpg",".mp4",".pdf",".zip",".flac",".dat"};
+            for(int category=0;category<counts.Length;category++)for(int i=0;i<counts[category];i++){
+                string subfolder=category==0?(2021+i%5)+"/"+(english?"Travel":"Путешествия"):category==1?(i%3==0?(english?"Travel":"Путешествия"):i%3==1?(english?"Family":"Семья"):(english?"Projects":"Проекты")):"";
+                string name=category==0?"IMG_":category==1?(english?"Trip_":"Поездка_"):category==2?(english?"Document_":"Документ_"):category==3?(english?"Backup_":"Резервная_копия_"):category==4?(english?"Track_":"Композиция_"):"File_";
+                string path=names[category]+"/"+(subfolder==""?"":subfolder+"/")+name+(i+1).ToString("D5")+extensions[category];
+                bool complete=i*997%counts[category]<ready[category];
+                string status=complete?"success":i%7==0?"cloud_error":i%3==0?"downloading":i%3==1?"timeout":"pending";
+                long length=category==1?80000000L+(i%31)*17000000L:category==3?1200000000L+(i%11)*81000000L:3000000L+(i%19)*135700L;
+                sample.Add(new BrowserFile{Path=path,LocalPath=System.IO.Path.Combine(settings.ApiFolder,path.Replace('/','\\')),Length=length,Bytes=complete?length:status=="downloading"||status=="timeout"?length*(25+i%65)/100:0,Status=status,Verification=complete?"md5_verified":""});
+            }
+            dashboard.Live(sample,settings.ApiFolder);dashboard.SelectFolder(names[1]+"/"+(english?"Travel":"Путешествия"));
+            Snapshot demo=new Snapshot{Phase="running",Total=counts.Sum(),Selected=4892,Processed=1680,Downloaded=newly.Sum(),Available=ready.Sum(),Active=20,CloudErrorsThisPass=12,PerHour=3420,RemainingSeconds=3381,Catalog=sample};
+            for(int i=0;i<counts.Length;i++)demo.Categories.Add(new CategoryStats{Category=categories[i],Total=counts[i],Available=ready[i],Downloaded=newly[i],Remaining=counts[i]-ready[i]});
+            demo.Events.Add("12:00:01  Trip_00042.mp4  ·  success");demo.Events.Add("12:00:02  IMG_01758.jpg  ·  success");Render(demo);
         }
         public void Preview(){
             folder.Text=@"E:\Yandex.Disk";
