@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -20,6 +20,7 @@ namespace DiskRescue {
         readonly Action<Snapshot> publish;
         readonly CancellationTokenSource stop=new CancellationTokenSource();
         readonly List<DiskFile> files=new List<DiskFile>();
+        readonly HashSet<string> occupiedDestinations=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         readonly HashSet<string> remotePaths=new HashSet<string>(StringComparer.Ordinal);
         internal const int LinkConcurrency=7,DownloadConcurrency=20,ReadyLinkCapacity=20;
         readonly ApiPacer apiPacer=new ApiPacer();
@@ -34,6 +35,7 @@ namespace DiskRescue {
         readonly HttpMessageHandler apiHandler, fileHandler;
         readonly Stopwatch clock=new Stopwatch();
         HistoryStore history;
+        FilePreserver preserver;
         HttpClient client;
         HttpClient downloadClient;
         Settings settings;
@@ -43,7 +45,7 @@ namespace DiskRescue {
         RunMode runMode;
         bool queueReady;
         int checkFilesChecked;long checkFileBytes,checkFileLength;DateTime checkFileStarted;
-        sealed class Job { public DiskFile File; public HistoryRecord Prior; public Task<Result> Task; public Task<LinkResult> LinkTask; public Uri Link; public long Bytes; public SignedLinkCache.Lease LinkLease; public int LinkConfirmed; }
+        sealed class Job { public DiskFile File; public HistoryRecord Prior; public Task<Result> Task; public Task<LinkResult> LinkTask; public Uri Link; public long Bytes; public RangeMap Map;public SignedLinkCache.Lease LinkLease; public int LinkConfirmed; }
         sealed class LinkResult { public Uri Link; public Result Completed; }
         sealed class Result { public string Status,Message; public long Bytes; public bool RetryTransfer; }
         public ApiEngine(string data,Action<Snapshot> publish){this.data=data;this.publish=publish;}
@@ -120,8 +122,9 @@ namespace DiskRescue {
             Stack<string> folders=new Stack<string>();if(resume==null)folders.Push(root);else{foreach(string pending in (resume.PendingFolders??new List<string>()).AsEnumerable().Reverse())folders.Push(pending);if(!String.IsNullOrEmpty(resume.ActiveFolder))folders.Push(resume.ActiveFolder);}
             HashSet<string> seen=new HashSet<string>(StringComparer.Ordinal);
             while(folders.Count>0){stop.Token.ThrowIfCancellationRequested();string folder=folders.Pop();if(!seen.Add(folder))continue;
-                int firstOffset=resume!=null&&folder==resume.ActiveFolder?resume.NextOffset:0;
-                for(int offset=firstOffset;;offset+=1000){
+                // Offsets are positions, not stable cursors. Restart the interrupted
+                // folder; remotePaths retains discovered entries and removes repeats.
+                for(int offset=0;;offset+=1000){
                     SaveInventory(cachePath,account,root,false,folders,folder,offset);
                     current=folder;Snapshot("scanning", "",false);
                     Dictionary<string,object> resource;try{resource=Listing("/resources?path="+Uri.EscapeDataString(folder)+"&limit=1000&offset="+offset);}catch(ApiException ex){if(ex.Code==401||ex.Code==403)throw;scanErrors++;Event(folder+"  ·  Listing HTTP "+ex.Code);break;}catch(OperationCanceledException){if(stop.IsCancellationRequested)throw;scanErrors++;Event(folder+"  ·  Listing timeout.");break;}
@@ -174,7 +177,16 @@ namespace DiskRescue {
             Scan(remote,path,account,null);stop.Token.ThrowIfCancellationRequested();
             Event("Saved API list: "+files.Count+" files.");
         }
-        void Add(Dictionary<string,object> entry){string path=Text(entry,"path");if(!remotePaths.Add(path))return;string destination=LocalPath(settings.ApiFolder,path);files.Add(new DiskFile{Path=path,Destination=destination,Folder=Path.GetDirectoryName(destination),Length=Number(entry,"size"),Md5=Text(entry,"md5"),Modified=Text(entry,"modified")+"|"+Text(entry,"md5"),Category=FileRules.Category(path)});}
+        static string CloudModified(string modified,string md5,string sha){return modified+"|"+md5+(String.IsNullOrEmpty(md5)&&!String.IsNullOrEmpty(sha)?"|sha256:"+sha:"");}
+        void Add(Dictionary<string,object> entry){string path=Text(entry,"path");if(!remotePaths.Add(path))return;string destination=LocalPath(settings.ApiFolder,path);files.Add(new DiskFile{Path=path,Destination=destination,Folder=Path.GetDirectoryName(destination),Length=Number(entry,"size"),Md5=Text(entry,"md5"),Sha256=Text(entry,"sha256"),Modified=CloudModified(Text(entry,"modified"),Text(entry,"md5"),Text(entry,"sha256")),Category=FileRules.Category(path)});}
+        Result FinishPayload(Job job,string partial){
+            stop.Token.ThrowIfCancellationRequested();IntegrityResult check=CloudIntegrity.Check(partial,job.File,stop.Token);job.File.Verification=check.Kind;job.File.ActualHash=check.Actual;
+            bool accepted=preserver.Complete(job.File,partial,check);
+            DurablePartial.Forget(partial);ClearSegments(job.File);File.Delete(Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(job.File.Path)+".txt"));
+            if(job.Map!=null)File.Delete(job.File.Destination+".ydr-map");
+            if(!accepted)InvalidateLink(job);
+            return new Result{Status=accepted?"success":"integrity_failed",Bytes=accepted?job.File.Length:0,Message=accepted?(check.Kind=="size_only"?"Downloaded; cloud checksum unavailable.":"Cloud checksum verified."):"Cloud checksum mismatch; copy preserved. Automatic retries for this cloud version are blocked."};
+        }
         public static bool Verified(string path,long length,string md5,CancellationToken cancellation){
             return Verified(path,length,md5,cancellation,null);
         }
@@ -189,32 +201,39 @@ namespace DiskRescue {
         static void SafeDestination(string path){
             for(string current=path;!String.IsNullOrEmpty(current);current=Path.GetDirectoryName(current))if((File.Exists(current)||Directory.Exists(current))&&(File.GetAttributes(current)&FileAttributes.ReparsePoint)!=0)throw new IOException("Download destination contains a link or cloud placeholder.");
         }
+        bool ArtifactCollision(DiskFile f){
+            string[] reserved={f.Destination+".ydr-download",f.Destination+".ydr-map",f.Destination+".ydr-map.tmp",f.Destination+".ydr-part",f.Destination+".ydr-part.ydr-state",f.Destination+".ydr-part.ydr-state.tmp",SegmentFolder(f)};
+            return reserved.Any(p=>occupiedDestinations.Contains(p));
+        }
         async Task<LinkResult> PrepareLink(Job job){
             string partial=job.File.Destination+".ydr-part";
             string metadata=Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(job.File.Path)+".txt");
             long offset=0;bool checkingMetadata=false;
             try{stop.Token.ThrowIfCancellationRequested();
-                    SafeDestination(partial);SafeDestination(job.File.Destination);Directory.CreateDirectory(Path.GetDirectoryName(partial));
+                    if(ArtifactCollision(job.File))return new LinkResult{Completed=new Result{Status="failed",Message="Temporary filename conflicts with another cloud file; originals retained."}};
+                    preserver.CheckDestination(job.File.Destination);SafeDestination(partial);SafeDestination(job.File.Destination);Directory.CreateDirectory(Path.GetDirectoryName(partial));
                     SafeDestination(SegmentFolder(job.File));
-                    if(FileRules.HasPartialData(job.File.Destination)||File.Exists(job.File.Destination)){
+                    if(FileRules.HasPartialData(job.File.Destination)||RangeMap.Exists(job.File.Destination)||File.Exists(job.File.Destination)){
                         SegmentPlan existing=ReadSegmentPlan(job.File);
                         job.Bytes=existing==null?(File.Exists(partial)?Math.Min(new FileInfo(partial).Length,job.File.Length):0):existing.Offset+SegmentBytes(job.File,existing);
                         checkingMetadata=true;
-                        var remote=await Json("/resources?path="+Uri.EscapeDataString(job.File.Path)+"&fields=path,type,size,modified,md5",stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
-                        string digest=Text(remote,"md5"),modified=Text(remote,"modified");
+                        var remote=await Json("/resources?path="+Uri.EscapeDataString(job.File.Path)+"&fields=path,type,size,modified,md5,sha256",stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
+                        string digest=Text(remote,"md5"),sha=Text(remote,"sha256"),modified=Text(remote,"modified");CloudIntegrity.Validate(digest,32);CloudIntegrity.Validate(sha,64);
                         object rawSize;long remoteSize;
                         if(!remote.TryGetValue("size",out rawSize)||!(rawSize is int||rawSize is long))throw new IOException("Invalid cloud file size.");
                         remoteSize=Convert.ToInt64(rawSize);
-                        if(Text(remote,"type")!="file"||Text(remote,"path")!=job.File.Path||remoteSize<0||String.IsNullOrEmpty(modified)||(!String.IsNullOrEmpty(job.File.Md5)&&String.IsNullOrEmpty(digest))||(!String.IsNullOrEmpty(digest)&&(digest.Length!=32||digest.Any(c=>!Uri.IsHexDigit(c)))))throw new IOException("Cloud metadata cannot safely identify the file version.");
+                        if(Text(remote,"type")!="file"||Text(remote,"path")!=job.File.Path||remoteSize<0||String.IsNullOrEmpty(modified)||(CloudIntegrity.HasHash(job.File)&&String.IsNullOrEmpty(digest)&&String.IsNullOrEmpty(sha)))throw new IOException("Cloud metadata cannot safely identify the file version.");
                         stop.Token.ThrowIfCancellationRequested();
-                        if(job.File.Length!=remoteSize||job.File.Modified!=modified+"|"+digest)Interlocked.Exchange(ref refreshedInventory,1);
-                        job.File.Length=remoteSize;job.File.Md5=digest;job.File.Modified=modified+"|"+digest;
-                        job.File.ResumeEligible=FileRules.SameVersion(job.File,job.Prior)&&!String.IsNullOrEmpty(digest);
+                        if(job.File.Length!=remoteSize||job.File.Modified!=CloudModified(modified,digest,sha)||job.File.Sha256!=sha)Interlocked.Exchange(ref refreshedInventory,1);
+                        job.File.Length=remoteSize;job.File.Md5=digest;job.File.Sha256=sha;job.File.Modified=CloudModified(modified,digest,sha);
+                        job.File.ResumeEligible=FileRules.SameVersion(job.File,job.Prior)&&CloudIntegrity.HasHash(job.File);
                         checkingMetadata=false;
-                        if(PreviouslyVerified(job.File,job.Prior)||Verified(job.File.Destination,job.File.Length,job.File.Md5,stop.Token)){
+                        if(PreviouslyVerified(job.File,job.Prior)||CloudIntegrity.CheckAndRecord(job.File.Destination,job.File,stop.Token)){
                             job.File.Local=true;return new LinkResult{Completed=new Result{Status="local",Bytes=job.File.Length,Message="Local file matches refreshed cloud metadata."}};
                         }
                     }
+                    if(PrepareMapped(job)){if(job.Map.Bytes==job.File.Length)return new LinkResult{Completed=FinishPayload(job,job.File.Destination+".ydr-download")};}
+                    else {
                     string identity=SegmentIdentity(job.File);
                     bool samePartial=(File.Exists(metadata)&&File.ReadAllText(metadata)==identity)||(!File.Exists(metadata)&&job.File.ResumeEligible);
                     if(!samePartial)ClearSegments(job.File);
@@ -227,8 +246,9 @@ namespace DiskRescue {
                     else if(plan==null&&Directory.Exists(SegmentFolder(job.File)))ClearSegments(job.File);
                     if(!samePartial||!File.Exists(partial)||new FileInfo(partial).Length>job.File.Length)DurablePartial.Reset(partial,identity);
                     Directory.CreateDirectory(Path.GetDirectoryName(metadata));DurablePartial.AtomicText(metadata,identity);
-                    if(offset==job.File.Length&&offset>0){if(Verified(partial,job.File.Length,job.File.Md5,stop.Token)){stop.Token.ThrowIfCancellationRequested();if(File.Exists(job.File.Destination))File.Replace(partial,job.File.Destination,null);else File.Move(partial,job.File.Destination);DurablePartial.Forget(partial);File.Delete(metadata);return new LinkResult{Completed=new Result{Status="success",Bytes=offset,Message=""}};}offset=0;DurablePartial.Reset(partial,identity);}
+                    if(offset==job.File.Length&&offset>0)return new LinkResult{Completed=FinishPayload(job,partial)};
                     job.Bytes=offset;
+                    }
                 string cacheKey=history.DirectoryPath+"\n"+job.File.Path;
                 job.LinkLease=linkCache.Get(cacheKey,SegmentIdentity(job.File));
                 if(job.LinkLease!=null)return new LinkResult{Link=job.LinkLease.Link};
@@ -262,20 +282,13 @@ namespace DiskRescue {
                         idle.CancelAfter(TimeSpan.FromSeconds(idleSeconds));
                         using(Stream input=await response.Content.ReadAsStreamAsync().ConfigureAwait(false))using(DurablePartial output=new DurablePartial(partial,SegmentIdentity(job.File),offset)){
                             byte[] buffer=new byte[65536];int n;
-                            while((n=await ReadDownloadData(input,buffer,buffer.Length,idle.Token).ConfigureAwait(false))>0){idle.CancelAfter(TimeSpan.FromSeconds(idleSeconds));await output.WriteAsync(buffer,0,n,stop.Token).ConfigureAwait(false);received+=n;Interlocked.Add(ref job.Bytes,n);ConfirmLink(job);}
+                            while((n=await ReadDownloadData(input,buffer,buffer.Length,idle.Token).ConfigureAwait(false))>0){idle.CancelAfter(Timeout.Infinite);await output.WriteAsync(buffer,0,n,stop.Token).ConfigureAwait(false);received+=n;Interlocked.Add(ref job.Bytes,n);ConfirmLink(job);idle.CancelAfter(TimeSpan.FromSeconds(idleSeconds));}
                         }
                     }
                     }
                     idle.CancelAfter(Timeout.Infinite);
                     if(new FileInfo(partial).Length<job.File.Length){if(received==0)InvalidateLink(job);return new Result{Status="failed",Message="Incomplete download response; received data retained.",Bytes=job.Bytes,RetryTransfer=received>0};}
-                    if(!Verified(partial,job.File.Length,job.File.Md5,stop.Token)){
-                        InvalidateLink(job);
-                        if(new FileInfo(partial).Length>=job.File.Length){DurablePartial.Reset(partial,SegmentIdentity(job.File));job.Bytes=0;}
-                        return new Result{Status="failed",Message="File size or MD5 mismatch; incomplete data retained, invalid complete data reset.",Bytes=job.Bytes};
-                    }
-                    stop.Token.ThrowIfCancellationRequested();
-                    if(File.Exists(job.File.Destination))File.Replace(partial,job.File.Destination,null);else File.Move(partial,job.File.Destination);
-                    DurablePartial.Forget(partial);File.Delete(metadata);return new Result{Status="success",Message="",Bytes=job.Bytes};
+                    return FinishPayload(job,partial);
                 }catch(OperationCanceledException){if(!stop.IsCancellationRequested&&received==0)InvalidateLink(job);return new Result{Status=stop.IsCancellationRequested?"cancelled_user":"timeout",Message=stop.IsCancellationRequested?"Stopped by user.":"No progress during the idle timeout.",Bytes=job.Bytes,RetryTransfer=!stop.IsCancellationRequested&&received>0};}
                 catch(ApiException ex){InvalidateLink(job);return new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="HTTP "+ex.Code,Bytes=job.Bytes};}
                 catch(Exception ex){if(!stop.IsCancellationRequested&&received==0&&(idle.IsCancellationRequested||ex is DownloadReadException||ex is HttpRequestException))InvalidateLink(job);return new Result{Status=stop.IsCancellationRequested?"cancelled_user":idle.IsCancellationRequested?"timeout":"failed",Message=stop.IsCancellationRequested?"Stopped by user.":idle.IsCancellationRequested?"No progress during the idle timeout.":"Download failed: "+ex.GetType().Name+" (0x"+ex.HResult.ToString("X8")+")",Bytes=job.Bytes,RetryTransfer=!stop.IsCancellationRequested&&received>0&&(ex is DownloadReadException||ex is HttpRequestException)};}
@@ -303,9 +316,13 @@ namespace DiskRescue {
                 history=new HistoryStore(data,destination,account+"|"+remote+"|"+destination.ToUpperInvariant());
                 report=Path.Combine(history.DirectoryPath,"reports",DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss")+"_"+Guid.NewGuid().ToString("N").Substring(0,6));
                 Inventory(account,remote);
-                foreach(DiskFile f in files){stop.Token.ThrowIfCancellationRequested();current=f.Path;checkFileBytes=checkFileLength=0;checkFileStarted=DateTime.UtcNow;Snapshot("checking_local","",false);HistoryRecord old=history.Find(f.Path);bool same=FileRules.SameVersion(f,old);f.ResumeEligible=same&&!String.IsNullOrEmpty(f.Md5);if(same){f.Status=FileRules.NormalizeStatus(old);f.DownloadedBytes=old.downloadedBytes;}
-                    SafeDestination(f.Destination);f.Local=(mode!=RunMode.All&&PreviouslyVerified(f,old))||Verified(f.Destination,f.Length,f.Md5,stop.Token,delegate(long done,long total){checkFileBytes=done;checkFileLength=total;if(done==0)lastPhase="";Snapshot("checking_local","",false);});if(f.Local){f.DownloadedBytes=f.Length;if(!same||!FileRules.Success(old.status)||!old.localWriteTicks.HasValue||old.localWriteTicks.Value!=new FileInfo(f.Destination).LastWriteTimeUtc.Ticks)history.SaveApi(f,"local","");else f.Status="local";}else if(FileRules.Success(f.Status))f.Status="pending";
-                    string partial=f.Destination+".ydr-part";if(File.Exists(partial))f.DownloadedBytes=new FileInfo(partial).Length;
+                foreach(DiskFile entry in files){string occupied=entry.Destination;while(!String.IsNullOrEmpty(occupied)){occupiedDestinations.Add(occupied);occupied=Path.GetDirectoryName(occupied);}}
+                preserver=new FilePreserver(history.DirectoryPath,settings.ApiFolder,files.Select(f=>f.Destination));
+                foreach(DiskFile f in files){stop.Token.ThrowIfCancellationRequested();current=f.Path;checkFileBytes=checkFileLength=0;checkFileStarted=DateTime.UtcNow;Snapshot("checking_local","",false);HistoryRecord old=history.Find(f.Path);bool same=FileRules.SameVersion(f,old);f.ResumeEligible=same&&CloudIntegrity.HasHash(f);if(same){f.Status=FileRules.NormalizeStatus(old);f.DownloadedBytes=old.downloadedBytes;}
+                    try{preserver.CheckDestination(f.Destination);}catch(IOException){f.Local=false;f.Status="failed";f.Message="Destination conflicts with preserved files or pending recovery.";checkFilesChecked++;continue;}
+                    SafeDestination(f.Destination);bool cached=mode!=RunMode.All&&PreviouslyVerified(f,old);if(cached){f.Verification=CloudIntegrity.HasHash(f)?"history":"size_only";f.ActualHash=old.actualHash;}f.Local=cached||CloudIntegrity.CheckAndRecord(f.Destination,f,stop.Token,delegate(long done,long total){checkFileBytes=done;checkFileLength=total;if(done==0)lastPhase="";Snapshot("checking_local","",false);});if(f.Local){f.DownloadedBytes=f.Length;if(!same||!FileRules.Success(old.status)||!old.localWriteTicks.HasValue||old.localWriteTicks.Value!=new FileInfo(f.Destination).LastWriteTimeUtc.Ticks)history.SaveApi(f,"local","");else f.Status="local";}else if(FileRules.Success(f.Status))f.Status="pending";
+                    if(preserver.Blocked(f)){f.Status="integrity_failed";f.Local=false;f.Message=File.Exists(f.PreservedPath)?"Checksum mismatch; copy preserved.":"Checksum mismatch; preserved copy is missing. Automatic retries remain blocked.";}
+                    string partial=f.Destination+".ydr-part";if(RangeMap.Exists(f.Destination))f.DownloadedBytes=RangeMap.Progress(f.Destination);else if(File.Exists(partial))f.DownloadedBytes=new FileInfo(partial).Length;
                     checkFilesChecked++;Snapshot("checking_local","",false);
                 }
                 List<DiskFile> queue=FileRules.Order(files.Where(f=>mode==RunMode.Continue ? f.Status=="pending"||f.Status=="cancelled_user" : FileRules.Select(f,history.Find(f.Path),mode)));selected=queue.Count;skipped=files.Count-selected;queueReady=true;int next=0;Stopwatch reportClock=Stopwatch.StartNew();
@@ -358,7 +375,7 @@ namespace DiskRescue {
             ApiPacerStatus apiStatus=apiPacer.Status();s.ApiEffectiveIntervalMs=apiStatus.IntervalMs;s.ApiWaitingRequests=apiStatus.Waiting;s.ApiCooldownCode=apiStatus.Code;s.ApiCooldownSeconds=apiStatus.CooldownSeconds;s.ApiStatusCapturedUtc=DateTime.UtcNow;
             if(phase=="checking_local"){s.CheckFilesChecked=checkFilesChecked;s.CheckFilesTotal=files.Count;s.CheckFileBytes=checkFileBytes;s.CheckFileLength=checkFileLength;s.CheckFileStartedUtc=checkFileStarted;s.ProgressChecked=checkFilesChecked;s.ProgressTotal=files.Count;}
             foreach(string category in new[]{"photos","videos","documents","archives","audio","other"}){List<DiskFile> items=files.Where(f=>f.Category==category).ToList();s.Categories.Add(new CategoryStats{Category=category,Total=items.Count,Available=items.Count(f=>FileRules.Success(f.Status)),Downloaded=items.Count(f=>downloaded.Contains(f.Path)),Remaining=items.Count(f=>!FileRules.Success(f.Status)),ZeroDownload=items.Count(FileRules.CancelledZero),CloudErrors=items.Count(f=>f.Status=="cloud_error"),Deferred=items.Count(f=>f.Status=="timeout"||f.Status=="failed"||f.Status=="cancelled_user")});}
-            s.Available=s.Categories.Sum(c=>c.Available);s.CloudErrors=s.Categories.Sum(c=>c.CloudErrors);s.Deferred=s.Categories.Sum(c=>c.Deferred);s.PerHour=s.Seconds>0?processed*3600.0/s.Seconds:0;s.RemainingSeconds=s.PerHour>0?Math.Max(0,selected-processed)*3600.0/s.PerHour:0;s.Events=events.ToList();
+            s.OtherErrors=files.Count(f=>f.Status=="integrity_failed");s.Available=s.Categories.Sum(c=>c.Available);s.CloudErrors=s.Categories.Sum(c=>c.CloudErrors);s.Deferred=s.Categories.Sum(c=>c.Deferred);s.PerHour=s.Seconds>0?processed*3600.0/s.Seconds:0;s.RemainingSeconds=s.PerHour>0?Math.Max(0,selected-processed)*3600.0/s.PerHour:0;s.Events=events.ToList();
             if(catalog==null||finished||(DateTime.UtcNow-catalogTime).TotalSeconds>=2){catalog=BrowserCatalog.Capture(files,settings.ApiFolder);foreach(Job job in jobs){BrowserFile item=catalog.FirstOrDefault(f=>f.LocalPath==job.File.Destination);if(item!=null){item.Bytes=Interlocked.Read(ref job.Bytes);item.Status="downloading";}}catalogTime=DateTime.UtcNow;}s.Catalog=catalog;
             if(queueReady){s.ProgressTotal=runMode==RunMode.Continue?files.Count:selected;s.ProgressChecked=runMode==RunMode.Continue?skipped+processed:processed;}latest=s;publish(s);
         }

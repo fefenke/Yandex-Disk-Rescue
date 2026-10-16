@@ -24,6 +24,12 @@
     <Compile Include="src\ApiPacerTests.cs"/>
     <Compile Include="src\SignedLinkCache.cs"/>
     <Compile Include="src\SignedLinkTests.cs"/>
+    <Compile Include="src\SafeDownloadTests.cs"/>
+    <Compile Include="src\CloudIntegrity.cs"/>
+    <Compile Include="src\FilePreserver.cs"/>
+    <Compile Include="src\RangeMapTests.cs"/>
+    <Compile Include="src\RangeMap.cs"/>
+    <Compile Include="src\ApiMappedDownloads.cs"/>
     <Compile Include="src\DurablePartialTests.cs"/>
     <Compile Include="src\DurablePartial.cs"/>
     <None Include="App.config"/>

@@ -35,11 +35,11 @@ namespace DiskRescue {
         sealed class Download:HttpMessageHandler {
             public string Payload=Original;public long Requested=-1;public int Calls,Code,Step=2;public bool BreakEveryAttempt,ZeroOnSecond;
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token){
-                Assert(request.Headers.Authorization==null,"Cached link leaked OAuth.");Calls++;Requested=request.Headers.Range==null?0:request.Headers.Range.Ranges.Single().From.Value;
+                Assert(request.Headers.Authorization==null,"Cached link leaked OAuth.");int call=Interlocked.Increment(ref Calls);long requested=request.Headers.Range==null?0:request.Headers.Range.Ranges.Single().From.Value;Requested=requested;
                 if(Code!=0)return Task.FromResult(new HttpResponseMessage((HttpStatusCode)Code));
                 bool range=request.Headers.Range!=null;long end=range?request.Headers.Range.Ranges.Single().To??Payload.Length-1:Payload.Length-1;
-                HttpResponseMessage response=new HttpResponseMessage(range?HttpStatusCode.PartialContent:HttpStatusCode.OK){Content=new StreamContent(new Body(Payload,(int)Requested,(int)(end-Requested+1),BreakEveryAttempt?(ZeroOnSecond&&Calls==2?0:Step):-1))};
-                response.Content.Headers.ContentLength=end-Requested+1;if(range)response.Content.Headers.ContentRange=new ContentRangeHeaderValue(Requested,end,Payload.Length);
+                HttpResponseMessage response=new HttpResponseMessage(range?HttpStatusCode.PartialContent:HttpStatusCode.OK){Content=new StreamContent(new Body(Payload,(int)requested,(int)(end-requested+1),BreakEveryAttempt?(ZeroOnSecond&&call==2?0:Step):-1))};
+                response.Content.Headers.ContentLength=end-requested+1;if(range)response.Content.Headers.ContentRange=new ContentRangeHeaderValue(requested,end,Payload.Length);
                 return Task.FromResult(response);
             }
         }
@@ -84,9 +84,9 @@ namespace DiskRescue {
                 if(segmented){Seed(data,settings);string destination=Path.Combine(settings.ApiFolder,"a.txt");File.WriteAllText(destination+".ydr-part","");Directory.CreateDirectory(destination+".ydr-segments");File.WriteAllText(Path.Combine(destination+".ydr-segments","plan.json"),new JavaScriptSerializer().Serialize(new{Identity="disk:/a.txt\nv1|"+Digest(Original)+"\n"+Original.Length,Offset=0,Length=Original.Length,Parts=2}));settings.StreamsPerFile=2;}
                 SignedLinkCache cache=new SignedLinkCache();ApiPacer pacer=new ApiPacer();api=new Api();download=new Download{BreakEveryAttempt=true,Step=segmented?1:2};
                 new ApiEngine(data,x=>last=x,api,download,pacer,cache).Run(settings,RunMode.Remaining);
-                Assert(last.Downloaded==0&&download.Calls==(segmented?6:3),"Initial progressive interruptions did not retain partial data.");
-                string interrupted=segmented?Path.Combine(settings.ApiFolder,"a.txt.ydr-segments","0.part"):Path.Combine(settings.ApiFolder,"a.txt.ydr-part");
-                File.AppendAllText(interrupted,"unconfirmed crash tail");File.AppendAllText(interrupted+".ydr-state","{torn record");
+                Assert(last.Downloaded==0&&download.Calls==(segmented?6:3),"Initial progressive interruptions did not retain partial data: segmented="+segmented+", calls="+download.Calls+", downloaded="+last.Downloaded+", phase="+last.Phase+", error="+last.Error);
+                string interrupted=Path.Combine(settings.ApiFolder,"a.txt.ydr-download");
+                using(FileStream torn=new FileStream(interrupted,FileMode.Open,FileAccess.Write)){torn.Position=segmented?3:6;torn.Write(Encoding.ASCII.GetBytes("BAD"),0,3);}File.AppendAllText(Path.Combine(settings.ApiFolder,"a.txt.ydr-map"),"{torn record");
                 Api nextApi=new Api();Download nextDownload=new Download();
                 new ApiEngine(data,x=>last=x,nextApi,nextDownload,pacer,cache).Run(settings,RunMode.PartialFiles);
                 Assert(nextApi.MetadataCalls==1&&nextApi.LinkCalls==0&&last.Downloaded==1&&File.ReadAllText(Path.Combine(settings.ApiFolder,"a.txt"))==Original,"Working signed link was not reused safely across passes.");

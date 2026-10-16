@@ -105,7 +105,7 @@ namespace DiskRescue {
                 Assert(settings.IdleSeconds==1,id+": retry changed the user's idle timeout.");
                 if(scenario=="fair"){int other=download.Order.FindIndex(x=>x.StartsWith("/b:")),retry=download.Order.FindIndex(x=>x=="/a:2");Assert(other>=0&&other<retry,id+": retry overtook a waiting file.");}
                 if(scenario=="full-body-break"){
-                    Assert(File.ReadAllText(file.Destination+".ydr-part")==Payload,id+": complete partial was discarded after a final read error.");
+                    Assert(File.ReadAllText(file.Destination+".ydr-download")==Payload,id+": complete partial was discarded after a final read error.");
                     new ApiEngine(data,x=>last=x,new Api(),download).Run(settings,RunMode.PartialFiles);
                     Assert(download.Starts.Count==1&&File.ReadAllText(file.Destination)==Payload,id+": complete partial was downloaded again instead of verified.");
                 }

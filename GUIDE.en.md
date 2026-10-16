@@ -4,14 +4,14 @@
 
 ## 1. Scope and requirements
 
-Only the regular Files section of Yandex Disk is supported. Unlimited photo/video auto-upload is neither counted nor downloaded. The app uses Yandex Disk API technology or the official desktop client, retries available files and records results. It does not repair cloud originals, recover deleted files or guarantee access to unavailable data.
+Only the regular Files section of Yandex Disk is supported. Prepare ordinary folders first for media stored only in unlimited auto-upload; see below. The app uses Yandex Disk API technology or the official desktop client, retries available files and records results. It does not repair cloud originals, recover deleted files or guarantee access to unavailable data.
 
 Requires Windows 10 1709+ or Windows 11 and .NET Framework 4.7.1+. Choose x64 for 64-bit Windows, or x86 for 32-bit Windows; x86 also works on x64. There is no separate ARM64 build.
 
 ## 2. First launch
 
 1. Download the architecture-specific ZIP and extract the entire archive to a permanent writable folder.
-2. Run Start Yandex Disk Rescue.cmd to check prerequisites and launch the app. Settings opens first.
+2. Run YandexDiskRescue.exe. Start Yandex Disk Rescue.cmd is an optional launcher that checks Windows/.NET and explains incompatible environments. Settings opens first.
 3. Choose API or the official desktop client, fill required fields, select a pass mode and press Start pass at the top.
 4. The guide button is always at the top. Transfer settings are locked during passes and automatic retries. Press Stop and wait before changing them.
 
@@ -33,9 +33,9 @@ The app requests file retrieval and monitors results; Windows and the client con
 
 ## 5. Inventory and pass selection
 
-These are separate settings. The saved inventory avoids enumeration before every attempt. Missing lists are scanned and interrupted scans resume from their saved position. Refresh after cloud files are added, changed or deleted. Refreshing does not force suitable completed files to download again.
+These are separate settings. The saved inventory avoids enumeration before every attempt. Missing lists are scanned and an interrupted folder restarts from its first page while retaining discovered entries. Refresh after cloud files are added, changed or deleted. Refreshing does not force suitable completed files to download again.
 
-Before resuming a started file, the app queries that file's fresh size, modification time and available MD5. This is an individual metadata request, not a full Disk rescan. Failed checks preserve parts and defer the attempt. Changed versions cannot mix old and new data. Refreshed inventory is saved after active jobs finish: on normal completion, manual Stop or handled errors.
+Before resuming a started file, the app queries that file's fresh size, modification time and available MD5/SHA-256. This is an individual metadata request, not a full Disk rescan. Failed checks preserve parts and defer the attempt. Changed versions cannot mix old and new data. Refreshed inventory is saved after active jobs finish: on normal completion, manual Stop or handled errors.
 
 Scan errors appear in the log and warning. Finishing enumeration does not prove every cloud folder was accessible. Counts describe discovered files; errors prevent a completeness guarantee. A sudden crash may leave an older intact inventory, and the started file's version is checked again when resuming.
 
@@ -46,7 +46,7 @@ Pass modes:
 - Retry timeouts and failures: interrupted, stalled and otherwise unsuccessful transfers.
 - Retry all files not downloaded: everything lacking a suitable completed local copy; the usual retry choice.
 - Start pass from the beginning: check the entire list again. Suitable local copies are not downloaded again.
-- Resume partial downloads · API: files with saved bytes in .ydr-part or .ydr-segments. Automatic repeats retain this queue.
+- Resume partial downloads · API: files with confirmed .ydr-map data or legacy parts. Automatic repeats retain this queue.
 
 ## 6. Timeouts and retry queue
 
@@ -80,31 +80,31 @@ More connections do not create bandwidth. Increasing concurrency usually cannot 
 
 ## 9. Large-file parts
 
-Streams per file: 1–8, default 4 from 256 MB. Threshold: 64–4096 MB; MB means 1,000,000 bytes. New splitting requires cloud MD5. Small files use one stream. Setting 1 disables new splitting; existing parts retain their plan and resume with the selected concurrency.
+Streams per file: 1–8, default 4 from 256 MB. Threshold: 64–4096 MB; MB means 1,000,000 bytes. New splitting requires cloud MD5 or SHA-256. Small files use one stream. Setting 1 disables new splitting; existing parts retain their plan and resume with the selected concurrency.
 
 The first range request checks server support. Valid headers allow the other parts to begin. Ignored or rejected ranges fall back to a full response. Invalid ranges and MD5 failures never count as success. One stalled part need not stop the others.
 
-The destination's .ydr-part and .ydr-segments folder hold a plan and separate parts. Completed parts are merged, size and available MD5 are checked, and the temporary file becomes final. Interrupted merging rolls back and reuses completed parts. In addition to parts, merging needs space for the assembled copy, up to the file's full size. Direct range writes into one shared file are not implemented in this version.
+All streams write their ranges directly into one .ydr-download payload. The .ydr-map journal records confirmed extents and SHA-256 hashes. NTFS needs no final merge or second full assembled copy. Allocated payload length is not progress: the map determines downloaded bytes. Drives without sparse-file support use the legacy format.
 
 ## 10. Checkpoints, HDDs and recovery
 
 Each active stream checkpoints after 32 MiB of new data OR 15 seconds when the next data arrives, whichever occurs first. Both counters reset after saving. This is not a 15-second pause or network timeout. If only 5 MiB arrived in 15 seconds, those bytes are saved; another 27 MiB afterwards does not reach the next 32 MiB threshold.
 
-Normal Stop, interruptions and attempt completion also checkpoint remaining bytes. Data is flushed to disk before the SHA-256 extent journal in .ydr-state is committed. Recovery verifies confirmed extents, discards corrupt or unconfirmed tails and redownloads them. Up to 32 MiB can remain unconfirmed per active stream, rather than per whole file or session.
+Normal Stop, interruptions and attempt completion checkpoint pending bytes. Payload data is flushed before the .ydr-map record. Recovery verifies saved extents and redownloads corrupt or unconfirmed bytes. Up to 32 MiB may remain unconfirmed per active stream. Local writes and flushes do not consume the network idle timeout.
 
-Keep .ydr-state, .ydr-part and .ydr-segments until completion. Legacy parts without journals may be reused when cloud MD5 is known, subject to final verification. Cloud version changes invalidate incompatible data.
+Keep .ydr-download and .ydr-map until completion. Legacy .ydr-part/.ydr-state/.ydr-segments data migrates automatically; sources are deleted only after validating the new map. Incompatible old versions are preserved in the former-files archive.
 
-Saving briefly delays the corresponding worker; other downloads can continue but share the drive. One SATA HDD/NTFS test wrote 2 GiB in 77.9 seconds without checkpoints and 84.9 seconds with SHA-256/checkpoints (+7.0 seconds, about 9%). This is one synthetic measurement, not a guarantee for other files or drives. Recovery reads saved bytes; a real reboot has a cold system cache, so warm-memory reads do not predict its duration.
+Saving briefly delays the corresponding worker; other downloads can continue but share the drive. In the legacy 1.0.4 format, one SATA HDD/NTFS test wrote 2 GiB in 77.9 seconds without checkpoints and 84.9 seconds with SHA-256/checkpoints (+7.0 seconds, about 9%). This is one synthetic measurement, not a guarantee for other files or drives. Recovery reads saved bytes; a real reboot has a cold system cache, so warm-memory reads do not predict its duration.
 
 Tests killed a separate process during downloading and merging, corrupted saved data and journal records, and verified final MD5. Physical power removal was not performed. Durability depends on a healthy drive/controller honoring flush commands; absolute protection against hardware failure or ignored flush requests cannot be promised.
 
 ## 11. What file verification proves
 
-When cloud MD5 is known, size and digest are checked. For a previously verified file, history, cloud identity, length and local write timestamp can avoid a full reread. Start from the beginning performs full checks and may take time on large files. The UI shows filename, checked counts and hashing progress; completed counts remain provisional during verification.
+Size is checked first, followed by cloud MD5, or SHA-256 only when MD5 is absent. SHA-256 never overrides an MD5 mismatch. Ordinary passes may reuse history for unchanged versions, size and local write time, marked as previously checked. Start from the beginning reads and hashes the complete file again.
 
-Without cloud MD5, matching size currently suffices. This is weaker and does not prove identical contents. Local SHA-256 protects saved extents but cannot replace the cloud original's missing digest. A separate strict status for that case is not implemented in 1.0.4.
+Without either cloud hash, downloads remain allowed and are marked as size-only evidence. Local map SHA-256 protects saved extents but cannot prove equality with the cloud original.
 
-An unsuitable existing file remains while a new temporary copy downloads, but may be replaced after the new copy passes checks. Never-overwrite mode and automatic archives of old copies are not implemented. Keep your own backup before using a destination containing unique manual edits.
+The existing file stays while a new temporary copy downloads and is checked. Before replacement, a wrong-size file moves to the former-files archive; a hash-mismatched file moves to the verification-error archive. Subfolders and unique names are retained. A new bad copy is also preserved in the error archive. Failure to preserve the old file prevents replacement.
 
 ## 12. Interface, history and errors
 
@@ -123,3 +123,28 @@ For manual updates, close the app first. Preserve data and download parts, then 
 Never publish data, api-token.bin, personal-path logs or signed URLs. Remove tokens, signed query parameters and personal filenames from bug reports. Revoke leaked access through Yandex ID. Public sources and release archives must contain no user data.
 
 Independent unofficial project. [Report an issue](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [MIT license](LICENSE).
+
+
+A failed cloud version is blocked from automatic retries, including rescanning and full passes. Deleting its preserved artifact keeps it blocked and displays copy missing. Retry checksum failures (API) runs one explicit pass. Identical preserved bad copies are deduplicated. Changed cloud versions may download again; old artifacts remain. Keep data to retain these version records.
+
+
+If a cloud destination collides with another file?s temporary name, the affected download is skipped with a conflict error. The other final file is not used as scratch data; unrelated downloads continue.
+
+
+## Unlimited-upload photos and privacy
+
+The Photos view and ordinary folders can contain the same media. Independently downloading both without reconciliation can duplicate data and traffic. This project uses ordinary folders as one inventory source. On the official Yandex Disk website, copy only the photos missing from ordinary folders into a chosen folder, then refresh the app inventory. Retain originals until the backup is checked. Copies from unlimited storage count against your storage quota: see [Yandex help](https://yandex.ru/support/yandex-360/customers/disk/web/ru/media-upload.html?lang=ru).
+
+Additional schemes involving third-party sites, session cookies or public links would expand access to private data. This does not mean every possible unlimited-storage implementation is inherently unsafe. Public links are unnecessary here: anyone receiving an accessible link may read, download and retain its contents. Avoid untrusted recovery sites, revoke unwanted public sharing, and remember that revocation cannot delete copies already obtained by others.
+
+## Interrupted scans and cloud changes
+
+An interrupted folder restarts at its first page; saved paths suppress duplicate entries. Completed folders are retained in saved-list mode. Refresh the entire inventory to find changes there, and perform a fresh-list control pass after the main backup. An offset is a position, not a stable cursor. Concurrent cloud edits can still shift pages; enumeration is not an atomic snapshot or proof of completeness.
+
+## After backup
+
+Source, builds and tests are inspectable. Downloads and history processing run locally, using Yandex API/download hosts and GitHub update checks, without a project-operated file relay. Open source does not authenticate an arbitrary executable: use this repository's release, verify its checksum or build yourself.
+
+Windows DPAPI protects api-token.bin for the current Windows user. The token is used in memory; downloaded files, history and reports are not automatically encrypted. Keep data, tokens, session cookies and signed URLs private. Malware running as the same Windows user remains a risk.
+
+After checking the completed backup, revoke the used application's data access in [Yandex ID security](https://id.yandex.ru/security), then clear the app's local token. Removing a local token does not revoke remote authorization. See [Yandex ID help](https://yandex.ru/support/id/ru/profile). Design details and test coverage are linked in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) and [TESTING.md](TESTING.md).

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -11,12 +11,12 @@ using System.Runtime.InteropServices;
 
 namespace DiskRescue {
     public sealed class BrowserFile {
-        public string Path,LocalPath,Status;public long Length,Bytes;
+        public string Path,LocalPath,Status,Verification,PreservedPath;public long Length,Bytes;
         public bool Ready {get{return FileRules.Success(Status);}}
     }
     public static class BrowserCatalog {
         public static List<BrowserFile> Capture(IEnumerable<DiskFile> files,string root){
-            return files.Select(f=>new BrowserFile{Path=f.Path.StartsWith("disk:/",StringComparison.Ordinal)?f.Path.Substring(6):f.Path.Substring(Math.Min(f.Path.Length,root.TrimEnd('\\').Length)).TrimStart('\\').Replace('\\','/'),LocalPath=String.IsNullOrEmpty(f.Destination)?f.Path:f.Destination,Length=f.Length,Bytes=f.DownloadedBytes??0,Status=f.Status}).ToList();
+            return files.Select(f=>new BrowserFile{Path=f.Path.StartsWith("disk:/",StringComparison.Ordinal)?f.Path.Substring(6):f.Path.Substring(Math.Min(f.Path.Length,root.TrimEnd('\\').Length)).TrimStart('\\').Replace('\\','/'),LocalPath=String.IsNullOrEmpty(f.Destination)?f.Path:f.Destination,Length=f.Length,Bytes=f.DownloadedBytes??0,Status=f.Status,Verification=f.Verification,PreservedPath=f.PreservedPath}).ToList();
         }
         public static List<BrowserFile> Load(string data,bool api,string root,string remote){
             List<DiskFile> files=new List<DiskFile>();string historyPath;
@@ -36,7 +36,7 @@ namespace DiskRescue {
             Dictionary<string,HistoryRecord> records=new Dictionary<string,HistoryRecord>(api?StringComparer.Ordinal:StringComparer.OrdinalIgnoreCase);
             if(File.Exists(historyPath))using(StreamReader reader=new StreamReader(new FileStream(historyPath,FileMode.Open,FileAccess.Read,FileShare.ReadWrite))){string line;while((line=reader.ReadLine())!=null){try{HistoryRecord r=json.Deserialize<HistoryRecord>(line);if(r!=null&&r.path!=null)records[r.path]=r;}catch(ArgumentException){} }}
             if(!api)files=records.Values.Select(r=>new DiskFile{Path=r.path,Destination=r.path,Length=r.length,Modified=r.modified}).ToList();
-            foreach(DiskFile f in files){HistoryRecord r;if(records.TryGetValue(f.Path,out r)&&FileRules.SameVersion(f,r)){f.Status=FileRules.NormalizeStatus(r);f.DownloadedBytes=r.downloadedBytes;}if(FileRules.Success(f.Status)&&!File.Exists(f.Destination))f.Status="pending";string part=f.Destination+".ydr-part";if(File.Exists(part))try{f.DownloadedBytes=new FileInfo(part).Length;}catch(IOException){} }
+            foreach(DiskFile f in files){HistoryRecord r;if(records.TryGetValue(f.Path,out r)&&FileRules.SameVersion(f,r)){f.Status=FileRules.NormalizeStatus(r);f.DownloadedBytes=r.downloadedBytes;f.Verification=r.verification;f.PreservedPath=r.preservedPath;}if(FileRules.Success(f.Status)&&!File.Exists(f.Destination))f.Status="pending";string part=f.Destination+".ydr-part";if(RangeMap.Exists(f.Destination))f.DownloadedBytes=RangeMap.Progress(f.Destination);else if(File.Exists(part))try{f.DownloadedBytes=new FileInfo(part).Length;}catch(IOException){} }
             return Capture(files,root);
         }
     }
@@ -117,7 +117,7 @@ namespace DiskRescue {
         string FolderText(Folder f){return (f.Path==""?T("Весь список","All listed files"):f.Path.Substring(f.Path.LastIndexOf('/')+1))+"   "+f.Ready.ToString("N0")+" / "+f.Total.ToString("N0")+"   "+(f.Total==0?0:100.0*f.Ready/f.Total).ToString("0")+"%";}
         void BuildNode(Folder f,TreeNodeCollection nodes){f.Node=nodes.Add(FolderText(f));f.Node.ImageKey=f.Node.SelectedImageKey="folder";f.Node.Tag=f;foreach(Folder child in f.Children.OrderBy(c=>c.Path,StringComparer.CurrentCultureIgnoreCase))BuildNode(child,f.Node.Nodes);}
         static string FormatSize(long bytes){return bytes>=1073741824?(bytes/1073741824.0).ToString("0.00")+" GB":bytes>=1048576?(bytes/1048576.0).ToString("0.0")+" MB":(bytes/1024.0).ToString("0.0")+" KB";}
-        string State(BrowserFile f){if(f.Ready)return T("✓  Скачан","✓  Downloaded");string state=f.Status=="downloading"?T("Скачивается","Downloading"):f.Status=="cloud_error"?T("Ошибка сервера / синхронизации","Server / sync error"):f.Status=="timeout"?T("Таймаут","Timeout"):f.Status=="failed"?T("Сбой загрузки","Download failed"):f.Status=="cancelled_user"?T("Остановлен","Stopped"):T("Не скачан","Not downloaded");return f.Bytes>0?String.Format("{0} / {1} · {2:0}% · {3}",FormatSize(f.Bytes),FormatSize(f.Length),f.Length>0?100.0*f.Bytes/f.Length:0,state):state;}
+        string State(BrowserFile f){if(f.Ready)return f.Verification=="size_only"?(f.Status=="local"?T("✓  Совпал размер · нет облачного хеша","✓  Size matched · no cloud hash"):T("✓  Скачан · без облачного хеша","✓  Downloaded · no cloud hash")):f.Verification=="history"?T("✓  Скачан · проверен ранее","✓  Downloaded · previously checked"):T("✓  Скачан","✓  Downloaded");if(f.Status=="integrity_failed")return !String.IsNullOrEmpty(f.PreservedPath)&&File.Exists(f.PreservedPath)?T("Хеш не совпал · копия сохранена","Checksum mismatch · copy preserved"):T("Хеш не совпал · копия отсутствует","Checksum mismatch · copy missing");string state=f.Status=="downloading"?T("Скачивается","Downloading"):f.Status=="cloud_error"?T("Ошибка сервера / синхронизации","Server / sync error"):f.Status=="timeout"?T("Таймаут","Timeout"):f.Status=="failed"?T("Сбой загрузки","Download failed"):f.Status=="cancelled_user"?T("Остановлен","Stopped"):T("Не скачан","Not downloaded");return f.Bytes>0?String.Format("{0} / {1} · {2:0}% · {3}",FormatSize(f.Bytes),FormatSize(f.Length),f.Length>0?100.0*f.Bytes/f.Length:0,state):state;}
         string CompactState(BrowserFile file){string value=State(file);if(file.Bytes>0&&!file.Ready){int split=value.IndexOf(" · ",StringComparison.Ordinal);if(split>=0)value=value.Substring(split+3);}return value.Replace(T("Ошибка сервера / синхронизации","Server / sync error"),T("Ошибка сервера / Диска","Server / Disk error"));}
         object CurrentTag(){return grid.CurrentRow==null?null:grid.CurrentRow.Tag;}BrowserFile Current(){return CurrentTag() as BrowserFile;}Folder CurrentFolder(){return CurrentTag() as Folder;}
         void ShowFiles(){

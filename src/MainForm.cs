@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
@@ -205,7 +205,7 @@ namespace DiskRescue {
             guideText.Text=T("1. Выберите способ ниже: клиент Диска на компьютере или API с токеном.\n2. Для клиента: установите Яндекс Диск, войдите в аккаунт и дождитесь окончания синхронизации.\n3. Укажите локальную папку Диска со всеми подпапками и нажмите «Начать проход». При ошибках клиент перезапускается.\nБезлимитная автозагрузка не поддерживается. «Продолжить» пропускает завершённые попытки. Ошибки повторяются отдельными режимами.","1. Choose desktop Disk client or API with an OAuth token below.\n2. For the client: install Yandex Disk, sign in and wait for synchronization to finish.\n3. Select the local Disk folder, including subfolders, then Start pass. The client restarts on sync errors.\nUnlimited auto-upload is unsupported. Continue skips completed attempts. Use retry modes for errors.");
             folderCaption.Text=T("Папка Яндекс Диска · включая все подпапки","Yandex Disk folder · including all subfolders");
             browse.Text=T("Выбрать папку","Browse folder");modeCaption.Text=T("Режим прохода","Pass mode");idleCaption.Text=T("Без данных файла, сек","File idle timeout, sec");linkTimeoutCaption.Text=T("Ожидание ссылки, сек","Link timeout, sec");
-            mode.Items.Clear();mode.Items.AddRange(new object[]{T("Продолжить незавершённый проход","Resume unfinished pass"),T("Повторить ошибки синхронизации","Retry sync errors"),T("Повторить таймауты и сбои","Retry timeouts and failures"),T("Повторить все нескачанные","Retry all files not downloaded"),T("Начать проход с нуля","Start pass from the beginning"),T("Докачать начатые файлы · API","Resume partial downloads · API")});mode.SelectedIndex=selectedMode;
+            mode.Items.Clear();mode.Items.AddRange(new object[]{T("Продолжить незавершённый проход","Resume unfinished pass"),T("Повторить ошибки синхронизации","Retry sync errors"),T("Повторить таймауты и сбои","Retry timeouts and failures"),T("Повторить все нескачанные","Retry all files not downloaded"),T("Начать проход с нуля","Start pass from the beginning"),T("Докачать начатые файлы · API","Resume partial downloads · API"),T("Повторить ошибки проверки · API","Retry checksum failures · API")});mode.SelectedIndex=selectedMode;
             modeReadout.Text=Convert.ToString(mode.SelectedItem);
             tip.SetToolTip(mode,T("Каждый проход заново сканирует папку. Одинаковые имена в разных папках — разные файлы. «Всё заново» проверяет локальные файлы, но не удаляет их и не скачивает повторно.","Every pass rescans the folder. Same names in different folders remain separate. Recheck all files verifies local files without deleting or downloading them again."));
             tip.SetToolTip(linkTimeout,T("Ожидание ответа API после отправки запроса. Очередь и выбранный интервал запуска не учитываются. Другие файлы скачиваются одновременно.","API response timeout after sending the request. Queueing and the selected launch interval do not count. Other files download concurrently."));tip.SetToolTip(idle,T("Ожидание ответа скачивания или новых данных. Начинается при запуске скачивания и сбрасывается при получении заголовков и новых байтов. Это не предел общего времени загрузки.","Wait for download response or new data. Starts when downloading begins and resets on response headers and new bytes. Not a total download duration limit."));
@@ -256,9 +256,9 @@ namespace DiskRescue {
                 return;
             }
             if(settings.UseApi){settings.UseCachedApiList=apiList.SelectedIndex==1;settings.ApiFolder=Path.GetFullPath(folder.Text);settings.ApiToken=apiToken.Text.Trim();try{settings.RemoteFolder=ApiEngine.NormalizeRemote(remoteFolder.Text);TokenVault.Save(dataFolder,settings.ApiToken);}catch(Exception){MessageBox.Show(this,T("Проверьте облачный путь и доступ к хранилищу токена.","Check the cloud path and token storage permissions."),Text);return;}}else settings.Folder=Path.GetFullPath(folder.Text);settings.Concurrency=5;settings.IdleSeconds=(int)idle.Value;settings.LinkTimeoutSeconds=(int)linkTimeout.Value;settings.ApiLinkConcurrency=(int)linkConcurrency.Value;settings.ApiDownloadConcurrency=(int)downloadConcurrency.Value;settings.ApiRequestIntervalMs=(int)requestInterval.Value;settings.RepeatProblemFiles=repeatProblems.Checked;settings.RestartClient=true;SaveSettings();
-            if(mode.SelectedIndex==5&&!settings.UseApi){MessageBox.Show(this,T("Докачка доступна только через API.","Resuming partial downloads requires API mode."),Text);return;}
+            if(mode.SelectedIndex>=5&&!settings.UseApi){MessageBox.Show(this,T("Этот режим доступен только через API.","This mode requires API downloads."),Text);return;}
             busy=true;SetBusy(true);phase.Text=T("Подготовка…","Preparing…");progress.Style=ProgressBarStyle.Marquee;timer.Start();
-            RunMode runMode=new[]{RunMode.Continue,RunMode.CloudErrors,RunMode.ZeroDownload,RunMode.Remaining,RunMode.All,RunMode.PartialFiles}[mode.SelectedIndex];
+            RunMode runMode=new[]{RunMode.Continue,RunMode.CloudErrors,RunMode.ZeroDownload,RunMode.Remaining,RunMode.All,RunMode.PartialFiles,RunMode.IntegrityFailures}[mode.SelectedIndex];
             sessionStop=new System.Threading.CancellationTokenSource();work=RunSession(runMode);
             work.ContinueWith(delegate(Task completed){
                 if(!IsDisposed)BeginInvoke(new Action(delegate {
@@ -280,7 +280,7 @@ namespace DiskRescue {
                     Snapshot result=engine.Latest;
                     if(result.Finished){PassResult row=PassResult.From(result,started,settings.UseApi,runMode);row.IdleSeconds=settings.IdleSeconds;row.LinkTimeoutSeconds=settings.UseApi?settings.LinkTimeoutSeconds:0;row.ApiLinkConcurrency=settings.UseApi?settings.ApiLinkConcurrency:0;row.ApiDownloadConcurrency=settings.UseApi?settings.ApiDownloadConcurrency:0;row.ApiRequestIntervalMs=settings.UseApi?settings.ApiRequestIntervalMs:0;PassHistory.Append(Path.Combine(dataFolder,"passes.jsonl"),row);passRows.Add(row);RenderPasses();}
                     Render(result);
-                    if(!PassHistory.ShouldRepeat(result,repeat,sessionStop.IsCancellationRequested)||((runMode==RunMode.ProblemFiles||runMode==RunMode.PartialFiles)&&result.Phase=="completed"&&result.Selected==0))break;
+                    if(runMode==RunMode.IntegrityFailures||!PassHistory.ShouldRepeat(result,repeat,sessionStop.IsCancellationRequested)||((runMode==RunMode.ProblemFiles||runMode==RunMode.PartialFiles)&&result.Phase=="completed"&&result.Selected==0))break;
                     if(result.Phase=="completed"&&runMode!=RunMode.PartialFiles)runMode=RunMode.ProblemFiles;if(settings.UseApi)settings.UseCachedApiList=true;
                     passTransition.Prepare(result);
                     waitingForRetry=true;
@@ -295,7 +295,7 @@ namespace DiskRescue {
             passes.Columns[0].FillWeight=160;passes.Columns[1].FillWeight=200;passes.ColumnHeadersHeight=55;
             foreach(PassResult row in passRows.AsEnumerable().Reverse())passes.Rows.Add(row.StartedUtc.ToLocalTime().ToString("dd.MM HH:mm:ss"),row.Method+(row.ApiLinkConcurrency>0?" "+row.ApiLinkConcurrency+"+"+row.ApiDownloadConcurrency:"")+" / "+PassModeName(row.Mode),Phase(row.Outcome),row.IdleSeconds>0?row.IdleSeconds.ToString():"—",(row.Seconds/60).ToString("0.0"),row.Processed,row.Downloaded,row.Available,row.Remaining,row.ZeroDownload,row.Errors);
         }
-        string PassModeName(string modeName){switch(modeName){case"Continue":return T("Продолжить","Resume");case"All":return T("Все файлы","All files");case"CloudErrors":return T("Ошибки","Errors");case"ZeroDownload":return T("Нет ответа / сбой загрузки","Timeout / download failures");case"ErrorsAndZero":return T("Ошибки + незавершённые","Errors + incomplete");case"NewFiles":return T("Новые / изменённые","New / changed");case"ProblemFiles":return T("Автоповтор проблемных","Automatic retry");default:return modeName;}}
+        string PassModeName(string modeName){switch(modeName){case"IntegrityFailures":return T("Ошибки проверки","Checksum failures");case"Continue":return T("Продолжить","Resume");case"All":return T("Все файлы","All files");case"CloudErrors":return T("Ошибки","Errors");case"ZeroDownload":return T("Нет ответа / сбой загрузки","Timeout / download failures");case"ErrorsAndZero":return T("Ошибки + незавершённые","Errors + incomplete");case"NewFiles":return T("Новые / изменённые","New / changed");case"ProblemFiles":return T("Автоповтор проблемных","Automatic retry");default:return modeName;}}
         void SetBusy(bool value) {
             if(settingsCard!=null)settingsCard.Enabled=!value;
             repeatProblems.Enabled=!value;if(streamsPerFile!=null)streamsPerFile.Enabled=multiStreamThreshold.Enabled=!value&&settings.UseApi;

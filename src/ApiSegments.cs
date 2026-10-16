@@ -58,6 +58,7 @@ namespace DiskRescue {
         }
         async Task<Result> Download(Job job){
             try{
+                if(job.Map!=null)return await DownloadMapped(job).ConfigureAwait(false);
                 bool segmented=!String.IsNullOrEmpty(job.File.Md5)&&job.File.Length>=Math.Max(64,Math.Min(4096,settings.MultiStreamThresholdMB))*1000000L&&Math.Max(1,Math.Min(8,settings.StreamsPerFile))>1;
                 SegmentPlan saved=ReadSegmentPlan(job.File);
                 if(segmented||saved!=null)return await DownloadSegments(job,Math.Max(1,Math.Min(8,settings.StreamsPerFile)),saved).ConfigureAwait(false);
@@ -156,15 +157,7 @@ namespace DiskRescue {
                 }
                 output.Flush(true);
             }
-            if(!Verified(partial,job.File.Length,job.File.Md5,stop.Token)){
-                InvalidateLink(job);
-                ClearSegments(job.File);DurablePartial.Reset(partial,SegmentIdentity(job.File));job.Bytes=0;
-                return new Result{Status="failed",Message="Segmented file size or MD5 mismatch; invalid parts reset.",Bytes=0};
-            }
-            stop.Token.ThrowIfCancellationRequested();SafeDestination(job.File.Destination);
-            if(File.Exists(job.File.Destination))File.Replace(partial,job.File.Destination,null);else File.Move(partial,job.File.Destination);
-            DurablePartial.Forget(partial);ClearSegments(job.File);File.Delete(Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(job.File.Path)+".txt"));
-            return new Result{Status="success",Message="",Bytes=job.File.Length};
+            return FinishPayload(job,partial);
         }
     }
 }

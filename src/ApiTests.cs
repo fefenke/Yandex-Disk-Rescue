@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -50,13 +50,18 @@ namespace DiskRescue {
         }
         sealed class PagedMock:HttpMessageHandler {
             public Action Interrupt;
-            public bool RequestedFirstPage;
+            public bool RequestedFirstPage,InsertFirst,Nested;public int RootRequests,CompletedRequests;
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken cancellation){
                 string json;
                 if(request.RequestUri.AbsolutePath.EndsWith("/resources")){
+                    string requested=Uri.UnescapeDataString(request.RequestUri.Query.Split('&')[0].Substring(6));
+                    if(Nested&&requested=="disk:/"){RootRequests++;return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(new JavaScriptSerializer().Serialize(new{type="dir",_embedded=new{items=new[]{new{path="disk:/active",type="dir"},new{path="disk:/done",type="dir"}}}}))});}
+                    if(Nested&&requested=="disk:/done"){CompletedRequests++;return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(new JavaScriptSerializer().Serialize(new{type="dir",_embedded=new{items=new[]{new{path="disk:/done/done.txt",type="file",size=0,modified="v"}}}}))});}
                     bool first=request.RequestUri.Query.Contains("offset=0");RequestedFirstPage|=first;
                     if(!first&&Interrupt!=null){Interrupt();cancellation.ThrowIfCancellationRequested();}
-                    object[] entries=Enumerable.Range(first?0:1000,first?1000:1).Select(i=>(object)new{path="disk:/f"+i+".txt",type="file",size=0,modified="v"}).ToArray();json=new JavaScriptSerializer().Serialize(new{type="dir",_embedded=new{items=entries}});
+                    int offset=Int32.Parse(request.RequestUri.Query.TrimStart('?').Split('&').Single(x=>x.StartsWith("offset=",StringComparison.Ordinal)).Substring(7));
+                    string prefix=Nested?"disk:/active/":"disk:/";var paths=Enumerable.Range(0,1001).Select(i=>prefix+"f"+i+".txt");if(InsertFirst)paths=new[]{prefix+"added-before-offset.txt"}.Concat(paths);
+                    object[] entries=paths.Skip(offset).Take(1000).Select(path=>(object)new{path=path,type="file",size=0,modified="v"}).ToArray();json=new JavaScriptSerializer().Serialize(new{type="dir",_embedded=new{items=entries}});
                 }else json="{\"user\":{\"uid\":\"paged-account\"}}";
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(json)});
             }
@@ -81,7 +86,7 @@ namespace DiskRescue {
                 ResumeMock mock=new ResumeMock{IgnoreRange=variant==1,WrongRange=variant==2};Snapshot result=null;
                 new ApiEngine(data,x=>result=x,new ApiMock(),mock).Run(new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",IdleSeconds=5},RunMode.PartialFiles);
                 Assert(result.Selected==1,"Partial mode included unrelated files.");
-                if(variant==2){Assert(!File.Exists(destination)&&File.ReadAllText(destination+".ydr-part")=="te","Invalid range corrupted existing partial data.");}
+                if(variant==2){Assert(!File.Exists(destination)&&RangeMap.Progress(destination)==2&&File.ReadAllText(destination+".ydr-download").StartsWith("te",StringComparison.Ordinal),"Invalid range corrupted existing partial data.");}
                 else{Assert(File.ReadAllText(destination)=="test"&&result.Downloaded==1,"Resume or full-response fallback failed.");Assert(mock.Requested==(variant==3?-1:2),"Resume ignored cloud version or byte offset.");}
             }
         }
@@ -117,6 +122,22 @@ namespace DiskRescue {
                 else{Assert(last.Phase=="completed"&&last.Downloaded==30&&last.Processed==30,"Queue wait consumed API timeout, download reused API budget, or pipeline lost files.");Assert(Directory.GetFiles(Path.Combine(folder,"pipeline")).Length==30,"Pipeline left missing or partial files.");if(variant==1)Assert(downloads.Peak>ApiEngine.LinkConcurrency,"Link and download queues did not run independently.");}
             }
         }
+        public static void ScanResumeTests(string root){
+            foreach(bool nested in new[]{false,true}){
+                Settings settings=new Settings{UseApi=true,ApiToken="test-secret",UseCachedApiList=true,RemoteFolder="disk:/"};Snapshot last=null;ApiEngine engine=null;
+                string data=Path.Combine(root,"resume-history-"+nested);settings.ApiFolder=Path.Combine(root,"resume-downloads-"+nested);string active=nested?Path.Combine(settings.ApiFolder,"active"):settings.ApiFolder;Directory.CreateDirectory(active);
+                for(int i=0;i<1001;i++)File.WriteAllBytes(Path.Combine(active,"f"+i+".txt"),new byte[0]);
+                if(nested){Directory.CreateDirectory(Path.Combine(settings.ApiFolder,"done"));File.WriteAllBytes(Path.Combine(settings.ApiFolder,"done","done.txt"),new byte[0]);}
+                PagedMock page=new PagedMock{Nested=nested};engine=new ApiEngine(data,x=>last=x,page,new DownloadMock());page.Interrupt=()=>engine.Stop();engine.Run(settings,RunMode.Continue);
+                Assert(last.Phase=="stopped"&&last.Total==(nested?1001:1000),"Partial scan was not checkpointed.");
+                string checkpoint=Directory.GetFiles(data,"inventory.json",SearchOption.AllDirectories).Single();var serializer=new JavaScriptSerializer{MaxJsonLength=128*1024*1024};ApiEngine.InventoryCache saved=serializer.Deserialize<ApiEngine.InventoryCache>(File.ReadAllText(checkpoint));Assert(!saved.Complete&&saved.NextOffset==1000,"Scan checkpoint lost its diagnostic offset.");
+                page=new PagedMock{Nested=nested,InsertFirst=true};engine=new ApiEngine(data,x=>last=x,page,new DownloadMock());engine.Run(settings,RunMode.Continue);int expected=nested?1003:1002;
+                Assert(last.Phase=="completed"&&last.Total==expected&&page.RequestedFirstPage,"Interrupted folder did not restart from its first page or missed the inserted file.");
+                Assert(File.Exists(Path.Combine(active,"added-before-offset.txt")),"File inserted before the saved offset was not recovered.");
+                Assert(!nested||page.RootRequests==0&&page.CompletedRequests==0,"Resuming one folder rescanned completed folders.");
+                saved=serializer.Deserialize<ApiEngine.InventoryCache>(File.ReadAllText(checkpoint));Assert(saved.Files.Count==expected&&saved.Files.Select(f=>f.Path).Distinct(StringComparer.Ordinal).Count()==expected,"Restarting the folder duplicated saved entries.");
+            }
+        }
         public static void Run(string root){
             TransferRetryTests.Run(root);
             SegmentTests.Run(root);
@@ -141,7 +162,7 @@ namespace DiskRescue {
             Assert(FileRules.Category("disk:/Фото/фото \"1\".jpg")=="photos"&&FileRules.Category("disk:/Фото/a|b.png")=="photos","Cloud filename rejected by category detection.");
             bool rejected=false;try{ApiEngine.LocalPath(folder,"disk:/../outside.jpg");}catch(IOException){rejected=true;}Assert(rejected,"Traversal accepted.");
             Snapshot last=null;DownloadMock downloads=new DownloadMock();ApiEngine engine=new ApiEngine(data,x=>last=x,new ApiMock(),downloads);engine.Run(s,RunMode.Continue);
-            Assert(last.Finished&&last.Phase=="completed"&&last.Total==7&&last.Downloaded==4,"API pass results incorrect.");Assert(last.CloudErrorsThisPass==1&&last.Deferred==2,"Timeout, HTTP error or integrity failure missing.");Assert(downloads.Peak<=ApiEngine.DownloadConcurrency&&downloads.Peak>1,"Download concurrency incorrect.");
+            Assert(last.Finished&&last.Phase=="completed"&&last.Total==7&&last.Downloaded==4,"API pass results incorrect.");Assert(last.CloudErrorsThisPass==1&&last.Deferred==1&&last.OtherErrors==1,"Timeout, HTTP error or integrity failure missing.");Assert(downloads.Peak<=ApiEngine.DownloadConcurrency&&downloads.Peak>1,"Download concurrency incorrect.");
             System.Collections.Generic.List<BrowserFile> savedBrowser=BrowserCatalog.Load(data,true,folder,"disk:/");Assert(savedBrowser.Count==7&&savedBrowser.Count(f=>f.Ready)==4,"Offline dashboard ignored saved list/history.");Assert(savedBrowser.Single(f=>f.Path=="Case.JPG").LocalPath!=savedBrowser.Single(f=>f.Path=="case.JPG").LocalPath,"Dashboard mixed case-colliding download locations.");
             Assert(File.Exists(Path.Combine(folder,"a","same.jpg"))&&File.Exists(Path.Combine(folder,"b","same.jpg")),"Same-name files collided.");Assert(Directory.GetFiles(folder,"*",SearchOption.AllDirectories).Count(x=>Path.GetFileName(x).StartsWith("case",StringComparison.OrdinalIgnoreCase)&&!x.EndsWith(".ydr-part"))==2,"Case-sensitive cloud files collided.");
             Assert(!File.Exists(Path.Combine(folder,"bad.jpg")),"Corrupt download promoted to final file.");
@@ -156,7 +177,7 @@ namespace DiskRescue {
             verifiedRecord.localWriteTicks=verifiedInfo.LastWriteTimeUtc.Ticks+1;Assert(!ApiEngine.PreviouslyVerified(verifiedFile,verifiedRecord),"Changed local timestamp bypassed verification.");
             verifiedRecord.localWriteTicks=verifiedInfo.LastWriteTimeUtc.Ticks;verifiedRecord.modified="v2";Assert(!ApiEngine.PreviouslyVerified(verifiedFile,verifiedRecord),"Changed cloud version bypassed verification.");
             Assert(!File.ReadAllText(Path.Combine(last.Report,"summary.json")).Contains("test-secret"),"Token leaked into report.");
-            engine=new ApiEngine(data,x=>last=x,new ApiMock(),new DownloadMock());engine.Run(s,RunMode.ZeroDownload);Assert(last.Selected==2&&last.Processed==2,"Incomplete retry did not select timeout and integrity failure.");
+            engine=new ApiEngine(data,x=>last=x,new ApiMock(),new DownloadMock());engine.Run(s,RunMode.ZeroDownload);Assert(last.Selected==1&&last.Processed==1,"Incomplete retry did not exclude a blocked integrity failure.");
             engine=new ApiEngine(data,x=>last=x,new ApiMock(),new DownloadMock());engine.Run(s,RunMode.Continue);Assert(last.Skipped==7&&last.Selected==0&&last.ProgressChecked==7&&last.ProgressTotal==7,"Continue repeated previous attempts or reset cumulative progress.");
             using(HistoryStore history=new HistoryStore(data,folder,"case-test")){DiskFile a=new DiskFile{Path="disk:/A.jpg",Length=1,Modified="v"},b=new DiskFile{Path="disk:/a.jpg",Length=1,Modified="v"};history.SaveApi(a,"success","");history.SaveApi(b,"timeout","");Assert(history.Records.Count==2,"API history lost case-sensitive identity.");}
             engine=new ApiEngine(data,x=>last=x,new ApiMock{Unauthorized=true},new DownloadMock());engine.Run(s,RunMode.Continue);engine.Stop();Assert(last.Phase=="error"&&last.Error.Contains("token"),"Invalid OAuth was not reported.");
@@ -173,10 +194,7 @@ namespace DiskRescue {
             s.UseCachedApiList=false;mock=new ApiMock{SpecialNames=true};engine=new ApiEngine(cacheData,x=>last=x,mock,new DownloadMock());engine.Run(s,RunMode.Continue);Assert(last.Total==9&&mock.ListingCalls==1,"Refresh did not discover new files.");
             s.UseCachedApiList=true;mock=new ApiMock{Account="another-account"};engine=new ApiEngine(cacheData,x=>last=x,mock,new DownloadMock());engine.Run(s,RunMode.Continue);Assert(mock.ListingCalls==1&&last.Total==7,"Different account reused cached inventory.");
             s.RemoteFolder="disk:/Another";mock=new ApiMock();engine=new ApiEngine(cacheData,x=>last=x,mock,new DownloadMock());engine.Run(s,RunMode.Continue);Assert(mock.ListingCalls==1,"Different cloud folder reused cached inventory.");
-            string resumeData=Path.Combine(root,"resume-history");s.ApiFolder=Path.Combine(root,"resume-downloads");Directory.CreateDirectory(s.ApiFolder);s.RemoteFolder="disk:/";for(int i=0;i<1001;i++)File.WriteAllBytes(Path.Combine(s.ApiFolder,"f"+i+".txt"),new byte[0]);
-            PagedMock page=new PagedMock();engine=new ApiEngine(resumeData,x=>last=x,page,new DownloadMock());page.Interrupt=()=>engine.Stop();engine.Run(s,RunMode.Continue);Assert(last.Phase=="stopped"&&last.Total==1000,"Partial scan was not checkpointed.");
-            string checkpoint=Directory.GetFiles(resumeData,"inventory.json",SearchOption.AllDirectories).Single();ApiEngine.InventoryCache saved=new JavaScriptSerializer{MaxJsonLength=128*1024*1024}.Deserialize<ApiEngine.InventoryCache>(File.ReadAllText(checkpoint));Assert(!saved.Complete&&saved.NextOffset==1000,"Scan checkpoint lost pagination offset.");
-            page=new PagedMock();engine=new ApiEngine(resumeData,x=>last=x,page,new DownloadMock());engine.Run(s,RunMode.Continue);Assert(last.Phase=="completed"&&last.Total==1001&&!page.RequestedFirstPage,"Scan restarted instead of resuming.");
+            ScanResumeTests(root);
         }
     }
 }

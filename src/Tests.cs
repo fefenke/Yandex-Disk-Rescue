@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -11,6 +11,8 @@ namespace DiskRescue {
             string result=Path.Combine(Path.GetDirectoryName(typeof(Tests).Assembly.Location),"self-test-results.txt");
             try{
                 PassTransitionTests.Run(root);
+                SafeDownloadTests.Run(root);
+                RangeMapTests.Run(root);
                 DurablePartialTests.Run(root);
                 SignedLinkTests.Run(root);
                 ApiPacerTests.Run(root);
@@ -89,7 +91,7 @@ namespace DiskRescue {
                 string before=File.ReadAllText(a);engine.Run(new Settings{Folder=root,RestartClient=false},RunMode.All);Assert(File.ReadAllText(a)==before,"Recheck changed local content.");
                 string missing=Path.Combine(root,"missing");engine.Run(new Settings{Folder=missing},RunMode.Continue);Assert(engine.Latest.Phase=="error","Missing folder was not reported.");
                 ApiTests.Run(root);
-                File.WriteAllText(result,"PASS: segmented range downloads, shared connection budget, per-stream idle timeouts and queue exclusion, retained segment resume, torn merge and changed-version recovery, unsupported/invalid ranges, corruption and Stop; native checks plus independent 7-link / 20-download pipeline, separate timeout budgets, queue exclusion, cancellation and history, API authentication, path safety, resume/MD5 integrity, retry filters, defaults and encrypted token storage.",Encoding.UTF8);
+                File.WriteAllText(result,"PASS: safe copy preservation and recovery, MD5/SHA256 priority, missing-hash evidence, version failure ledger, manual retry and deduplication, single-payload range maps and process-kill recovery; segmented range downloads, shared connection budget, per-stream idle timeouts and queue exclusion, retained segment resume, torn merge and changed-version recovery, unsupported/invalid ranges, corruption and Stop; native checks plus independent 7-link / 20-download pipeline, separate timeout budgets, queue exclusion, cancellation and history, API authentication, path safety, resume/MD5 integrity, retry filters, defaults and encrypted token storage.",Encoding.UTF8);
                 return 0;
             }catch(Exception ex){File.WriteAllText(result,"FAIL: "+ex.ToString(),Encoding.UTF8);return 1;}
         }

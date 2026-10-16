@@ -7,7 +7,7 @@ using System.Text;
 using System.Web.Script.Serialization;
 
 namespace DiskRescue {
-    public enum RunMode { Continue, All, CloudErrors, ZeroDownload, ErrorsAndZero, NewFiles, ProblemFiles, Remaining, PartialFiles }
+    public enum RunMode { Continue, All, CloudErrors, ZeroDownload, ErrorsAndZero, NewFiles, ProblemFiles, Remaining, PartialFiles, IntegrityFailures }
     public sealed class Settings {
         public string Folder = "";
         public string Language = "ru";
@@ -37,6 +37,7 @@ namespace DiskRescue {
         }
     }
     public sealed class HistoryRecord {
+        public string verification, actualHash, expectedHash, preservedPath;
         public string path, modified, status, message, time;
         public long length;
         public long? downloadedBytes;
@@ -46,7 +47,7 @@ namespace DiskRescue {
         public string Path, Folder, Category, Modified, Status = "pending", Message = "";
         public long Length;
         public long? DownloadedBytes;
-        public string Md5 = "", Destination = "";
+        public string Md5 = "", Sha256 = "", Destination = "",Verification="",ActualHash="",PreservedPath="";
         public bool Local;
         public bool ResumeEligible;
     }
@@ -109,8 +110,11 @@ namespace DiskRescue {
             return record.status;
         }
         public static bool Select(DiskFile file, HistoryRecord old, RunMode mode) {
+            if(file.Status=="integrity_failed")return mode==RunMode.IntegrityFailures;
             bool same = SameVersion(file, old);
             string status = same ? NormalizeStatus(old) : "pending";
+            if(mode==RunMode.IntegrityFailures)return status=="integrity_failed";
+            if(status=="integrity_failed")return false;
             if (mode == RunMode.All) return true;
             if (mode == RunMode.Remaining) return !file.Local;
             if (mode == RunMode.PartialFiles) return !file.Local && HasPartialData(file.Destination);
@@ -125,6 +129,7 @@ namespace DiskRescue {
         }
         public static bool HasPartialData(string destination){
             if(String.IsNullOrEmpty(destination))return false;
+            if(RangeMap.Progress(destination)>0)return true;
             if(File.Exists(destination+".ydr-part")&&new FileInfo(destination+".ydr-part").Length>0)return true;
             string folder=destination+".ydr-segments";
             return Directory.Exists(folder)&&Enumerable.Range(0,8).Any(i=>File.Exists(Path.Combine(folder,i+".part"))&&new FileInfo(Path.Combine(folder,i+".part")).Length>0);
@@ -172,7 +177,7 @@ namespace DiskRescue {
         public void Dispose() { writer.Dispose(); }
         public void SaveApi(DiskFile file, string status, string message) {
             file.Status=status;file.Message=message??"";
-            HistoryRecord record=new HistoryRecord{path=file.Path,length=file.Length,modified=file.Modified,status=status,message=file.Message,time=DateTimeOffset.Now.ToString("o"),downloadedBytes=file.DownloadedBytes};
+            HistoryRecord record=new HistoryRecord{path=file.Path,length=file.Length,modified=file.Modified,status=status,message=file.Message,time=DateTimeOffset.Now.ToString("o"),downloadedBytes=file.DownloadedBytes,verification=file.Verification,actualHash=file.ActualHash,expectedHash=!String.IsNullOrEmpty(file.Md5)?file.Md5:file.Sha256,preservedPath=file.PreservedPath};
             if(FileRules.Success(status)&&!String.IsNullOrEmpty(file.Destination)){FileInfo local=new FileInfo(file.Destination);if(local.Exists&&local.Length==file.Length)record.localWriteTicks=local.LastWriteTimeUtc.Ticks;}
             writer.WriteLine();writer.WriteLine(json.Serialize(record));Records[file.Path]=record;
         }
@@ -182,8 +187,8 @@ namespace DiskRescue {
         public static void Write(string directory, string root, IList<DiskFile> files, Snapshot snapshot) {
             Directory.CreateDirectory(directory);
             using (StreamWriter output = new StreamWriter(System.IO.Path.Combine(directory, "files.csv"), false, new UTF8Encoding(true))) {
-                output.WriteLine("Path;Folder;Category;Status;Bytes;Message");
-                foreach (DiskFile f in files) output.WriteLine(String.Join(";", new string[] { Csv(f.Path), Csv(f.Folder), Csv(f.Category), Csv(f.Status), Csv(f.Length), Csv(f.Message) }));
+                output.WriteLine("Path;Folder;Category;Status;Bytes;Message;Verification;ExpectedHash;ActualHash;PreservedPath");
+                foreach (DiskFile f in files) output.WriteLine(String.Join(";", new string[] { Csv(f.Path), Csv(f.Folder), Csv(f.Category), Csv(f.Status), Csv(f.Length), Csv(f.Message), Csv(f.Verification), Csv(String.IsNullOrEmpty(f.Md5)?f.Sha256:f.Md5), Csv(f.ActualHash), Csv(f.PreservedPath) }));
             }
             using (StreamWriter output = new StreamWriter(System.IO.Path.Combine(directory, "categories.csv"), false, new UTF8Encoding(true))) {
                 output.WriteLine("Category;Total;DownloadedTotal;DownloadedThisRun;Remaining;IncompleteDownload;SyncErrors");

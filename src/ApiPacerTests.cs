@@ -26,6 +26,8 @@ namespace DiskRescue {
                     if(Interlocked.Increment(ref Links)==FailLink){FailureAt=now;HttpResponseMessage limited=new HttpResponseMessage((HttpStatusCode)429);limited.Headers.RetryAfter=new RetryConditionHeaderValue(TimeSpan.FromSeconds(RetrySeconds));Limited.Set();return Task.FromResult(limited);}
                     return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("{\"href\":\"https://download.example/file\"}")});
                 }
+                string requested=Uri.UnescapeDataString(request.RequestUri.Query.Split('&')[0].TrimStart('?'));
+                if(request.RequestUri.AbsolutePath.EndsWith("/resources")&&requested.StartsWith("path=disk:/pacer-",StringComparison.Ordinal))return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(new JavaScriptSerializer().Serialize(new{path=requested.Substring(5),type="file",size=4,md5="098f6bcd4621d373cade4e832627b4f6",modified="v"}))});
                 string json=request.RequestUri.AbsolutePath.EndsWith("/resources")?new JavaScriptSerializer().Serialize(new{type="dir",_embedded=new{items=Enumerable.Range(0,Files).Select(i=>new{path="disk:/pacer-"+i+".txt",type="file",size=4,md5="098f6bcd4621d373cade4e832627b4f6",modified="v"}).ToArray()}}):"{\"user\":{\"uid\":\"pacer-account\"}}";
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(json)});
             }
@@ -125,7 +127,7 @@ namespace DiskRescue {
             Assert(shared.Status().CooldownSeconds>0,"A completed pass discarded an active server cooldown.");
             Api secondApi=new Api{Files=1,FailLink=0,Clock=firstApi.Clock};
             new ApiEngine(Path.Combine(root,"pacer-shared-data"),x=>last=x,secondApi,new Download(),shared).Run(settings,RunMode.Remaining);
-            Assert(secondApi.FirstAt-firstApi.FailureAt>=950&&last.Downloaded==1,"The next pass bypassed shared API cooldown.");
+            Assert(secondApi.FirstAt-firstApi.FailureAt>=950&&last.Downloaded==1,"The next pass bypassed shared API cooldown: elapsed="+(secondApi.FirstAt-firstApi.FailureAt)+", downloaded="+last.Downloaded+", error="+last.Error+", events="+String.Join(" | ",last.Events));
             settings.ApiFolder=Path.Combine(root,"pacer-independent-files");
             Api slowApi=new Api{FailLink=2};Download slowDownload=new Download{Slow=true};bool receivedDuringPause=false;
             new ApiEngine(Path.Combine(root,"pacer-independent-data"),x=>{last=x;if(x.ApiCooldownSeconds>0&&slowDownload.Bytes>0)receivedDuringPause=true;},slowApi,slowDownload).Run(settings,RunMode.All);

@@ -14,9 +14,11 @@
 A free Windows app that downloads available files from Yandex Disk, retains progress and retries failed transfers. Uses Yandex Disk API technology or the official desktop client. An independent, unofficial project unaffiliated with Yandex.
 
 > [!IMPORTANT]
-> Only the regular **Files** section is supported. **Unlimited photo/video auto-upload is neither counted nor downloaded.** The app cannot repair unavailable cloud originals or guarantee every download.
+> Only the regular **Files** section is supported. For photos stored only in unlimited auto-upload, use the Yandex Disk website to copy missing items into an ordinary folder, then refresh the app inventory. See the guide for quota and privacy details. The app cannot repair unavailable cloud originals or guarantee every download.
 
 ## Download
+
+Current-source documentation includes next-release changes; the published 1.0.4 ZIP does not yet include single-payload maps and automatic copy preservation.
 
 [![Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.4/YandexDiskRescue-win-x64.zip)
 
@@ -24,11 +26,10 @@ A free Windows app that downloads available files from Yandex Disk, retains prog
 
 Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, portable. Usually choose x64 for 64-bit Windows. x86 supports 32-bit Windows and also runs on x64.
 
-Extract the **entire** ZIP to a permanent folder and run **Start Yandex Disk Rescue.cmd**. Settings, encrypted token and history live in `data` beside the app. Keep it during updates and never publish it.
+Extract the **entire** ZIP to a permanent folder and run **YandexDiskRescue.exe**. Settings, encrypted token and history live in `data` beside the app. Keep it during updates and never publish it.
 
 ![File and folder progress, resume and status](assets/preview-api-en.png)
 
-*The screenshot contains demonstration data, not personal files.*
 
 ## Getting started
 
@@ -62,7 +63,7 @@ Alternatively, use the official desktop client: wait for synchronization and sel
 
 Queueing and API pacing do not consume network timeout budgets. Continuous passes are enabled by default. More streams are not always faster, especially on HDDs. See the [guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) for examples.
 
-Keep `.ydr-part`, `.ydr-segments` folders and `.ydr-state` journals until completion. Parts still use separate files, and merging needs additional space. A changed cloud version can require downloading the file again.
+Streams write into one `.ydr-download` payload with confirmed extents in `.ydr-map`. Keep both until completion. Legacy parts migrate after map validation. NTFS needs no final merge; drives without sparse support retain the legacy format.
 
 ## Validation and limitations
 
@@ -70,7 +71,7 @@ Full x64/x86 self-tests cover timeouts, queueing, Stop, byte ranges, MD5, versio
 
 One local 2 GiB write test took 77.9 s without checkpoints and 84.9 s with them: +7.0 s, about 9%. This synthetic test under a particular workload does not predict internet speed or other HDD performance.
 
-Without cloud MD5, size-only verification is weaker. Local SHA-256 protects saved extents but does not prove equality with the cloud original. An existing file failing verification may be replaced after a new copy downloads successfully. Listing errors appear in the log and prevent a completeness guarantee. These limitations remain in 1.0.4.
+Verification checks size, then MD5, or SHA-256 only if MD5 is absent. Missing both hashes is explicitly marked as size-only evidence. Existing files are archived before replacement. Bad new copies are preserved and their cloud version is blocked from automatic retries even if the artifact is deleted. Explicit retry has its own mode; changed cloud versions remain eligible. See the guide.
 
 ## Updates, builds and support
 
@@ -79,3 +80,10 @@ In-app updates validate the architecture-specific ZIP against GitHub SHA-256 and
 Build: `powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 -Package -Platform x64`. Substitute x86 as needed. Checks: `powershell -NoProfile -ExecutionPolicy Bypass -File tests/run-tests.ps1`. Requires Windows and .NET Framework 4.7.1+. Self-tests use synthetic network responses.
 
 [All releases](https://github.com/fefenke/Yandex-Disk-Rescue/releases) · [Report an issue](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [MIT license](LICENSE) · [Yandex Disk API terms](https://yandex.ru/legal/disk_api/ru/)
+
+
+## Design and privacy
+
+Separate link/download queues keep other files moving when a server stalls. Network idle timeouts exclude local writes; connections, streams, pacing and timeouts can be adjusted for the network and HDD. More streams are not always faster. Preserved copies, extent maps and cloud checksums address different failure modes. See [design decisions](DESIGN-DECISIONS.md) and the [test matrix](TESTING.md).
+
+API downloads do not require public links. Do not publish private data or paste links/tokens into untrusted sites: recipients may copy or share the content. The source is open; downloads/history run locally, with Yandex requests and GitHub update checks. No project-operated relay receives your files. Windows DPAPI protects the saved token for the current Windows user, not downloaded files or reports. It does not defeat malware running as that user. After backup, revoke the application's access in [Yandex ID](https://id.yandex.ru/security), then clear the local token; local deletion alone does not revoke remote access.
