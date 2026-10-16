@@ -119,7 +119,7 @@ jobs:
           $releasesJson = & gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName,name,isDraft
           if ($LASTEXITCODE -ne 0) { throw 'Cannot read release titles.' }
           foreach ($release in ($releasesJson | ConvertFrom-Json)) {
-            if ($release.isDraft -or $release.tagName -notmatch '^v?(\d+\.\d+\.\d+)$') { continue }
+            if ($release.tagName -notmatch '^v?(\d+\.\d+\.\d+)$') { continue }
             $shortTitle = 'YDR ' + $Matches[1]
             if ($release.name -eq $shortTitle) { continue }
             & gh release edit $release.tagName --repo $env:GITHUB_REPOSITORY --title $shortTitle
