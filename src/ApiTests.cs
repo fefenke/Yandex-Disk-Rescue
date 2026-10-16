@@ -109,17 +109,19 @@ namespace DiskRescue {
                 try{if(Started!=null)Started();await Task.Delay(DelayMs,cancellation);return new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("test")};}finally{Interlocked.Decrement(ref Active);}
             }
         }
-        static void PipelineTests(string root){
+        public static void PipelineTests(string root){
+            // Each 1.2-second stage fits its own 2-second budget; their sum does not.
+            // Leave scheduling margin on shared CI machines without merging budgets.
             for(int variant=0;variant<4;variant++){
                 string folder=Path.Combine(root,"pipeline-"+variant),data=Path.Combine(root,"pipeline-data-"+variant);Directory.CreateDirectory(folder);
-                PipelineApiMock api=new PipelineApiMock{DelayMs=variant==4?2000:variant==0?850:200};PipelineDownloadMock downloads=new PipelineDownloadMock{DelayMs=variant==0||variant==3?350:1800};
+                PipelineApiMock api=new PipelineApiMock{DelayMs=variant==4?2000:variant==0?1200:200};PipelineDownloadMock downloads=new PipelineDownloadMock{DelayMs=variant==0?1200:variant==3?350:1800};
                 Snapshot last=null;ApiEngine engine=new ApiEngine(data,x=>last=x,api,downloads);if(variant==2)downloads.Started=engine.Stop;
-                engine.Run(new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",LinkTimeoutSeconds=variant==4?3:1,IdleSeconds=variant==0?1:3,ApiLinkConcurrency=variant==4?30:variant==3?2:7,ApiDownloadConcurrency=variant==4?30:variant==3?3:20},RunMode.Remaining);
+                engine.Run(new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",LinkTimeoutSeconds=variant==4?3:variant==0?2:1,IdleSeconds=variant==0?2:3,ApiLinkConcurrency=variant==4?30:variant==3?2:7,ApiDownloadConcurrency=variant==4?30:variant==3?3:20},RunMode.Remaining);
                 Assert(api.Peak<=(variant==4?30:variant==3?2:ApiEngine.LinkConcurrency)&&api.Peak>1&&downloads.Peak<=(variant==4?30:variant==3?3:ApiEngine.DownloadConcurrency),"Configured pipeline limits exceeded.");
                 if(variant==4)Assert(api.Peak>20&&downloads.Peak>20,"30 + 30 settings remained capped at the old hardcoded limits.");
                 Assert(api.Active==0&&downloads.Active==0,"Stop or completion left requests running.");
                 if(variant==2){Assert(last.Phase=="stopped"&&last.Finished,"Pipeline Stop did not finish cleanly.");using(HistoryStore history=new HistoryStore(data,folder,"pipeline-account|disk:/|"+folder.ToUpperInvariant()))Assert(history.Records.Count>0&&history.Records.Values.All(x=>x.status=="cancelled_user"),"Stopped pipeline lost or misclassified history.");}
-                else{Assert(last.Phase=="completed"&&last.Downloaded==30&&last.Processed==30,"Queue wait consumed API timeout, download reused API budget, or pipeline lost files.");Assert(Directory.GetFiles(Path.Combine(folder,"pipeline")).Length==30,"Pipeline left missing or partial files.");if(variant==1)Assert(downloads.Peak>ApiEngine.LinkConcurrency,"Link and download queues did not run independently.");}
+                else{Assert(last.Phase=="completed"&&last.Downloaded==30&&last.Processed==30,"Pipeline variant "+variant+": phase="+last.Phase+", downloaded="+last.Downloaded+", processed="+last.Processed+"; "+String.Join(", ",last.Catalog.Where(f=>!f.Ready).Take(5).Select(f=>f.Status))+". Queue wait consumed API timeout, download reused API budget, or pipeline lost files.");Assert(Directory.GetFiles(Path.Combine(folder,"pipeline")).Length==30,"Pipeline left missing or partial files.");if(variant==1)Assert(downloads.Peak>ApiEngine.LinkConcurrency,"Link and download queues did not run independently.");}
             }
         }
         public static void ScanResumeTests(string root){
