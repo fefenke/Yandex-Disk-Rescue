@@ -162,6 +162,11 @@ namespace DiskRescue {
             FileStream stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
             writer = new StreamWriter(stream, new UTF8Encoding(false));
             writer.AutoFlush = true;
+            RefreshPreservedPaths();
+        }
+        internal void RefreshPreservedPaths(){
+            ArchiveNameMigration.Rename move=ArchiveNameMigration.Load(System.IO.Path.Combine(DirectoryPath,"preservation"));if(move==null)return;
+            foreach(HistoryRecord record in Records.Values){string path=ArchiveNameMigration.Resolve(record.preservedPath,move);if(path==record.preservedPath)continue;record.preservedPath=path;writer.WriteLine();writer.WriteLine(json.Serialize(record));dirty=true;}
         }
         internal static void ReadRecords(Dictionary<string,HistoryRecord> records,IEnumerable<string> lines,CancellationToken token){
             var json=new JavaScriptSerializer();token.ThrowIfCancellationRequested();

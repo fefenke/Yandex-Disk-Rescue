@@ -1,13 +1,13 @@
-﻿<details>
-<summary>Изменения 1.0.9 · RU / EN</summary>
+<details>
+<summary>Изменения 1.1.0 · RU / EN</summary>
 
-- Исправлена докачка после переноса программы и восстановление совместимых сохранённых частей.
-- Добавлены автоматическое сокращение истории и ограничение старых проходов и отчётов.
+- Ускорена подготовка повторных проходов.
+- Добавлено обновление отклонённой ссылки в текущем проходе с сохранением скачанных частей.
 
 ---
 
-- Fixed resume after moving the app and recovery of compatible archived parts.
-- Added automatic history compaction and retention limits for passes and reports.
+- Faster repeat-pass preparation.
+- Rejected download links can refresh within the current pass while retaining completed ranges.
 
 </details>
 

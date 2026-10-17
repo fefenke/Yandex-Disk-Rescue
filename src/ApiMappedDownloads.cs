@@ -92,7 +92,7 @@ namespace DiskRescue {
                     }
                     return new Result{Status="success"};
                 }catch(OperationCanceledException){if(!stop.IsCancellationRequested&&received==0)InvalidateLink(job);return new Result{Status=stop.IsCancellationRequested?"cancelled_user":"timeout",Message=stop.IsCancellationRequested?"Stopped by user.":"Mapped download idle timeout.",RetryTransfer=!stop.IsCancellationRequested&&received>0};}
-                catch(ApiException ex){InvalidateLink(job);return new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="Download HTTP "+ex.Code};}
+                catch(ApiException ex){RejectLink(job,ex.Code);return new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="Download HTTP "+ex.Code};}
                 catch(Exception ex){if(received==0&&(ex is DownloadReadException||ex is HttpRequestException))InvalidateLink(job);return new Result{Status=stop.IsCancellationRequested?"cancelled_user":idle.IsCancellationRequested?"timeout":"failed",Message="Mapped download failed: "+ex.GetType().Name,RetryTransfer=!stop.IsCancellationRequested&&received>0&&(ex is DownloadReadException||ex is HttpRequestException)};}
                 finally{if(reset)map.Reset(index);if(acquired)downloadSlots.Release();if(supported!=null)supported.TrySetResult(false);}
             }

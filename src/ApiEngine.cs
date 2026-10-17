@@ -45,7 +45,7 @@ namespace DiskRescue {
         RunMode runMode;
         bool queueReady;
         int checkFilesChecked;long checkFileBytes,checkFileLength;DateTime checkFileStarted;
-        sealed class Job { public DiskFile File; public HistoryRecord Prior; public Task<Result> Task; public Task<LinkResult> LinkTask; public Uri Link; public long Bytes; public RangeMap Map;public SignedLinkCache.Lease LinkLease; public int LinkConfirmed; }
+        sealed class Job { public DiskFile File; public HistoryRecord Prior; public Task<Result> Task; public Task<LinkResult> LinkTask; public Uri Link; public long Bytes; public RangeMap Map;public SignedLinkCache.Lease LinkLease; public int LinkConfirmed,LinkRejected; }
         sealed class LinkResult { public Uri Link; public Result Completed; }
         sealed class Result { public string Status,Message; public long Bytes; public bool RetryTransfer; }
         public ApiEngine(string data,Action<Snapshot> publish){this.data=data;this.publish=publish;}
@@ -54,6 +54,7 @@ namespace DiskRescue {
         internal ApiEngine(string data,Action<Snapshot> publish,HttpMessageHandler apiHandler,HttpMessageHandler fileHandler,ApiPacer apiPacer,SignedLinkCache linkCache):this(data,publish,apiHandler,fileHandler,apiPacer){this.linkCache=linkCache;}
         void ConfirmLink(Job job){if(Interlocked.CompareExchange(ref job.LinkConfirmed,1,0)==0)linkCache.Confirm(job.LinkLease);}
         void InvalidateLink(Job job){linkCache.Invalidate(job.LinkLease);}
+        void RejectLink(Job job,int code){InvalidateLink(job);if(code==401||code==403||code==410)Interlocked.Exchange(ref job.LinkRejected,1);}
         public void Stop(){try{stop.Cancel();}catch(ObjectDisposedException){ /* Run has already finished. */ }}
         static string Text(IDictionary<string,object> o,string key){object v;return o.TryGetValue(key,out v)?Convert.ToString(v):"";}
         static long RequiredSize(IDictionary<string,object> entry){object value;if(!entry.TryGetValue("size",out value)||!(value is int||value is long))throw new IOException("Missing or invalid cloud file size.");long length=Convert.ToInt64(value);if(length<0)throw new IOException("Invalid cloud file size.");return length;}
@@ -292,7 +293,7 @@ namespace DiskRescue {
                     if(new FileInfo(partial).Length<job.File.Length){if(received==0)InvalidateLink(job);return new Result{Status="failed",Message="Incomplete download response; received data retained.",Bytes=job.Bytes,RetryTransfer=received>0};}
                     return FinishPayload(job,partial);
                 }catch(OperationCanceledException){if(!stop.IsCancellationRequested&&received==0)InvalidateLink(job);return new Result{Status=stop.IsCancellationRequested?"cancelled_user":"timeout",Message=stop.IsCancellationRequested?"Stopped by user.":"No progress during the idle timeout.",Bytes=job.Bytes,RetryTransfer=!stop.IsCancellationRequested&&received>0};}
-                catch(ApiException ex){InvalidateLink(job);return new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="HTTP "+ex.Code,Bytes=job.Bytes};}
+                catch(ApiException ex){RejectLink(job,ex.Code);return new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="HTTP "+ex.Code,Bytes=job.Bytes};}
                 catch(Exception ex){if(!stop.IsCancellationRequested&&received==0&&(idle.IsCancellationRequested||ex is DownloadReadException||ex is HttpRequestException))InvalidateLink(job);return new Result{Status=stop.IsCancellationRequested?"cancelled_user":idle.IsCancellationRequested?"timeout":"failed",Message=stop.IsCancellationRequested?"Stopped by user.":idle.IsCancellationRequested?"No progress during the idle timeout.":"Download failed: "+ex.GetType().Name+" (0x"+ex.HResult.ToString("X8")+")",Bytes=job.Bytes,RetryTransfer=!stop.IsCancellationRequested&&received>0&&(ex is DownloadReadException||ex is HttpRequestException)};}
             }
         }
@@ -320,6 +321,7 @@ namespace DiskRescue {
                 Inventory(account,remote);
                 foreach(DiskFile entry in files){stop.Token.ThrowIfCancellationRequested();string occupied=entry.Destination;while(!String.IsNullOrEmpty(occupied)){occupiedDestinations.Add(occupied);occupied=Path.GetDirectoryName(occupied);}}
                 preserver=new FilePreserver(history.DirectoryPath,settings.ApiFolder,files.Select(f=>f.Destination),stop.Token);
+                history.RefreshPreservedPaths();
                 RelocatedArchiveRepair.Run(history.DirectoryPath,settings.ApiFolder,files,stop.Token,CanRecoverArchived);
                 foreach(DiskFile f in files){stop.Token.ThrowIfCancellationRequested();current=f.Path;checkFileBytes=checkFileLength=0;checkFileStarted=DateTime.UtcNow;Snapshot("checking_local","",false);HistoryRecord old=history.Find(f.Path);bool same=FileRules.SameVersion(f,old);f.ResumeEligible=same&&CloudIntegrity.HasHash(f);if(same){f.Status=FileRules.NormalizeStatus(old);f.DownloadedBytes=old.downloadedBytes;}
                     try{preserver.CheckDestination(f.Destination);}catch(IOException){f.Local=false;f.Status="failed";f.Message="Destination conflicts with preserved files or pending recovery.";checkFilesChecked++;continue;}

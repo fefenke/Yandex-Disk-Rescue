@@ -6,10 +6,10 @@
 ![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.0.9](https://img.shields.io/badge/1.0.9-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.0.9)
+[![1.1.0](https://img.shields.io/badge/1.1.0-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.1.0)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-[Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [1.0.9 changes](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
+[Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [1.1.0 changes](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
 
 A free Windows app that downloads available files from Yandex Disk, retains progress and retries failed transfers. Uses Yandex Disk API technology. An independent, unofficial project unaffiliated with Yandex.
 
@@ -20,9 +20,9 @@ A free Windows app that downloads available files from Yandex Disk, retains prog
 
 ## Download
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.9/YandexDiskRescue-win-x64.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_bit-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.1.0/YandexDiskRescue-win-x64.zip)
 
-[![Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.0.9/YandexDiskRescue-win-x86.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_bit-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.1.0/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, portable. Usually choose x64 for 64-bit Windows. x86 supports 32-bit Windows and also runs on x64.
 
@@ -39,16 +39,16 @@ Extract the **entire** ZIP to a permanent folder and run **YandexDiskRescue.exe*
 4. Keep the saved-list option, choose **Retry all files not downloaded**, and start a pass. A missing list is fetched automatically.
 5. Refresh the list after cloud changes; rescanning before every retry is unnecessary.
 
-## New in 1.0.9
+## New in 1.1.0
 
-- Fixed resume after moving the app folder; compatible archived parts can be recovered.
-- Automatic retention keeps latest file states, 1,000 passes and 50 detailed reports.
+- Faster repeat-pass preparation removes redundant per-file service-configuration reads.
+- Rejected download links can refresh once within the current pass, preserving completed ranges.
 
 How downloading works:
 
 - **Retries after progress.** Up to two extra attempts after new bytes and a network interruption, using the same link and saved offset. Retries rejoin the connection queue. Idle timeout is the selected value +2 seconds for both retries, for example 3 → 5 → 5. No quick retries after zero new bytes, HTTP/MD5 failures or disk errors.
 - **API rate handling.** A shared pacer honors `Retry-After` for 429, 408 and 5xx, reduces request frequency and gradually recovers. Ready-link downloads continue.
-- **Links across passes.** Links proven by data remain in memory within one session. Rejection or no new bytes triggers fresh link acquisition on the next pass; no arbitrary expiry time is assumed.
+- **Links across passes.** Links proven by data remain in memory within one session. HTTP 401/403/410 can trigger one shared refresh after a cloud-version check; remaining ranges resume immediately. Other failures remain for the next matching pass. No arbitrary expiry time is assumed.
 - **Fresh version checks before resuming.** Query metadata for the individual started file, rather than rescanning the Disk. Failed checks preserve saved parts.
 - **Crash recovery.** Each stream checkpoints every 32 MiB or 15 seconds while receiving data, and on attempt completion. SHA-256 journal checks discard corrupt or unconfirmed tails. Final size and available cloud MD5 are checked before promotion.
 

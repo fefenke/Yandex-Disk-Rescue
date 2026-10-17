@@ -57,6 +57,24 @@ namespace DiskRescue {
             return bytes;
         }
         async Task<Result> Download(Job job){
+            Result result=await DownloadCurrentLink(job).ConfigureAwait(false);
+            if(stop.IsCancellationRequested||Interlocked.CompareExchange(ref job.LinkRejected,0,0)==0||result.Status=="success"||result.Status=="integrity_failed")return result;
+            // All old-link readers and writers have finished. Refresh once for
+            // the whole file, without holding a download connection slot.
+            try{
+                var remote=await Json("/resources?path="+Uri.EscapeDataString(job.File.Path)+"&fields=path,type,size,modified,md5,sha256",stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
+                string md5=Text(remote,"md5"),sha=Text(remote,"sha256");CloudIntegrity.Validate(md5,32);CloudIntegrity.Validate(sha,64);
+                DiskFile fresh=new DiskFile{Path=Text(remote,"path"),Length=RequiredSize(remote),Md5=md5,Sha256=sha,Modified=CloudModified(Text(remote,"modified"),md5,sha)};
+                if(Text(remote,"type")!="file"||String.IsNullOrEmpty(Text(remote,"modified"))||CloudIntegrity.Version(fresh)!=CloudIntegrity.Version(job.File))return new Result{Status="failed",Message="Cloud version changed; saved ranges retained for the next pass.",Bytes=job.Bytes};
+                var response=await Json("/resources/download?path="+Uri.EscapeDataString(job.File.Path),stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
+                Uri uri;if(!Uri.TryCreate(Text(response,"href"),UriKind.Absolute,out uri)||uri.Scheme!="https"||!String.IsNullOrEmpty(uri.UserInfo))throw new IOException("Invalid HTTPS download link.");
+                job.LinkLease=linkCache.Offer(history.DirectoryPath+"\n"+job.File.Path,SegmentIdentity(job.File),uri);job.Link=uri;job.LinkConfirmed=0;job.LinkRejected=0;
+                return await DownloadCurrentLink(job).ConfigureAwait(false);
+            }catch(OperationCanceledException){return new Result{Status=stop.IsCancellationRequested?"cancelled_user":"timeout",Message="Link refresh interrupted; saved ranges retained.",Bytes=job.Bytes};}
+            catch(ApiException ex){return new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="Link refresh HTTP "+ex.Code,Bytes=job.Bytes};}
+            catch(Exception ex){return new Result{Status=stop.IsCancellationRequested?"cancelled_user":"failed",Message="Link refresh failed: "+ex.GetType().Name,Bytes=job.Bytes};}
+        }
+        async Task<Result> DownloadCurrentLink(Job job){
             try{
                 if(job.Map!=null)return await DownloadMapped(job).ConfigureAwait(false);
                 bool segmented=!String.IsNullOrEmpty(job.File.Md5)&&job.File.Length>=Math.Max(64,Math.Min(4096,settings.MultiStreamThresholdMB))*1000000L&&Math.Max(1,Math.Min(8,settings.StreamsPerFile))>1;
@@ -110,7 +128,7 @@ namespace DiskRescue {
                     }
                     return new Result{Status="success"};
                 }catch(OperationCanceledException){if(!stop.IsCancellationRequested&&received==0)InvalidateLink(job);return new Result{Status=stop.IsCancellationRequested?"cancelled_user":"timeout",Message=stop.IsCancellationRequested?"Stopped by user.":"A file segment received no data during the idle timeout.",RetryTransfer=!stop.IsCancellationRequested&&received>0};}
-                catch(ApiException ex){InvalidateLink(job);return new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="Segment HTTP "+ex.Code};}
+                catch(ApiException ex){RejectLink(job,ex.Code);return new Result{Status=ex.Code>=500?"cloud_error":"failed",Message="Segment HTTP "+ex.Code};}
                 catch(Exception ex){if(!stop.IsCancellationRequested&&received==0&&(idle.IsCancellationRequested||ex is DownloadReadException||ex is HttpRequestException))InvalidateLink(job);return new Result{Status=stop.IsCancellationRequested?"cancelled_user":idle.IsCancellationRequested?"timeout":"failed",Message=stop.IsCancellationRequested?"Stopped by user.":idle.IsCancellationRequested?"A file segment received no data during the idle timeout.":"Segment download failed: "+ex.GetType().Name,RetryTransfer=!stop.IsCancellationRequested&&received>0&&(ex is DownloadReadException||ex is HttpRequestException)};}
                 finally{if(acquired)downloadSlots.Release();if(supported!=null)supported.TrySetResult(false);}
             }

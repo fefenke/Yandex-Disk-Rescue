@@ -1,4 +1,4 @@
-﻿# Yandex Disk Rescue 1.0.9 — guide
+﻿# Yandex Disk Rescue 1.1.0 — guide
 
 [Home](README.en.md) · [Русский](GUIDE.md) · [Releases](https://github.com/fefenke/Yandex-Disk-Rescue/releases)
 
@@ -66,7 +66,7 @@ Up to two extra attempts follow new bytes and a network interruption, idle timeo
 
 An attempt with no new bytes ends quick retries; the file remains for the next matching pass. Old saved parts are not new progress. HTTP errors, invalid ranges, MD5 failures, disk write errors and Stop do not trigger quick retries.
 
-A working signed link is retained only in memory within one automatic-pass session after receiving data. No arbitrary lifetime is assumed. Rejection or zero new bytes causes a fresh link request on the next pass, without an immediate refresh chain in the failed attempt. Restarting the app or starting a new manual session creates a new link cache.
+A working signed link is retained only in memory within one automatic-pass session after receiving data. No arbitrary lifetime is assumed. Download-server HTTP 401, 403 or 410 triggers one shared refresh after this file's readers finish and fresh metadata confirms the same cloud version. Remaining ranges resume with the new link; completed ranges are retained. Changed versions, failed checks or refreshes, and another rejected link leave the file for the next matching pass. HTTP 404 and ordinary timeouts do not trigger this refresh. Restarting the app or starting a new manual session creates a new link cache.
 
 ## 7. Continuous passes and API throttling
 
@@ -107,6 +107,8 @@ Saving briefly delays the corresponding worker; other downloads can continue but
 Tests killed a separate process during downloading and merging, corrupted saved data and journal records, and verified final MD5. Physical power removal was not performed. Durability depends on a healthy drive/controller honoring flush commands; absolute protection against hardware failure or ignored flush requests cannot be promised.
 
 ## 11. What file verification proves
+
+If relocation gave this context's former-copy archive a `(YDR-…)` suffix, the ordinary name is restored when available or occupied only by a service marker. Files and history references are retained; an interrupted rename resumes before a later pass. Directories containing other files or conflicting with cloud destinations are not merged automatically.
 
 Size is checked first, followed by cloud MD5, or SHA-256 only when MD5 is absent. SHA-256 never overrides an MD5 mismatch. Ordinary passes may reuse history for unchanged versions, size and local write time, marked as previously checked. Start from the beginning reads and hashes the complete file again.
 
