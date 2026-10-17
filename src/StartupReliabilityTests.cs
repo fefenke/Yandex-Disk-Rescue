@@ -121,6 +121,25 @@ namespace DiskRescue {
                 Assert(settings.UseApi&&method.Items.Count==1&&method.SelectedIndex==0,"Language switch restored retired client mode.");
             }
         }
-        public static void Run(string root){Relocation(root);Interface(root);Size(root);LegacyZero(root);History(root);FastFiles(root);}
+        public static void Compatibility(string root){
+            var serializer=new JavaScriptSerializer();
+            const string savedSettings="{\"UseApi\":false,\"RestartClient\":true,\"Folder\":\"C:\\\\Legacy Disk\",\"Concurrency\":3,\"ApiFolder\":\"C:\\\\Saved\",\"Language\":\"en\",\"IdleSeconds\":9,\"TransferSettingsVersion\":1,\"unknownSetting\":true}";
+            Settings old=serializer.Deserialize<Settings>(savedSettings);old.ApplyTransferDefaults();
+            Assert(old.Folder==@"C:\Legacy Disk"&&old.ApiFolder==@"C:\Saved"&&old.Language=="en"&&old.IdleSeconds==9,"Legacy settings fields or saved user choices were lost.");
+            old.ApiToken="fixture-secret";Assert(!serializer.Serialize(old).Contains("fixture-secret"),"Compatibility settings fixture leaked a token.");
+            string passes=Path.Combine(root,"legacy-passes.jsonl");
+            const string savedPasses="{\"StartedUtc\":\"\\/Date(0)\\/\",\"Method\":\"Desktop\",\"Mode\":\"Continue\",\"Outcome\":\"completed\",\"Downloaded\":2}\n{\"Method\":\"API\",\"Mode\":\"unknown-old-mode\",\"Downloaded\":3}\n{broken";
+            File.WriteAllText(passes,savedPasses);var rows=PassHistory.Load(passes);
+            Assert(rows.Count==2&&rows[0].Method=="Desktop"&&rows[0].Mode=="Continue"&&rows[0].Downloaded==2&&rows[0].StartedUtc.ToUniversalTime()==new DateTime(1970,1,1,0,0,0,DateTimeKind.Utc)&&rows[1].Mode=="unknown-old-mode","Legacy pass strings, dates or torn-tail recovery changed.");
+            Assert(File.ReadAllText(passes)==savedPasses,"Reading legacy passes rewrote source data.");
+            string data=Path.Combine(root,"compat-data"),identity="compatibility-fixture";
+            string directory=Path.Combine(data,HistoryStore.IdentityKey(identity));Directory.CreateDirectory(directory);
+            string journal=Path.Combine(directory,"history.jsonl");
+            const string savedHistory="{\"path\":\"disk:/A\",\"length\":4,\"modified\":\"v1\",\"status\":\"success\",\"downloadedBytes\":4,\"verification\":\"md5_verified\",\"actualHash\":\"098f6bcd4621d373cade4e832627b4f6\"}\n{\"path\":\"disk:/a\",\"length\":4,\"modified\":\"v1\",\"status\":\"timeout\",\"downloadedBytes\":2}\n{broken";
+            File.WriteAllText(journal,savedHistory);
+            using(var history=new HistoryStore(data,root,identity))Assert(history.Records.Count==2&&history.Find("disk:/A").status=="success"&&history.Find("disk:/a").downloadedBytes==2,"Legacy cloud history lost case-sensitive identities or progress.");
+            Assert(File.ReadAllText(journal)==savedHistory,"Reading cloud history rewrote its authoritative journal.");
+        }
+        public static void Run(string root){Compatibility(root);Relocation(root);Interface(root);Size(root);LegacyZero(root);History(root);FastFiles(root);}
     }
 }
