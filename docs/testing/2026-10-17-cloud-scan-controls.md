@@ -1,0 +1,11 @@
+# Cloud refresh controls and pass selection
+
+The inventory dropdown is replaced by a parent option to refresh on manual Start and an indented child option to refresh on automatic repeats. Both default off. The existing API behavior scans automatically when no inventory exists and resumes interrupted enumeration. Each manual Start begins a new scan session.
+
+The five visible modes check all files, download remaining files, download files with recorded download errors, resume only files with saved parts, or retry checksum mismatches once. The last mode does not automatically repeat. Automatic repeats do not repeatedly run the full local hash check. Refreshed automatic error passes include new/changed cloud versions; partial-only passes never begin new files. A completed pass with no eligible files stops rather than polling indefinitely. Fast local checks and saved-range hash validation remain enabled.
+
+`ScanControlsTests` failed against the former seven-mode selector before implementation. New tests cover the five-mode selector, dependent checkbox behavior, first/repeated-pass scan policy, mode transitions, new-file inclusion, integrity protection, and common horizontal center lines for settings fields. Full x64 and x86 self-tests passed on 2026-10-17 with Windows visual styles enabled. An initial themed-control alignment failure was fixed by centering using the actual ComboBox height rather than its reported preferred height.
+
+Independent read-only review found no Critical or Important issues. RU/EN documentation and inline help describe the new controls. No changes to runtime history, credentials or installed application files are required for this UI change.
+
+The nested cloud-refresh option stays visible and disabled when the parent is unchecked. Layout checks cover equal field centers, timeout widths, checkbox left edges, folder-button clearance, title/icon alignment after scaling, and initial window height bounded by the working area. Normal Load/Shown lifecycle was rendered for all five sections using synthetic settings; the settings page fits without scrolling on a 1920×1080 display. Icons share one vector renderer, including the settings gear. Documentation links in built-in help open through the default browser; only HTTP(S) targets are accepted.

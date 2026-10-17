@@ -1,13 +1,17 @@
 <details>
-<summary>Изменения 1.1.0 · RU / EN</summary>
+<summary>Изменения 1.1.1 · RU / EN</summary>
 
-- Ускорена подготовка повторных проходов.
-- Добавлено обновление отклонённой ссылки в текущем проходе с сохранением скачанных частей.
+- Упрощены режимы прохода; обновление облачного списка настраивается отдельными галочками.
+- Повтор файлов с несовпавшим хешем доступен в списке режимов и выполняется однократно.
+- Выровнены поля, кнопки и значки; окно при запуске подбирает высоту под настройки и экран.
+- Обновлены гайды и ссылки во встроенной справке.
 
 ---
 
-- Faster repeat-pass preparation.
-- Rejected download links can refresh within the current pass while retaining completed ranges.
+- Simplified pass modes with separate cloud-list refresh options.
+- Checksum-mismatch retries are available in the mode selector and run once.
+- Aligned fields, buttons and icons; startup height fits settings within the usable screen.
+- Updated guides and clickable built-in help links.
 
 </details>
 

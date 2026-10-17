@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,7 +8,7 @@ using System.Threading;
 using System.Web.Script.Serialization;
 
 namespace DiskRescue {
-    public enum RunMode { Continue, All, CloudErrors, ZeroDownload, ErrorsAndZero, NewFiles, ProblemFiles, Remaining, PartialFiles, IntegrityFailures }
+    public enum RunMode { Continue, All, CloudErrors, ZeroDownload, ErrorsAndZero, NewFiles, ProblemFiles, Remaining, PartialFiles, IntegrityFailures, ErrorsAndNew, DownloadErrors }
     public sealed class Settings {
         public string Folder = "";
         public string Language = "ru";
@@ -26,6 +26,7 @@ namespace DiskRescue {
         public bool RestartClient = true;
         public bool UseApi;
         public bool UseCachedApiList = true;
+        public bool ScanCloudOnStart,ScanCloudOnRepeats;
 
         public bool AutoCheckUpdates = true;
         public string ApiFolder = "", RemoteFolder = "disk:/";
@@ -119,6 +120,8 @@ namespace DiskRescue {
             if(status=="integrity_failed")return false;
             if (mode == RunMode.All) return true;
             if (mode == RunMode.Remaining) return !file.Local;
+            if (mode == RunMode.ErrorsAndNew) return !file.Local&&(!same||status=="cloud_error"||status=="failed"||status=="timeout");
+            if (mode == RunMode.DownloadErrors) return old!=null&&!file.Local&&(NormalizeStatus(old)=="cloud_error"||NormalizeStatus(old)=="failed"||NormalizeStatus(old)=="timeout");
             if (mode == RunMode.PartialFiles) return !file.Local && HasPartialData(file.Destination);
             if (mode == RunMode.ProblemFiles) return same && !file.Local && (status=="cloud_error"||status=="failed"||status=="timeout");
             if (mode == RunMode.NewFiles) return !same;

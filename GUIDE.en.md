@@ -1,6 +1,4 @@
-﻿# Yandex Disk Rescue 1.1.0 — guide
-
-[Home](README.en.md) · [Русский](GUIDE.md) · [Releases](https://github.com/fefenke/Yandex-Disk-Rescue/releases)
+# Yandex Disk Rescue 1.1.1 — guide
 
 ## 1. Scope and requirements
 
@@ -25,11 +23,11 @@ The desktop client is unnecessary. Follow the OAuth link in Settings, sign into 
 
 Choose an ordinary local destination, such as an HDD backup folder. Cloud placeholders, links and reparse points are rejected. Cloud folder structure is retained. disk:/ means the regular Disk section; disk:/Photos selects a folder. Different accounts and cloud roots use separate history contexts.
 
-The usual choice is Retry all files not downloaded with the saved list. A missing inventory is fetched automatically.
+The usual choice is Download all remaining files with cloud refresh unchecked. A missing inventory is fetched automatically.
 
 ## 4. Fast starts and bounded history
 
-Unchanged completed files use saved cloud-version, size and local-write-time evidence. Start pass from the beginning performs full content verification again.
+Unchanged completed files use saved cloud-version, size and local-write-time evidence. Check all files performs full content verification again.
 
 The history.latest index contains latest records. A missing, corrupt or stale index falls back to history.jsonl. After a successful pass, a journal of at least 16 MiB is compacted when replacement would halve its size. Every file retains its latest state and resume/verification evidence. Separate failed-cloud-version records remain intact; history cleanup never enables automatic retries of those versions.
 
@@ -41,20 +39,24 @@ Missing or invalid API sizes are not zero. Old unconfirmed zero sizes are refres
 
 ## 5. Inventory and pass selection
 
-These are separate settings. The saved inventory avoids enumeration before every attempt. Missing lists are scanned and an interrupted folder restarts from its first page while retaining discovered entries. Refresh after cloud files are added, changed or deleted. Refreshing does not force suitable completed files to download again.
+Cloud-list refresh and local-file processing are independent settings.
 
-Before resuming a started file, the app queries that file's fresh size, modification time and available MD5/SHA-256. This is an individual metadata request, not a full Disk rescan. Failed checks preserve parts and defer the attempt. Changed versions cannot mix old and new data. Refreshed inventory is saved after active jobs finish: on normal completion, manual Stop or handled errors.
+- Refresh cloud file list when starting unchecked: use the saved inventory. A missing inventory is scanned automatically; interrupted scans resume by rereading the unfinished folder.
+- Parent checked: refresh on each manual Start. Automatic repeats reuse that list.
+- Also refresh before every automatic pass is available with the parent checked. It refreshes each automatic repeat, adding enumeration time and API requests. Stop ends the session; the next Start is a new first pass.
 
-Scan errors appear in the log and warning. Finishing enumeration does not prove every cloud folder was accessible. Counts describe discovered files; errors prevent a completeness guarantee. A sudden crash may leave an older intact inventory, and the started file's version is checked again when resuming.
+Refreshing finds new and changed cloud files without forcing all completed local files to be rehashed. To verify current data on both sides, enable refresh and choose Check all files.
+
+Before resuming a started file, its current cloud version is still requested individually, even with both options unchecked. Failed checks preserve saved parts; different versions are not mixed.
 
 Pass modes:
 
-- Resume unfinished pass: unprocessed files and user-cancelled attempts, rather than every completed failure.
-- Retry server/sync errors: recorded errors of that type.
-- Retry timeouts and failures: interrupted, stalled and otherwise unsuccessful transfers.
-- Retry all files not downloaded: everything lacking a suitable completed local copy; the usual retry choice.
-- Start pass from the beginning: check the entire list again. Suitable local copies are not downloaded again.
-- Resume partial downloads · API: files with confirmed .ydr-map data or legacy parts. Automatic repeats retain this queue.
+- Check all files: verify local size and available cloud hash, then download missing or replacement files. Suitable local copies are not downloaded again. Automatic repeats switch to remaining files rather than rehashing every completed file again.
+- Download all remaining files: missing, partial and failed files; the usual continuation mode.
+- Download files with download errors: recorded timeouts, network and server errors. Automatic repeats that refresh the cloud also include newly discovered and changed files.
+- Resume partial files: only files with saved parts. Never starts new downloads, including after automatic cloud refresh.
+
+Download files with checksum mismatches in the pass mode selector runs a separate one-shot attempt. Ordinary modes and cloud refresh do not unblock a failed cloud version. Automatic repeats stop when no eligible files remain; this is not a continuous cloud-watching mode.
 
 ## 6. Timeouts and retry queue
 
@@ -70,9 +72,9 @@ A working signed link is retained only in memory within one automatic-pass sessi
 
 ## 7. Continuous passes and API throttling
 
-Continuous passes are enabled by default. Normal completion starts preparing the next problem pass without a mandatory 30-second pause. Preparation is not instantaneous: reports, history and local checks still take time. Partial-download mode keeps its own queue.
+Continuous passes are enabled by default. After a completed pass, the app prepares another attempt for the remaining problem files. Preparation includes saving results and checking local files. Partial-download mode keeps its own queue.
 
-Temporary whole-pass failures back off for 1, 2, 4, 8, 16, up to 30 seconds. Normal completion resets this delay. An empty matching queue or a nonrecoverable error ends the session. Stop cancels both the pass and waiting.
+After a temporary whole-pass failure, the app waits before retrying to avoid overloading the server. An empty matching queue or a nonrecoverable error ends the session. Stop cancels both the pass and waiting.
 
 All REST API calls share one pacer. HTTP 429 means too many requests, 408 a request timeout, and 5xx a server error. Retry-After is honored as seconds or a date. Without a usable header, cooldown grows through 1, 2, 4, 8, 16, 32, up to 60 seconds. Server instructions may require a longer delay.
 
@@ -135,7 +137,7 @@ Never publish data, api-token.bin, personal-path logs or signed URLs. Remove tok
 Independent unofficial project. [Report an issue](https://github.com/fefenke/Yandex-Disk-Rescue/issues) · [MIT license](LICENSE).
 
 
-A failed cloud version is blocked from automatic retries, including rescanning and full passes. Deleting its preserved artifact keeps it blocked and displays copy missing. Retry checksum failures (API) runs one explicit pass. Identical preserved bad copies are deduplicated. Changed cloud versions may download again; old artifacts remain. Keep data to retain these version records.
+A failed cloud version is blocked from automatic retries, including rescanning and full passes. Deleting its preserved artifact keeps it blocked and displays copy missing. Download files with checksum mismatches in the pass mode selector runs one explicit pass. Identical preserved bad copies are deduplicated. Changed cloud versions may download again; old artifacts remain. Keep data to retain these version records.
 
 
 If a cloud destination collides with another file?s temporary name, the affected download is skipped with a conflict error. The other final file is not used as scratch data; unrelated downloads continue.
@@ -161,6 +163,8 @@ Source, builds and tests are inspectable. Downloads and history processing run l
 
 Windows DPAPI protects api-token.bin for the current Windows user. The token is used in memory; downloaded files, history and reports are not automatically encrypted. Keep data, tokens, session cookies and signed URLs private. Malware running as the same Windows user remains a risk.
 
-After checking the completed backup, revoke the used application's data access in [Yandex ID security](https://id.yandex.ru/security), then clear the app's local token. Removing a local token does not revoke remote authorization. See [Yandex ID help](https://yandex.ru/support/id/ru/profile). Design details and test coverage are linked in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) and [TESTING.md](TESTING.md).
+After checking the completed backup, revoke the used application's data access in [Yandex ID security](https://id.yandex.ru/security), then clear the app's local token. Removing a local token does not revoke remote authorization. See [Yandex ID help](https://yandex.ru/support/id/ru/profile).
+
+[Project design](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/DESIGN-DECISIONS.md) · [Tests and limitations](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/TESTING.md).
 
 The official-client method is temporarily hidden following a partial recovery of Yandex Disk functionality. The developer may restore it if stalls return; watch for app updates.

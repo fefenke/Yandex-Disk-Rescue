@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 <p><strong>Приложение помогло забрать файлы? Можно поддержать автора 💜</strong><br>Это необязательно. Приложение остаётся бесплатным.</p>
 <a href="https://yoomoney.ru/fundraise/1KS67440FP0.261012"><img alt="Поддержать автора" src="https://img.shields.io/badge/Поддержать_автора-ЮMoney-7556D9?style=for-the-badge"></a>
 </div>
@@ -6,10 +6,10 @@
 ![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.1.0](https://img.shields.io/badge/1.1.0-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.1.0)
+[![1.1.1](https://img.shields.io/badge/1.1.1-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.1.1)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-**Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Изменения 1.1.0](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
+**Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Изменения 1.1.1](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
 
 Бесплатное приложение для Windows, которое скачивает доступные файлы с Яндекс Диска, сохраняет прогресс и повторяет неудачные попытки. Использует технологию API Яндекс Диска. Независимый неофициальный проект, не связанный с Яндексом.
 
@@ -20,9 +20,9 @@
 
 ## Скачать
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_бита-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.1.0/YandexDiskRescue-win-x64.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_бита-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.1.1/YandexDiskRescue-win-x64.zip)
 
-[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.1.0/YandexDiskRescue-win-x86.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.1.1/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, без установки. Для 64-битной Windows обычно выбирайте x64; x86 предназначен для 32-битной Windows и также работает на x64.
 
@@ -36,13 +36,14 @@ Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, без устан
 1. Откройте «Настройки». Скачивание работает через API; устанавливать клиент Яндекс Диска не нужно.
 2. Получите токен по OAuth-ссылке в приложении, войдя в нужный аккаунт, и вставьте его в поле.
 3. Выберите обычную локальную папку сохранения. `disk:/` означает весь обычный раздел Диска; `disk:/Фото` — выбранную папку.
-4. Оставьте сохранённый список и выберите **«Повторить все нескачанные»**, затем начните проход. В первый раз список будет получен автоматически.
-5. После изменений в облаке обновите список. Перед каждым повтором пересканирование не требуется.
+4. Выберите **«Скачать всё недокачанное»** и начните проход. Без галочек обновления используется сохранённый список; в первый раз он получается автоматически.
+5. Чтобы найти новые и изменённые облачные файлы, включите **«Обновлять список файлов из облака при запуске»**. Вложенная галочка обновляет список также перед автоматическими повторами. Для полной проверки локальных хешей выберите **«Проверить все файлы»**.
 
-## Что изменилось в 1.1.0
+## Что изменилось в 1.1.1
 
-- Ускорена подготовка повторных проходов: убраны лишние обращения к служебным настройкам для каждого файла.
-- Добавлено однократное обновление отклонённой ссылки в текущем проходе с продолжением сохранённых частей.
+- Переработаны режимы прохода и настройки обновления облачного списка.
+- Выровнены элементы интерфейса; начальная высота окна подбирается под настройки и экран.
+- Обновлены гайды и кликабельные ссылки во встроенной справке.
 
 Как работает загрузка:
 
