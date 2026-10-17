@@ -22,6 +22,8 @@ namespace DiskRescue {
         readonly List<DiskFile> files=new List<DiskFile>();
         readonly HashSet<string> occupiedDestinations=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         readonly HashSet<string> remotePaths=new HashSet<string>(StringComparer.Ordinal);
+        readonly HashSet<string> failedFolders=new HashSet<string>(StringComparer.Ordinal);
+        InventoryCache inventoryCheckpoint;
         internal const int LinkConcurrency=7,DownloadConcurrency=20,ReadyLinkCapacity=20;
         readonly ApiPacer apiPacer=new ApiPacer();
         readonly SignedLinkCache linkCache=new SignedLinkCache();
@@ -120,23 +122,26 @@ namespace DiskRescue {
             }}
         }
         void Scan(string root,string cachePath,string account,InventoryCache resume){
-            Stack<string> folders=new Stack<string>();if(resume==null)folders.Push(root);else{foreach(string pending in (resume.PendingFolders??new List<string>()).AsEnumerable().Reverse())folders.Push(pending);if(!String.IsNullOrEmpty(resume.ActiveFolder))folders.Push(resume.ActiveFolder);}
+            Stack<string> folders=new Stack<string>();if(resume==null)folders.Push(root);else{foreach(string failed in resume.FailedFolders??new List<string>())failedFolders.Add(failed);foreach(string failed in failedFolders.Reverse())folders.Push(failed);foreach(string pending in (resume.PendingFolders??new List<string>()).AsEnumerable().Reverse())folders.Push(pending);if(!String.IsNullOrEmpty(resume.ActiveFolder))folders.Push(resume.ActiveFolder);if(folders.Count==0)folders.Push(root);}scanErrors=failedFolders.Count;
             HashSet<string> seen=new HashSet<string>(StringComparer.Ordinal);
             while(folders.Count>0){stop.Token.ThrowIfCancellationRequested();string folder=folders.Pop();if(!seen.Add(folder))continue;
                 // Offsets are positions, not stable cursors. Restart the interrupted
                 // folder; remotePaths retains discovered entries and removes repeats.
-                for(int offset=0;;offset+=1000){
+                bool completed=false;for(int offset=0;;offset+=1000){
                     SaveInventory(cachePath,account,root,false,folders,folder,offset);
                     current=folder;Snapshot("scanning", "",false);
-                    Dictionary<string,object> resource;try{resource=Listing("/resources?path="+Uri.EscapeDataString(folder)+"&limit=1000&offset="+offset);}catch(ApiException ex){if(ex.Code==401||ex.Code==403)throw;scanErrors++;Event(folder+"  ·  Listing HTTP "+ex.Code);break;}catch(OperationCanceledException){if(stop.IsCancellationRequested)throw;scanErrors++;Event(folder+"  ·  Listing timeout.");break;}
-                    if(Text(resource,"type")=="file"){Add(resource);break;}
+                    Dictionary<string,object> resource;try{resource=Listing("/resources?path="+Uri.EscapeDataString(folder)+"&limit=1000&offset="+offset);}catch(ApiException ex){if(ex.Code==401||ex.Code==403)throw;Event(folder+"  ·  Listing HTTP "+ex.Code);break;}catch(OperationCanceledException){if(stop.IsCancellationRequested)throw;Event(folder+"  ·  Listing timeout.");break;}
+                    if(Text(resource,"type")=="file"){Add(resource);completed=true;break;}
                     object raw;Dictionary<string,object> embedded=resource.TryGetValue("_embedded",out raw)?raw as Dictionary<string,object>:null;
                     if(embedded==null)throw new IOException("Missing directory listing in API response.");
                     IEnumerable entries=embedded.TryGetValue("items",out raw)?raw as IEnumerable:null;if(entries==null)throw new IOException("Missing API items.");
                     int count=0;foreach(object item in entries){Dictionary<string,object> entry=item as Dictionary<string,object>;if(entry==null)throw new IOException("Invalid API item.");count++;if(Text(entry,"type")=="dir")folders.Push(Text(entry,"path"));else if(Text(entry,"type")=="file")Add(entry);}
-                    SaveInventory(cachePath,account,root,false,folders,count<1000?null:folder,count<1000?0:offset+1000);
-                    if(count<1000)break;
+                    if(count<1000){completed=true;failedFolders.Remove(folder);scanErrors=failedFolders.Count;}
+                    SaveInventory(cachePath,account,root,false,folders,completed?null:folder,completed?0:offset+1000);
+                    if(completed)break;
                 }
+                if(completed)failedFolders.Remove(folder);else failedFolders.Add(folder);scanErrors=failedFolders.Count;
+                if(!completed)SaveInventory(cachePath,account,root,false,folders,null,0);
             }
             AssignDestinations();
             SaveInventory(cachePath,account,root,true,folders,null,0);
@@ -153,16 +158,18 @@ namespace DiskRescue {
             }
         }
         public sealed class InventoryCache {
-            public int Version=2, ScanErrors,NextOffset;
+            public int Version=3, ScanErrors,NextOffset;
             public bool Complete=true;
             public string ActiveFolder;
             public List<string> PendingFolders;
+            public List<string> FailedFolders;
             public string Account,Root,CreatedUtc;
             public List<DiskFile> Files;
         }
         void SaveInventory(string path,string account,string root,bool complete,Stack<string> pending,string active,int offset){
-            InventoryCache value=new InventoryCache{Account=account,Root=root,CreatedUtc=DateTime.UtcNow.ToString("o"),Files=files,ScanErrors=scanErrors,Complete=complete,PendingFolders=pending.ToList(),ActiveFolder=active,NextOffset=offset};
+            InventoryCache value=new InventoryCache{Account=account,Root=root,CreatedUtc=DateTime.UtcNow.ToString("o"),Files=files,ScanErrors=scanErrors,Complete=complete&&failedFolders.Count==0&&pending.Count==0&&String.IsNullOrEmpty(active),PendingFolders=pending.ToList(),FailedFolders=failedFolders.OrderBy(folder=>folder,StringComparer.Ordinal).ToList(),ActiveFolder=active,NextOffset=offset};
             DurablePartial.AtomicText(path,new JavaScriptSerializer{MaxJsonLength=128*1024*1024}.Serialize(value));
+            inventoryCheckpoint=value;
         }
         void Inventory(string account,string remote){
             string directory=Path.Combine(data,"api-inventory",HistoryStore.IdentityKey(account+"|"+remote));Directory.CreateDirectory(directory);string path=Path.Combine(directory,"inventory.json");
@@ -170,9 +177,11 @@ namespace DiskRescue {
             JavaScriptSerializer json=new JavaScriptSerializer{MaxJsonLength=128*1024*1024};
             if(settings.UseCachedApiList&&File.Exists(path)){
                 InventoryCache cache;try{stop.Token.ThrowIfCancellationRequested();string saved=File.ReadAllText(path,Encoding.UTF8);stop.Token.ThrowIfCancellationRequested();cache=json.Deserialize<InventoryCache>(saved);stop.Token.ThrowIfCancellationRequested();}catch(OperationCanceledException){throw;}catch{throw new IOException("Saved API list is unreadable. Choose Refresh list from Disk.");}
-                if(cache==null||(cache.Version!=1&&cache.Version!=2)||cache.Account!=account||cache.Root!=remote||cache.Files==null||cache.NextOffset<0)throw new IOException("Saved API list does not match the selected account and cloud folder.");
+                if(cache==null||(cache.Version!=1&&cache.Version!=2&&cache.Version!=3)||cache.Account!=account||cache.Root!=remote||cache.Files==null||cache.NextOffset<0)throw new IOException("Saved API list does not match the selected account and cloud folder.");
+                if(cache.ScanErrors>0&&(cache.Version<3||cache.FailedFolders==null||cache.FailedFolders.Count==0)){Event("Rebuilding an incomplete legacy API list; local downloads and history are retained.");Scan(remote,path,account,null);return;}
+                inventoryCheckpoint=cache;
                 foreach(DiskFile file in cache.Files){stop.Token.ThrowIfCancellationRequested();if(file==null||String.IsNullOrEmpty(file.Path)||file.Length<0)throw new IOException("Saved API list is invalid. Refresh the list.");file.Status="pending";file.Message="";file.Local=false;file.DownloadedBytes=null;if(remotePaths.Add(file.Path))files.Add(file);}
-                scanErrors=cache.ScanErrors;if(!cache.Complete){Event("Resuming API scan from saved position: "+files.Count+" files already found.");Scan(remote,path,account,cache);}AssignDestinations();Event("Using saved API list: "+files.Count+" files. New or changed cloud files require refreshing the list.");if(scanErrors>0)Event("Saved list is incomplete: "+scanErrors+" listing errors.");return;
+                scanErrors=cache.ScanErrors;if(!cache.Complete||(cache.FailedFolders!=null&&cache.FailedFolders.Count>0)||(cache.PendingFolders!=null&&cache.PendingFolders.Count>0)||!String.IsNullOrEmpty(cache.ActiveFolder)){Event("Resuming API scan from saved position: "+files.Count+" files already found.");Scan(remote,path,account,cache);}AssignDestinations();Event("Using saved API list: "+files.Count+" files. New or changed cloud files require refreshing the list.");if(scanErrors>0)Event("Saved list is incomplete: "+scanErrors+" listing errors.");return;
             }
             if(settings.UseCachedApiList)Event("No saved API list for this account and folder. Scanning first.");
             Scan(remote,path,account,null);stop.Token.ThrowIfCancellationRequested();
@@ -363,7 +372,7 @@ namespace DiskRescue {
             finally{
                 bool cleanCompletion=phase=="completed"&&!stop.IsCancellationRequested;
                 stop.Cancel();foreach(Job job in jobs.ToArray())try{Result r=job.Task!=null?job.Task.GetAwaiter().GetResult():job.LinkTask!=null?job.LinkTask.GetAwaiter().GetResult().Completed:null;if(r==null)r=new Result{Status="cancelled_user",Message="Stopped before download started.",Bytes=job.Bytes};job.File.DownloadedBytes=r.Bytes;history.SaveApi(job.File,r.Status,r.Message);}catch{}jobs.Clear();
-                if(refreshedInventory!=0&&!String.IsNullOrEmpty(inventoryPath))try{SaveInventory(inventoryPath,inventoryAccount,inventoryRoot,true,new Stack<string>(),null,0);}catch(Exception cacheError){retryableError=false;phase="error";error="Could not save refreshed cloud metadata: "+cacheError.GetType().Name;}
+                if(refreshedInventory!=0&&!String.IsNullOrEmpty(inventoryPath))try{InventoryCache checkpoint=inventoryCheckpoint;if(checkpoint==null)throw new IOException("Missing inventory checkpoint.");SaveInventory(inventoryPath,inventoryAccount,inventoryRoot,checkpoint.Complete,new Stack<string>((checkpoint.PendingFolders??new List<string>()).AsEnumerable().Reverse()),checkpoint.ActiveFolder,checkpoint.NextOffset);}catch(Exception cacheError){retryableError=false;phase="error";error="Could not save refreshed cloud metadata: "+cacheError.GetType().Name;}
                 clock.Stop();Snapshot(phase,error,true);if(history!=null){try{if(phase!="stopped"||queueReady)Reports.Write(report,settings.ApiFolder,files,latest);}catch(Exception reportError){retryableError=false;string reportMessage="Could not save reports: "+reportError.GetType().Name;Event(reportMessage);Snapshot("error",String.IsNullOrEmpty(error)?reportMessage:error+"\n"+reportMessage,true);}history.Close(cleanCompletion);}if(client!=null)client.Dispose();if(downloadClient!=null)downloadClient.Dispose();stop.Dispose();
             }
 

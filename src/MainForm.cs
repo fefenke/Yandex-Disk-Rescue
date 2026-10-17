@@ -284,7 +284,7 @@ namespace DiskRescue {
                     Snapshot result=engine.Latest;
                     if(result.Finished){PassResult row=PassResult.From(result,started,settings.UseApi,runMode);row.IdleSeconds=settings.IdleSeconds;row.LinkTimeoutSeconds=settings.UseApi?settings.LinkTimeoutSeconds:0;row.ApiLinkConcurrency=settings.UseApi?settings.ApiLinkConcurrency:0;row.ApiDownloadConcurrency=settings.UseApi?settings.ApiDownloadConcurrency:0;row.ApiRequestIntervalMs=settings.UseApi?settings.ApiRequestIntervalMs:0;PassHistory.Append(Path.Combine(dataFolder,"passes.jsonl"),row);passRows.Add(row);if(passRows.Count>PassHistory.MaximumEntries)passRows.RemoveRange(0,passRows.Count-PassHistory.MaximumEntries);RenderPasses();}
                     Render(result);
-                    if(runMode==RunMode.IntegrityFailures||!PassHistory.ShouldRepeat(result,repeat,sessionStop.IsCancellationRequested)||(result.Phase=="completed"&&result.Selected==0))break;
+                    if(runMode==RunMode.IntegrityFailures||!PassHistory.ShouldRepeat(result,repeat,sessionStop.IsCancellationRequested)||(result.Phase=="completed"&&result.Selected==0&&result.ScanErrors==0))break;
                     automaticPass=true;if(result.Phase=="completed")runMode=ScanSessionPolicy.NextMode(initialMode,!ScanSessionPolicy.UseCachedList(settings,true));
                     passTransition.Prepare(result);
                     waitingForRetry=true;

@@ -6,10 +6,10 @@
 ![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.1.1](https://img.shields.io/badge/1.1.1-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.1.1)
+[![1.1.2](https://img.shields.io/badge/1.1.2-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/tag/v1.1.2)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-**Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Изменения 1.1.1](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
+**Русский** · [English](README.en.md) · [Подробный гайд](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.md) · [Изменения 1.1.2](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
 
 Бесплатное приложение для Windows, которое скачивает доступные файлы с Яндекс Диска, сохраняет прогресс и повторяет неудачные попытки. Использует технологию API Яндекс Диска. Независимый неофициальный проект, не связанный с Яндексом.
 
@@ -20,9 +20,9 @@
 
 ## Скачать
 
-[![Windows x64](https://img.shields.io/badge/Windows_64_бита-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.1.1/YandexDiskRescue-win-x64.zip)
+[![Windows x64](https://img.shields.io/badge/Windows_64_бита-x64_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.1.2/YandexDiskRescue-win-x64.zip)
 
-[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.1.1/YandexDiskRescue-win-x86.zip)
+[![Windows x86](https://img.shields.io/badge/Windows_32_бита-x86_ZIP-5965E9?style=for-the-badge)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.1.2/YandexDiskRescue-win-x86.zip)
 
 Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, без установки. Для 64-битной Windows обычно выбирайте x64; x86 предназначен для 32-битной Windows и также работает на x64.
 
@@ -39,11 +39,10 @@ Windows **10 1709+ / 11**, .NET Framework **4.7.1+**, RU / EN, без устан
 4. Выберите **«Скачать всё недокачанное»** и начните проход. Без галочек обновления используется сохранённый список; в первый раз он получается автоматически.
 5. Чтобы найти новые и изменённые облачные файлы, включите **«Обновлять список файлов из облака при запуске»**. Вложенная галочка обновляет список также перед автоматическими повторами. Для полной проверки локальных хешей выберите **«Проверить все файлы»**.
 
-## Что изменилось в 1.1.1
+## Что изменилось в 1.1.2
 
-- Переработаны режимы прохода и настройки обновления облачного списка.
-- Выровнены элементы интерфейса; начальная высота окна подбирается под настройки и экран.
-- Обновлены гайды и кликабельные ссылки во встроенной справке.
+- Исправлено сохранение неполного облачного списка: непрочитанные папки остаются для повторного обхода.
+- Старые списки с ошибками автоматически перестраиваются при первом запуске прохода после обновления; готовые файлы и история сохраняются.
 
 Как работает загрузка:
 

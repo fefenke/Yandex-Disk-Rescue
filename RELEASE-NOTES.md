@@ -1,17 +1,13 @@
 <details>
-<summary>Изменения 1.1.1 · RU / EN</summary>
+<summary>Изменения 1.1.2 · RU / EN</summary>
 
-- Упрощены режимы прохода; обновление облачного списка настраивается отдельными галочками.
-- Повтор файлов с несовпавшим хешем доступен в списке режимов и выполняется однократно.
-- Выровнены поля, кнопки и значки; окно при запуске подбирает высоту под настройки и экран.
-- Обновлены гайды и ссылки во встроенной справке.
+- Исправлено сохранение неполного облачного списка и повторное чтение непрочитанных папок.
+- Старые списки с ошибками восстанавливаются автоматически при первом запуске прохода после обновления. Готовые файлы и история сохраняются; полная проверка локальных хешей для этого не нужна.
 
 ---
 
-- Simplified pass modes with separate cloud-list refresh options.
-- Checksum-mismatch retries are available in the mode selector and run once.
-- Aligned fields, buttons and icons; startup height fits settings within the usable screen.
-- Updated guides and clickable built-in help links.
+- Fixed incomplete cloud inventories and retries of unreadable folders.
+- Old inventories with scan errors rebuild automatically on the first Start after updating. Completed local files and history are retained; full local hash verification is not required for this repair.
 
 </details>
 

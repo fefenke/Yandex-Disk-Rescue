@@ -1,4 +1,4 @@
-# Yandex Disk Rescue 1.1.1 — guide
+# Yandex Disk Rescue 1.1.2 — guide
 
 ## 1. Scope and requirements
 
@@ -154,6 +154,8 @@ The Photos view and ordinary folders can contain the same media. Independently d
 Additional schemes involving third-party sites, session cookies or public links would expand access to private data. This does not mean every possible unlimited-storage implementation is inherently unsafe. Public links are unnecessary here: anyone receiving an accessible link may read, download and retain its contents. Avoid untrusted recovery sites, revoke unwanted public sharing, and remember that revocation cannot delete copies already obtained by others.
 
 ## Interrupted scans and cloud changes
+
+An unreadable folder keeps the inventory incomplete and its path is saved for retry on the next pass. Discovered files can still download. Old inventories with listing errors are rebuilt automatically on the first Start after updating; completed local files and history are retained, and full local hash verification is not required for this repair.
 
 An interrupted folder restarts at its first page; saved paths suppress duplicate entries. Completed folders are retained in saved-list mode. Refresh the entire inventory to find changes there, and perform a fresh-list control pass after the main backup. An offset is a position, not a stable cursor. Concurrent cloud edits can still shift pages; enumeration is not an atomic snapshot or proof of completeness.
 

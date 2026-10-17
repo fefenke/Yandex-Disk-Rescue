@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -12,7 +12,7 @@ namespace DiskRescue {
         public PassTransition(){}
         public int Prepare(Snapshot result){
             int delay=0;
-            if(result.Phase=="error"&&result.RetryableError){failures=Math.Min(failures+1,6);delay=Math.Min(30,1<<(failures-1));}
+            if((result.Phase=="error"&&result.RetryableError)||(result.Phase=="completed"&&result.ScanErrors>0&&result.Selected==0)){failures=Math.Min(failures+1,6);delay=Math.Min(30,1<<(failures-1));}
             else failures=0;
             ReadyUtc=DateTime.UtcNow.AddSeconds(delay);return delay;
         }
@@ -32,7 +32,7 @@ namespace DiskRescue {
     }
     public static class PassHistory {
         public const int MaximumEntries=1000;
-        public static bool ShouldRepeat(Snapshot result,bool repeat,bool stopped){return repeat&&!stopped&&!result.RecoveryRequired&&((result.Phase=="error"&&result.RetryableError)||(result.Phase=="completed"&&result.CloudErrors+result.OtherErrors+result.Deferred>0));}
+        public static bool ShouldRepeat(Snapshot result,bool repeat,bool stopped){return repeat&&!stopped&&!result.RecoveryRequired&&((result.Phase=="error"&&result.RetryableError)||(result.Phase=="completed"&&result.ScanErrors+result.CloudErrors+result.OtherErrors+result.Deferred>0));}
         public static int SumValues(this List<int> values){int n=0;foreach(int value in values)n+=value;return n;}
         static List<PassResult> Read(string path,out long count){
             var rows=new Queue<PassResult>();count=0;var json=new JavaScriptSerializer();
