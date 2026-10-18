@@ -10,7 +10,9 @@ namespace DiskRescue {
             using(var form=new MainForm(Path.Combine(root,"scan-controls"))){
                 var mode=(ComboBox)Field(form,"mode");Assert(mode.Items.Count==5,"Pass selector still exposes overlapping legacy modes.");
                 var first=(CheckBox)Field(form,"scanCloudStart");var every=(CheckBox)Field(form,"scanCloudRepeats");
-                Assert(!first.Checked&&!every.Checked&&!every.Enabled,"New scan controls do not default to the cached list.");
+                Assert(first.Checked&&!every.Checked&&every.Enabled,"Release defaults must refresh on manual Start, without rescanning every automatic pass.");
+                Assert(mode.SelectedIndex==1&&((CheckBox)Field(form,"repeatProblems")).Checked&&((CheckBox)Field(form,"autoCheck")).Checked,"Release defaults must select Remaining, automatic retries and update checks.");
+                first.Checked=false;Assert(!every.Enabled,"Nested scan option stays enabled without its parent.");
                 first.Checked=true;Assert(every.Enabled,"Nested scan option stays disabled when its parent is checked.");every.Checked=true;
                 first.Checked=false;Assert(!every.Enabled,"Nested scan option remains active without its parent.");first.Checked=true;Assert(every.Checked&&every.Enabled,"Toggling the parent erased the nested preference.");
                 Assert(Convert.ToString(mode.Items[4]).Contains("хеш"),"Checksum retry is missing from the pass selector.");

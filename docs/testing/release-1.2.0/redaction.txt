@@ -1,0 +1,1 @@
+PASS: 2372 synthetic report/settings files from the two final 1.2.0 suite roots contain no known test-secret, sensitive-credential or signed-link lease markers.

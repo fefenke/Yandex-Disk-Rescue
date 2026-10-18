@@ -41,6 +41,8 @@ Missing or invalid API sizes are not zero. Old unconfirmed zero sizes are refres
 
 Cloud-list refresh and local-file processing are independent settings.
 
+A fresh installation selects Download all remaining files. Cloud-list refresh on manual Start is enabled; refresh before every automatic pass is disabled. Automatic retries and application update checks are enabled. Existing saved choices for these settings are retained when updating.
+
 - Refresh cloud file list when starting unchecked: use the saved inventory. A missing inventory is scanned automatically; interrupted scans resume by rereading the unfinished folder.
 - Parent checked: refresh on each manual Start. Automatic repeats reuse that list.
 - Also refresh before every automatic pass is available with the parent checked. It refreshes each automatic repeat, adding enumeration time and API requests. Stop ends the session; the next Start is a new first pass.

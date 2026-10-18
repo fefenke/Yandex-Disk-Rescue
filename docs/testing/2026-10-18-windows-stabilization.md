@@ -1,5 +1,7 @@
 # Windows stabilization — 2026-10-18
 
+This is the pre-release stabilization snapshot. Subsequent live-account results and release preparation are recorded in the [live report](2026-10-19-live-account-verification.md) and [1.2.0 verification](2026-10-19-release-1.2.0.md); statements below about no publication refer to this earlier stage.
+
 Branch: `work/windows-stabilization`, based on `234fea2f415007a698d0faa834e1136f3d3891fd` (1.1.2). Tasks 0–7 and the final review after a manual model switch are complete as of 2026-10-19. This is local implementation and verification; no release has been published.
 
 ## Delivered behavior
