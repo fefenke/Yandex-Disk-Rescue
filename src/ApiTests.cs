@@ -110,17 +110,19 @@ namespace DiskRescue {
             }
         }
         public static void PipelineTests(string root){
-            // Each 1.2-second stage fits its own 2-second budget; their sum does not.
-            // Leave scheduling margin on shared CI machines without merging budgets.
+            // Each 6-second stage fits its own 10-second budget; their sum does not.
+            // Hosted CI exhausted the old 0.8-second scheduling margin (1.2 / 2).
+            // Keep the separate-budget assertion with 4 seconds of scheduling margin.
             // Variant 1 measures concurrency, not deadlines: generous timeouts isolate that assertion.
             for(int variant=0;variant<5;variant++){PipelineVariant(root,variant);}
         }
         public static void PipelineCapacityTests(string root){PipelineVariant(root,4);}
+        public static void PipelineBudgetTests(string root){PipelineVariant(root,0);}
         static void PipelineVariant(string root,int variant){
             string folder=Path.Combine(root,"pipeline-"+variant),data=Path.Combine(root,"pipeline-data-"+variant);Directory.CreateDirectory(folder);
-            PipelineApiMock api=new PipelineApiMock{DelayMs=variant==4?2000:variant==0?1200:200};PipelineDownloadMock downloads=new PipelineDownloadMock{DelayMs=variant==0?1200:variant==3?350:1800};
+            PipelineApiMock api=new PipelineApiMock{DelayMs=variant==4?2000:variant==0?6000:200};PipelineDownloadMock downloads=new PipelineDownloadMock{DelayMs=variant==0?6000:variant==3?350:1800};
             Snapshot last=null;ApiEngine engine=new ApiEngine(data,x=>last=x,api,downloads);if(variant==2)downloads.Started=engine.Stop;
-            engine.Run(new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",LinkTimeoutSeconds=variant==1||variant==4?10:variant==0?2:1,IdleSeconds=variant==1||variant==4?10:variant==0?2:3,ApiLinkConcurrency=variant==4?30:variant==3?2:7,ApiDownloadConcurrency=variant==4?30:variant==3?3:20},RunMode.Remaining);
+            engine.Run(new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",LinkTimeoutSeconds=variant==0||variant==1||variant==4?10:1,IdleSeconds=variant==0||variant==1||variant==4?10:3,ApiLinkConcurrency=variant==4?30:variant==3?2:7,ApiDownloadConcurrency=variant==4?30:variant==3?3:20},RunMode.Remaining);
             Assert(api.Peak<=(variant==4?30:variant==3?2:ApiEngine.LinkConcurrency)&&api.Peak>1&&downloads.Peak<=(variant==4?30:variant==3?3:ApiEngine.DownloadConcurrency),"Configured pipeline limits exceeded.");
             if(variant==4)Assert(api.Peak>20&&downloads.Peak>20,"30 + 30 settings remained capped at the old hardcoded limits.");
             Assert(api.Active==0&&downloads.Active==0,"Stop or completion left requests running.");
