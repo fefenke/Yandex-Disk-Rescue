@@ -50,7 +50,8 @@ namespace DiskRescue {
             foreach(string suffix in new[]{".ydr-download",".ydr-map"}){
                 string folder=Path.Combine(root,"collision"+suffix),data=Path.Combine(root,"collision-data"+suffix);Directory.CreateDirectory(folder);string original=Path.Combine(folder,"a.bin"+suffix);File.WriteAllText(original,Content);
                 var download=new Download();Snapshot view=null;new ApiEngine(data,x=>view=x,new Api{ExtraName=suffix},download).Run(new Settings{UseApi=true,ApiToken="test-secret",ApiFolder=folder,UseCachedApiList=false},RunMode.Remaining);
-                Assert(download.Calls==0&&File.ReadAllText(original)==Content&&view.Available==1,"Temporary suffix overwrote another cloud destination.");
+                Assert(download.Calls==0&&File.ReadAllText(original)==Content,"Temporary suffix overwrote another cloud destination.");
+                Assert(view.Available==0&&view.Catalog.Count(f=>f.Status=="failed")==2,"Ambiguous cloud/state ownership was reported as a verified local file.");
             }
             foreach(string scenario in new[]{"sha","bad-md5","bad-size","bad-new","no-hashes"}){
                 string folder=Path.Combine(root,"safe-"+scenario),data=Path.Combine(root,"safe-data-"+scenario);Directory.CreateDirectory(folder);string destination=Path.Combine(folder,"a.bin");

@@ -53,6 +53,7 @@ namespace DiskRescue {
         public bool Local;
         public bool SizeKnown;
         public bool ResumeEligible;
+        internal string DestinationError="";
     }
     public sealed class ActiveFile {
         public string Path, Category, State;

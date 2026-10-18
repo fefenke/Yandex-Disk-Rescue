@@ -22,6 +22,7 @@ namespace DiskRescue {
         readonly List<DiskFile> files=new List<DiskFile>();
         readonly HashSet<string> occupiedDestinations=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         readonly HashSet<string> remotePaths=new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string,string> savedDestinations=new Dictionary<string,string>(StringComparer.Ordinal);
         readonly HashSet<string> failedFolders=new HashSet<string>(StringComparer.Ordinal);
         InventoryCache inventoryCheckpoint;
         internal const int LinkConcurrency=7,DownloadConcurrency=20,ReadyLinkCapacity=20;
@@ -147,15 +148,11 @@ namespace DiskRescue {
             SaveInventory(cachePath,account,root,true,folders,null,0);
         }
         void AssignDestinations(){
-            AssignDestinations(files,settings.ApiFolder);
+            DestinationPaths.Assign(files,settings.ApiFolder,savedDestinations);
+            foreach(DiskFile file in files)if(String.IsNullOrEmpty(file.DestinationError))savedDestinations[file.Path]=file.Destination;
         }
         internal static void AssignDestinations(List<DiskFile> files,string root){
-            HashSet<string> destinations=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach(DiskFile f in files.OrderBy(x=>x.Path,StringComparer.Ordinal)){
-                f.Destination=LocalPath(root,f.Path);
-                if(!destinations.Add(f.Destination)){string ext=Path.GetExtension(f.Destination);f.Destination=Path.Combine(Path.GetDirectoryName(f.Destination),Path.GetFileNameWithoutExtension(f.Destination)+"_"+Suffix(f.Path)+ext);if(!destinations.Add(f.Destination))throw new IOException("Conflicting file destinations.");}
-                f.Folder=Path.GetDirectoryName(f.Destination);
-            }
+            DestinationPaths.Assign(files,root,DestinationPaths.Saved(files,root));
         }
         public sealed class InventoryCache {
             public int Version=3, ScanErrors,NextOffset;
@@ -165,9 +162,10 @@ namespace DiskRescue {
             public List<string> FailedFolders;
             public string Account,Root,CreatedUtc;
             public List<DiskFile> Files;
+            public Dictionary<string,string> DestinationAssignments;
         }
         void SaveInventory(string path,string account,string root,bool complete,Stack<string> pending,string active,int offset){
-            InventoryCache value=new InventoryCache{Account=account,Root=root,CreatedUtc=DateTime.UtcNow.ToString("o"),Files=files,ScanErrors=scanErrors,Complete=complete&&failedFolders.Count==0&&pending.Count==0&&String.IsNullOrEmpty(active),PendingFolders=pending.ToList(),FailedFolders=failedFolders.OrderBy(folder=>folder,StringComparer.Ordinal).ToList(),ActiveFolder=active,NextOffset=offset};
+            InventoryCache value=new InventoryCache{DestinationAssignments=new Dictionary<string,string>(savedDestinations,StringComparer.Ordinal),Account=account,Root=root,CreatedUtc=DateTime.UtcNow.ToString("o"),Files=files,ScanErrors=scanErrors,Complete=complete&&failedFolders.Count==0&&pending.Count==0&&String.IsNullOrEmpty(active),PendingFolders=pending.ToList(),FailedFolders=failedFolders.OrderBy(folder=>folder,StringComparer.Ordinal).ToList(),ActiveFolder=active,NextOffset=offset};
             DurablePartial.AtomicText(path,new JavaScriptSerializer{MaxJsonLength=128*1024*1024}.Serialize(value));
             inventoryCheckpoint=value;
         }
@@ -178,19 +176,27 @@ namespace DiskRescue {
             if(settings.UseCachedApiList&&File.Exists(path)){
                 InventoryCache cache;try{stop.Token.ThrowIfCancellationRequested();string saved=File.ReadAllText(path,Encoding.UTF8);stop.Token.ThrowIfCancellationRequested();cache=json.Deserialize<InventoryCache>(saved);stop.Token.ThrowIfCancellationRequested();}catch(OperationCanceledException){throw;}catch{throw new IOException("Saved API list is unreadable. Choose Refresh list from Disk.");}
                 if(cache==null||(cache.Version!=1&&cache.Version!=2&&cache.Version!=3)||cache.Account!=account||cache.Root!=remote||cache.Files==null||cache.NextOffset<0)throw new IOException("Saved API list does not match the selected account and cloud folder.");
+                savedDestinations=DestinationPaths.Saved(cache,settings.ApiFolder);
                 if(cache.ScanErrors>0&&(cache.Version<3||cache.FailedFolders==null||cache.FailedFolders.Count==0)){Event("Rebuilding an incomplete legacy API list; local downloads and history are retained.");Scan(remote,path,account,null);return;}
                 inventoryCheckpoint=cache;
                 foreach(DiskFile file in cache.Files){stop.Token.ThrowIfCancellationRequested();if(file==null||String.IsNullOrEmpty(file.Path)||file.Length<0)throw new IOException("Saved API list is invalid. Refresh the list.");file.Status="pending";file.Message="";file.Local=false;file.DownloadedBytes=null;if(remotePaths.Add(file.Path))files.Add(file);}
                 scanErrors=cache.ScanErrors;if(!cache.Complete||(cache.FailedFolders!=null&&cache.FailedFolders.Count>0)||(cache.PendingFolders!=null&&cache.PendingFolders.Count>0)||!String.IsNullOrEmpty(cache.ActiveFolder)){Event("Resuming API scan from saved position: "+files.Count+" files already found.");Scan(remote,path,account,cache);}AssignDestinations();Event("Using saved API list: "+files.Count+" files. New or changed cloud files require refreshing the list.");if(scanErrors>0)Event("Saved list is incomplete: "+scanErrors+" listing errors.");return;
             }
             if(settings.UseCachedApiList)Event("No saved API list for this account and folder. Scanning first.");
+            if(File.Exists(path)){
+                // Refresh replaces checkpoints while scanning. Capture previous
+                // assignments first so new case variants cannot steal old paths.
+                try{stop.Token.ThrowIfCancellationRequested();InventoryCache previous=json.Deserialize<InventoryCache>(File.ReadAllText(path,Encoding.UTF8));if(previous!=null&&(previous.Version==1||previous.Version==2||previous.Version==3)&&previous.Account==account&&previous.Root==remote&&previous.Files!=null)savedDestinations=DestinationPaths.Saved(previous,settings.ApiFolder);}
+                catch(OperationCanceledException){throw;}
+                catch(Exception){Event("Previous destination assignments are unreadable; ambiguous existing paths will be retained without downloading.");}
+            }
             Scan(remote,path,account,null);stop.Token.ThrowIfCancellationRequested();
             Event("Saved API list: "+files.Count+" files.");
         }
         static string CloudModified(string modified,string md5,string sha){return modified+"|"+md5+(String.IsNullOrEmpty(md5)&&!String.IsNullOrEmpty(sha)?"|sha256:"+sha:"");}
-        void Add(Dictionary<string,object> entry){string path=Text(entry,"path");if(!remotePaths.Add(path))return;string destination=LocalPath(settings.ApiFolder,path);files.Add(new DiskFile{Path=path,Destination=destination,Folder=Path.GetDirectoryName(destination),Length=RequiredSize(entry),SizeKnown=true,Md5=Text(entry,"md5"),Sha256=Text(entry,"sha256"),Modified=CloudModified(Text(entry,"modified"),Text(entry,"md5"),Text(entry,"sha256")),Category=FileRules.Category(path)});}
+        void Add(Dictionary<string,object> entry){string path=Text(entry,"path");if(!remotePaths.Add(path))return;string destination;if(!savedDestinations.TryGetValue(path,out destination))destination=LocalPath(settings.ApiFolder,path);files.Add(new DiskFile{Path=path,Destination=destination,Folder=Path.GetDirectoryName(destination),Length=RequiredSize(entry),SizeKnown=true,Md5=Text(entry,"md5"),Sha256=Text(entry,"sha256"),Modified=CloudModified(Text(entry,"modified"),Text(entry,"md5"),Text(entry,"sha256")),Category=FileRules.Category(path)});}
         bool CanRecoverArchived(DiskFile file){
-            if(ArtifactCollision(file)||preserver.Blocked(file))return false;
+            if(!String.IsNullOrEmpty(file.DestinationError)||ArtifactCollision(file)||preserver.Blocked(file))return false;
             try{preserver.CheckDestination(file.Destination);return true;}catch(IOException){return false;}
         }
         Result FinishPayload(Job job,string partial){
@@ -216,14 +222,14 @@ namespace DiskRescue {
             for(string current=path;!String.IsNullOrEmpty(current);current=Path.GetDirectoryName(current))if((File.Exists(current)||Directory.Exists(current))&&(File.GetAttributes(current)&FileAttributes.ReparsePoint)!=0)throw new IOException("Download destination contains a link or cloud placeholder.");
         }
         bool ArtifactCollision(DiskFile f){
-            string[] reserved={f.Destination+".ydr-download",f.Destination+".ydr-map",f.Destination+".ydr-map.tmp",f.Destination+".ydr-part",f.Destination+".ydr-part.ydr-state",f.Destination+".ydr-part.ydr-state.tmp",SegmentFolder(f)};
-            return reserved.Any(p=>occupiedDestinations.Contains(p));
+            return DestinationPaths.Artifacts(f.Destination).Any(p=>occupiedDestinations.Contains(p));
         }
         async Task<LinkResult> PrepareLink(Job job){
             string partial=job.File.Destination+".ydr-part";
             string metadata=Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(job.File.Path)+".txt");
             long offset=0;bool checkingMetadata=false;
             try{stop.Token.ThrowIfCancellationRequested();
+                    if(!String.IsNullOrEmpty(job.File.DestinationError))return new LinkResult{Completed=new Result{Status="failed",Message=job.File.DestinationError}};
                     if(ArtifactCollision(job.File))return new LinkResult{Completed=new Result{Status="failed",Message="Temporary filename conflicts with another cloud file; originals retained."}};
                     preserver.CheckDestination(job.File.Destination);SafeDestination(partial);SafeDestination(job.File.Destination);Directory.CreateDirectory(Path.GetDirectoryName(partial));
                     SafeDestination(SegmentFolder(job.File));
@@ -331,15 +337,15 @@ namespace DiskRescue {
                 foreach(DiskFile entry in files){stop.Token.ThrowIfCancellationRequested();string occupied=entry.Destination;while(!String.IsNullOrEmpty(occupied)){occupiedDestinations.Add(occupied);occupied=Path.GetDirectoryName(occupied);}}
                 preserver=new FilePreserver(history.DirectoryPath,settings.ApiFolder,files.Select(f=>f.Destination),stop.Token);
                 history.RefreshPreservedPaths();
-                RelocatedArchiveRepair.Run(history.DirectoryPath,settings.ApiFolder,files,stop.Token,CanRecoverArchived);
-                foreach(DiskFile f in files){stop.Token.ThrowIfCancellationRequested();current=f.Path;checkFileBytes=checkFileLength=0;checkFileStarted=DateTime.UtcNow;Snapshot("checking_local","",false);HistoryRecord old=history.Find(f.Path);bool same=FileRules.SameVersion(f,old);f.ResumeEligible=same&&CloudIntegrity.HasHash(f);if(same){f.Status=FileRules.NormalizeStatus(old);f.DownloadedBytes=old.downloadedBytes;}
+                RelocatedArchiveRepair.Run(history.DirectoryPath,settings.ApiFolder,files.Where(f=>String.IsNullOrEmpty(f.DestinationError)).ToList(),stop.Token,CanRecoverArchived);
+                foreach(DiskFile f in files){stop.Token.ThrowIfCancellationRequested();if(!String.IsNullOrEmpty(f.DestinationError)){Event(f.Path+"  ·  "+f.DestinationError);checkFilesChecked++;continue;}current=f.Path;checkFileBytes=checkFileLength=0;checkFileStarted=DateTime.UtcNow;Snapshot("checking_local","",false);HistoryRecord old=history.Find(f.Path);bool same=FileRules.SameVersion(f,old);f.ResumeEligible=same&&CloudIntegrity.HasHash(f);if(same){f.Status=FileRules.NormalizeStatus(old);f.DownloadedBytes=old.downloadedBytes;}
                     try{preserver.CheckDestination(f.Destination);}catch(IOException){f.Local=false;f.Status="failed";f.Message="Destination conflicts with preserved files or pending recovery.";checkFilesChecked++;continue;}
                     SafeDestination(f.Destination);bool cached=(f.Length>0||f.SizeKnown)&&mode!=RunMode.All&&PreviouslyVerified(f,old);if(cached){f.Verification=CloudIntegrity.HasHash(f)?"history":"size_only";f.ActualHash=old.actualHash;}f.Local=(f.Length>0||f.SizeKnown)&&(cached||CloudIntegrity.CheckAndRecord(f.Destination,f,stop.Token,delegate(long done,long total){checkFileBytes=done;checkFileLength=total;if(done==0)lastPhase="";Snapshot("checking_local","",false);}));if(f.Local){f.DownloadedBytes=f.Length;if(!same||!FileRules.Success(old.status)||!old.localWriteTicks.HasValue||old.localWriteTicks.Value!=new FileInfo(f.Destination).LastWriteTimeUtc.Ticks)history.SaveApi(f,"local","");else f.Status="local";}else if(FileRules.Success(f.Status))f.Status="pending";
                     if(preserver.Blocked(f)){f.Status="integrity_failed";f.Local=false;f.Message=File.Exists(f.PreservedPath)?"Checksum mismatch; copy preserved.":"Checksum mismatch; preserved copy is missing. Automatic retries remain blocked.";}
                     string partial=f.Destination+".ydr-part";if(RangeMap.Exists(f.Destination))f.DownloadedBytes=RangeMap.Progress(f.Destination);else if(File.Exists(partial))f.DownloadedBytes=new FileInfo(partial).Length;
                     checkFilesChecked++;Snapshot("checking_local","",false);
                 }
-                List<DiskFile> queue=FileRules.Order(files.Where(f=>mode==RunMode.Continue ? f.Status=="pending"||f.Status=="cancelled_user" : FileRules.Select(f,history.Find(f.Path),mode)));selected=queue.Count;skipped=files.Count-selected;queueReady=true;int next=0;Stopwatch reportClock=Stopwatch.StartNew();
+                List<DiskFile> queue=FileRules.Order(files.Where(f=>String.IsNullOrEmpty(f.DestinationError)&&(mode==RunMode.Continue ? f.Status=="pending"||f.Status=="cancelled_user" : FileRules.Select(f,history.Find(f.Path),mode))));selected=queue.Count;skipped=files.Count-selected;queueReady=true;int next=0;Stopwatch reportClock=Stopwatch.StartNew();
                 Queue<Job> readyJobs=new Queue<Job>();
                 while(next<queue.Count||jobs.Count>0){
                     foreach(Job job in jobs.ToArray())if(job.Task!=null&&job.Task.IsCompleted)Finish(job,job.Task.GetAwaiter().GetResult());

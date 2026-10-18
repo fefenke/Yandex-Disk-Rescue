@@ -11,6 +11,7 @@ namespace DiskRescue {
             string result=Path.Combine(Path.GetDirectoryName(typeof(Tests).Assembly.Location),"self-test-results.txt");
             try{
                 SettingsStoreTests.Run(root);
+                DestinationPathsTests.Run(root);
                 PassTransitionTests.Run(root);
                 ScanControlsTests.Run(root);
                 InventoryCompletenessTests.Run(root);
