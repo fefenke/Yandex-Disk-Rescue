@@ -14,6 +14,7 @@ namespace DiskRescue {
                 PassTransitionTests.Run(root);
                 ScanControlsTests.Run(root);
                 InventoryCompletenessTests.Run(root);
+                PreserverCancellationTests.Run(root);
                 SafeDownloadTests.Run(root);
                 PreservedCleanupTests.Run(root);
                 ArchiveNameMigrationTests.Run(root);

@@ -53,20 +53,23 @@ namespace DiskRescue {
             string relative=Path.GetFullPath(f.Destination).Substring(root.TrimEnd('\\').Length).TrimStart('\\');string directory=Path.Combine(ArchiveRoot(title),Path.GetDirectoryName(relative));DurablePartial.SafePath(directory);Directory.CreateDirectory(directory);
             return Path.Combine(directory,Path.GetFileNameWithoutExtension(relative)+"_"+DateTime.UtcNow.ToString("yyyyMMdd_HHmmss")+"_"+Guid.NewGuid().ToString("N").Substring(0,10)+Path.GetExtension(relative));
         }
-        public bool Complete(DiskFile f,string payload,IntegrityResult check){lock(sync){
-            if(!check.Match&&String.IsNullOrEmpty(check.Actual)){check.Actual=Fingerprint(payload,"sha256");check.Algorithm="sha256";f.ActualHash=check.Actual;}
+        public bool Complete(DiskFile f,string payload,IntegrityResult check){return Complete(f,payload,check,CancellationToken.None,null);}
+        public bool Complete(DiskFile f,string payload,IntegrityResult check,CancellationToken token,Action<long,long> progress){lock(sync){
+            token.ThrowIfCancellationRequested();
+            if(!check.Match&&String.IsNullOrEmpty(check.Actual)){check.Actual=Fingerprint(payload,"sha256",token,progress);check.Algorithm="sha256";f.ActualHash=check.Actual;}
             CheckDestination(f.Destination);string ledgerPath=LedgerPath(f);Ledger ledger=Read(f);
             Operation op=new Operation{LedgerPath=ledgerPath,Version=CloudIntegrity.Version(f),Source=payload,Target=f.Destination,Destination=f.Destination,Expected=check.Expected,Algorithm=check.Algorithm,Blocked=!check.Match,Hash=check.Actual,Length=new FileInfo(payload).Length};
             if(File.Exists(f.Destination)){
-                IntegrityResult old=CloudIntegrity.Check(f.Destination,f,CancellationToken.None);
+                IntegrityResult old=CloudIntegrity.Check(f.Destination,f,token,progress);
                 if(!old.Match){op.OldSource=f.Destination;op.OldTarget=ArchivePath(f,old.Kind=="size_mismatch"?"Сохранённые прежние файлы":"Файлы с ошибкой проверки",old.Actual);}
-                else if(check.Match&&old.Kind!="size_only"){File.Delete(payload);return true;}
+                else if(check.Match&&old.Kind!="size_only"){token.ThrowIfCancellationRequested();File.Delete(payload);return true;}
                 else if(check.Match){op.OldSource=f.Destination;op.OldTarget=ArchivePath(f,"Сохранённые прежние файлы",old.Actual);}
             }
             if(op.Blocked){
-                Artifact duplicate=ledger.Copies.FirstOrDefault(a=>a.Hash==check.Actual&&a.Length==op.Length&&File.Exists(a.Path)&&new FileInfo(a.Path).Length==a.Length&&Fingerprint(a.Path,check.Algorithm)==a.Hash);
+                Artifact duplicate=ledger.Copies.FirstOrDefault(a=>a.Hash==check.Actual&&a.Length==op.Length&&File.Exists(a.Path)&&new FileInfo(a.Path).Length==a.Length&&Fingerprint(a.Path,check.Algorithm,token,progress)==a.Hash);
                 op.Target=duplicate==null?ArchivePath(f,"Файлы с ошибкой проверки",check.Actual):duplicate.Path;
             }
+            token.ThrowIfCancellationRequested();
             string intent=Path.Combine(state,"intent-"+Guid.NewGuid().ToString("N")+".json");DurablePartial.AtomicText(intent,json.Serialize(op));Apply(op);File.Delete(intent);f.PreservedPath=op.Blocked?op.Target:op.OldTarget;return !op.Blocked;
         }}
         public void PreservePartial(DiskFile f,string source,string sidecar){lock(sync){
@@ -75,7 +78,17 @@ namespace DiskRescue {
             if(!String.IsNullOrEmpty(sidecar)&&File.Exists(sidecar)){op.OldSource=sidecar;op.OldTarget=target+".map";}
             string intent=Path.Combine(state,"intent-"+Guid.NewGuid().ToString("N")+".json");DurablePartial.AtomicText(intent,json.Serialize(op));Apply(op);File.Delete(intent);
         }}
-        static string Fingerprint(string path,string algorithm){DurablePartial.SafePath(path);using(HashAlgorithm h=algorithm=="md5"?(HashAlgorithm)MD5.Create():SHA256.Create())using(Stream input=File.OpenRead(path))return BitConverter.ToString(h.ComputeHash(input)).Replace("-","").ToLowerInvariant();}
+        static string Fingerprint(string path,string algorithm){return Fingerprint(path,algorithm,CancellationToken.None,null);}
+        static string Fingerprint(string path,string algorithm,CancellationToken token,Action<long,long> progress){
+            token.ThrowIfCancellationRequested();DurablePartial.SafePath(path);
+            using(HashAlgorithm hash=algorithm=="md5"?(HashAlgorithm)MD5.Create():SHA256.Create())using(FileStream input=File.OpenRead(path)){
+                long length=input.Length,done=0;byte[] buffer=new byte[1024*1024];int count;
+                if(progress!=null)progress(0,length);
+                while(true){token.ThrowIfCancellationRequested();count=input.Read(buffer,0,buffer.Length);if(count==0)break;hash.TransformBlock(buffer,0,count,buffer,0);done+=count;if(progress!=null)progress(done,length);}
+                token.ThrowIfCancellationRequested();hash.TransformFinalBlock(new byte[0],0,0);
+                return BitConverter.ToString(hash.Hash).Replace("-","").ToLowerInvariant();
+            }
+        }
         static void MoveOnce(string source,string target){
             DurablePartial.SafePath(source);DurablePartial.SafePath(target);
             if(File.Exists(target)){

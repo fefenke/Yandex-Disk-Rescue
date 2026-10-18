@@ -195,7 +195,7 @@ namespace DiskRescue {
         }
         Result FinishPayload(Job job,string partial){
             stop.Token.ThrowIfCancellationRequested();IntegrityResult check=CloudIntegrity.Check(partial,job.File,stop.Token);job.File.Verification=check.Kind;job.File.ActualHash=check.Actual;
-            bool accepted=preserver.Complete(job.File,partial,check);
+            bool accepted=preserver.Complete(job.File,partial,check,stop.Token,null);
             DurablePartial.Forget(partial);ClearSegments(job.File);File.Delete(Path.Combine(history.DirectoryPath,"partials",HistoryStore.IdentityKey(job.File.Path)+".txt"));
             if(job.Map!=null)File.Delete(job.File.Destination+".ydr-map");
             if(!accepted)InvalidateLink(job);
