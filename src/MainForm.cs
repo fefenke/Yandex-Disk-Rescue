@@ -71,7 +71,7 @@ namespace DiskRescue {
             dataFolder=data; settingsPath=Path.Combine(data,"settings.json"); Directory.CreateDirectory(data);
             SettingsLoadResult loaded=SettingsStore.Load(settingsPath);settings=loaded.Value;
             settingsLoadWarning=loaded.Warning;settingsRecovered=loaded.RecoveredFromBackup;
-            settings=settings??new Settings();settings.ApplyTransferDefaults();settings.UseApi=true;
+            settings=settings??new Settings();settings.ApplyTransferDefaults();settings.ApplyCloudRefreshDefaults();settings.UseApi=true;
             settings.SupportUrl=new Settings().SupportUrl;
             settings.GitHubReleasesUrl=new Settings().GitHubReleasesUrl;
             ru=settings.Language!="en";

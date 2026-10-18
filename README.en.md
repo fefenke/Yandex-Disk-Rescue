@@ -58,7 +58,7 @@ Downloads use the API exclusively. Legacy client settings and Desktop statistics
 - API-only downloads without the installed Yandex Disk client; five modes with independent cloud-list refresh.
 - More reliable settings, encrypted token, destination ownership and progress persistence; local path conflicts are rejected before writes.
 - Corrected error selection and automatic retries; update downloads can be cancelled.
-- Fresh-install defaults: Download all remaining files, cloud refresh on manual Start, automatic retries and update checks enabled; cloud refresh on every automatic pass disabled. Timeouts 3 + 3 seconds, link/download concurrency 7/20, four streams from 256 MB.
+- Fresh-install defaults: Download all remaining files, both cloud-list refresh options disabled; automatic retries and update checks enabled. Timeouts 3 + 3 seconds, link/download concurrency 7/20, four streams from 256 MB.
 - Keep the `data` folder when replacing application files. Yandex server errors may persist: the app preserves available files and lets you retry the rest.
 
 How downloading works:

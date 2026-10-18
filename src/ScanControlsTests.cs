@@ -7,10 +7,11 @@ namespace DiskRescue {
         static void Assert(bool value,string message){if(!value)throw new Exception(message);}
         static object Field(MainForm form,string name){var f=typeof(MainForm).GetField(name,BindingFlags.Instance|BindingFlags.NonPublic);Assert(f!=null,"Missing scan control: "+name);return f.GetValue(form);}
         public static void Run(string root){
+            RefreshDefaultsMigration(root);
             using(var form=new MainForm(Path.Combine(root,"scan-controls"))){
                 var mode=(ComboBox)Field(form,"mode");Assert(mode.Items.Count==5,"Pass selector still exposes overlapping legacy modes.");
                 var first=(CheckBox)Field(form,"scanCloudStart");var every=(CheckBox)Field(form,"scanCloudRepeats");
-                Assert(first.Checked&&!every.Checked&&every.Enabled,"Release defaults must refresh on manual Start, without rescanning every automatic pass.");
+                Assert(!first.Checked&&!every.Checked&&!every.Enabled,"Both cloud refresh options must be off by default.");
                 Assert(mode.SelectedIndex==1&&((CheckBox)Field(form,"repeatProblems")).Checked&&((CheckBox)Field(form,"autoCheck")).Checked,"Release defaults must select Remaining, automatic retries and update checks.");
                 first.Checked=false;Assert(!every.Enabled,"Nested scan option stays enabled without its parent.");
                 first.Checked=true;Assert(every.Enabled,"Nested scan option stays disabled when its parent is checked.");every.Checked=true;
@@ -57,6 +58,17 @@ namespace DiskRescue {
             f.Status="pending";Assert(!FileRules.Select(f,null,RunMode.DownloadErrors),"Error-only first pass included a never-attempted file.");
             var old=new HistoryRecord{path=f.Path,length=f.Length,modified="old-version",status="failed"};Assert(!FileRules.Select(f,old,RunMode.DownloadErrors),"Refreshing selected an error from the previous cloud version.");
             Assert((RunMode)next.Invoke(null,new object[]{RunMode.DownloadErrors,true})==RunMode.DownloadErrors,"Automatic cloud refresh expanded the selected mode.");
+        }
+        public static void RefreshDefaultsMigration(string root){
+            string directory=Path.Combine(root,"refresh-defaults-migration"),path=Path.Combine(directory,"settings.json");Directory.CreateDirectory(directory);
+            File.WriteAllText(path,"{\"ScanCloudOnStart\":true,\"ScanCloudOnRepeats\":true,\"TransferSettingsVersion\":1,\"IdleSeconds\":9,\"LinkTimeoutSeconds\":12,\"RepeatProblemFiles\":false,\"AutoCheckUpdates\":false}");
+            using(var form=new MainForm(directory)){
+                var first=(CheckBox)Field(form,"scanCloudStart");var every=(CheckBox)Field(form,"scanCloudRepeats");
+                Assert(!first.Checked&&!every.Checked&&!every.Enabled,"Updating retained the unintended cloud refresh defaults.");
+                Assert(((NumericUpDown)Field(form,"idle")).Value==9&&((NumericUpDown)Field(form,"linkTimeout")).Value==12&&!((CheckBox)Field(form,"repeatProblems")).Checked&&!((CheckBox)Field(form,"autoCheck")).Checked,"Cloud refresh correction changed unrelated saved choices.");
+                first.Checked=true;every.Checked=true;
+            }
+            using(var form=new MainForm(directory))Assert(((CheckBox)Field(form,"scanCloudStart")).Checked&&((CheckBox)Field(form,"scanCloudRepeats")).Checked,"One-time correction erased a subsequent manual refresh choice.");
         }
     }
 }

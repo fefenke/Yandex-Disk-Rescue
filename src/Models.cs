@@ -26,7 +26,13 @@ namespace DiskRescue {
         public bool RestartClient = true;
         public bool UseApi;
         public bool UseCachedApiList = true;
-        public bool ScanCloudOnStart=true,ScanCloudOnRepeats;
+        public bool ScanCloudOnStart,ScanCloudOnRepeats;
+        public int CloudRefreshDefaultsVersion;
+
+        public void ApplyCloudRefreshDefaults(){
+            if(CloudRefreshDefaultsVersion>=1)return;
+            ScanCloudOnStart=false;ScanCloudOnRepeats=false;CloudRefreshDefaultsVersion=1;
+        }
 
         public bool AutoCheckUpdates = true;
         public string ApiFolder = "", RemoteFolder = "disk:/";
