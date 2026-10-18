@@ -13,9 +13,7 @@ namespace DiskRescue {
             AppDomain.CurrentDomain.UnhandledException+=delegate(object sender,UnhandledExceptionEventArgs e){Exception error=e.ExceptionObject as Exception;if(error!=null)CrashDiagnostics.Save(error);};
             Application.ThreadException+=delegate(object sender,ThreadExceptionEventArgs e){string path=CrashDiagnostics.Save(e.Exception);MainForm form=Application.OpenForms.Count>0?Application.OpenForms[0] as MainForm:null;if(form!=null)form.HandleUiFailure(path);else MessageBox.Show("Ошибка интерфейса: "+e.Exception.GetType().Name+"\n"+path,"Yandex Disk Rescue");};
             Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
-            if(args.Length>2&&args[0]=="--probe"){
-                File.WriteAllText(args[2],new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(YandexCloudNative.Probe(args[1])));return 0;
-            }
+
             if(args.Length>0&&args[0]=="--self-test")return Tests.Run();
             if(args.Length>0&&(args[0]=="--render-preview"||args[0]=="--render-preview-api"||args[0]=="--render-dashboard")){
                 string data=Path.Combine(Path.GetTempPath(),"disk-rescue-preview-"+Guid.NewGuid().ToString("N"));
@@ -39,7 +37,7 @@ namespace DiskRescue {
                 string data=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"data");
                 try {
                     PrerequisiteStatus requirements=Prerequisites.Check();
-                    if(!requirements.PlatformReady){MessageBox.Show("Windows 10 1709+ / Windows 11 (x64/x86 build) and .NET Framework 4.7.1+ with Cloud Files are required.\n\nТребуются Windows 10 1709+ / Windows 11 (x64/x86 build), .NET Framework 4.7.1+ и Cloud Files.\n\nUse / Используйте: Start Yandex Disk Rescue.cmd", "Yandex Disk Rescue", MessageBoxButtons.OK,MessageBoxIcon.Information);return 1;}
+                    if(!requirements.PlatformReady){MessageBox.Show("Windows 10 1709+ / Windows 11 (x64/x86 build) and .NET Framework 4.7.1+ are required.\n\nТребуются Windows 10 1709+ / Windows 11 (x64/x86 build), .NET Framework 4.7.1+.\n\nUse / Используйте: Start Yandex Disk Rescue.cmd", "Yandex Disk Rescue", MessageBoxButtons.OK,MessageBoxIcon.Information);return 1;}
                     Directory.CreateDirectory(data);Application.Run(new MainForm(data));
                 }
                 catch(Exception ex){string path=CrashDiagnostics.Save(ex);MessageBox.Show(ex.GetType().Name+"\n"+path,"Yandex Disk Rescue",MessageBoxButtons.OK,MessageBoxIcon.Error);return 1;}

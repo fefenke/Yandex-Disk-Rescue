@@ -88,10 +88,10 @@ namespace DiskRescue {
         }
         string T(string a,string b){return ru?a:b;}
         public void Translate(bool russian){ru=russian;if(search.IsHandleCreated)Cue(search.Handle,0x1501,new IntPtr(1),T("Поиск в выбранной папке…","Search this folder…"));expand.Text=detached==null?T("Развернуть","Expand"):T("Свернуть","Restore");remaining.Text=T("Только нескачанные","Only remaining");open.Text=T("Открыть файл","Open file");reveal.Text=T("Показать в Проводнике","Show in Explorer");grid.Columns[1].HeaderText=T("Имя","Name");grid.Columns[2].HeaderText=T("Состояние","Status");grid.Columns[3].HeaderText=T("Размер","Size");if(last!=null){List<BrowserFile> saved=last;last=null;UpdateCatalog(saved,root);}}
-        public async void LoadSaved(string data,bool api,string destination,string remote){
-            string context=data+"|"+api+"|"+destination+"|"+remote;
+        public async void LoadSaved(string data,string destination,string remote){
+            string context=data+"|API|"+destination+"|"+remote;
             if(loading||String.IsNullOrWhiteSpace(destination)||(last!=null&&context==loadedContext))return;loading=true;int ticket=++generation;if(context!=loadedContext)UpdateCatalog(new List<BrowserFile>(),destination);summary.Text=T("Читаем сохранённую историю…","Reading saved history…");
-            try{List<BrowserFile> saved=await Task.Run(()=>BrowserCatalog.Load(data,api,destination,remote));if(!IsDisposed&&ticket==generation){loadedContext=context;UpdateCatalog(saved,destination);}}
+            try{List<BrowserFile> saved=await Task.Run(()=>BrowserCatalog.Load(data,true,destination,remote));if(!IsDisposed&&ticket==generation){loadedContext=context;UpdateCatalog(saved,destination);}}
             catch(Exception ex){if(!IsDisposed)summary.Text=T("Не удалось прочитать историю: ","Could not read history: ")+ex.GetType().Name;}
             finally{loading=false;}
         }

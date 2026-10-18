@@ -10,7 +10,21 @@ using System.Threading.Tasks;
 namespace DiskRescue {
     internal static class ModePolicyTests {
         static void Assert(bool ok,string message){if(!ok)throw new Exception(message);}
-        public static void Run(string root){Selection(root);Session(root);RefreshedErrors(root);MetadataChanged(root);ManualIntegrity(root);LegacyHistory(root);}
+        public static void Run(string root){Selection(root);Session(root);RefreshedErrors(root);MetadataChanged(root);MetadataChangedFailure(root);ManualIntegrity(root);LegacyHistory(root);}
+        public static void MetadataChangedFailure(string root){
+            string folder=Path.Combine(root,"mode-failed-pass"),data=folder+"-data";Directory.CreateDirectory(folder);
+            string hash=SafeDownloadTests.Hash("test",false),context="mode-test|disk:/|"+Path.GetFullPath(folder).ToUpperInvariant();
+            using(var history=new HistoryStore(data,folder,context))history.SaveApi(new DiskFile{Path="disk:/failed",Modified="v1|"+hash,Length=4},"failed","old error");
+            ApiEngine engine=null;bool injected=false;Snapshot last=null;
+            engine=new ApiEngine(data,s=>{
+                last=s;if(injected||s.Phase!="running")return;
+                var jobs=(System.Collections.IEnumerable)typeof(ApiEngine).GetField("jobs",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(engine);
+                foreach(object job in jobs){var task=(Task)job.GetType().GetField("LinkTask").GetValue(job);if(task==null)continue;Assert(task.Wait(5000),"Metadata fixture timed out.");injected=true;throw new IOException("Synthetic report/publication failure.");}
+            },new Api{Names=new[]{"failed"},NewMetadata=true},new Download());
+            engine.Run(new Settings{ApiToken="test-secret",UseApi=true,ApiFolder=folder,UseCachedApiList=false,ApiRequestIntervalMs=25},RunMode.DownloadErrors);
+            Assert(injected&&last.Phase=="error","The exceptional drain fixture did not run.");
+            using(var history=new HistoryStore(data,folder,context))Assert(history.Find("disk:/failed").modified=="v1|"+hash&&history.Find("disk:/failed").message=="old error","Exceptional cleanup overwrote an excluded version's history.");
+        }
         public static void Selection(string root){
             var file=new DiskFile{Path="disk:/changed",Modified="v2",Length=4};
             var previous=new HistoryRecord{path=file.Path,modified="v1",length=4,status="failed"};

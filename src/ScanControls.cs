@@ -28,7 +28,7 @@ namespace DiskRescue {
             credentials.Controls.Add(scanCloudStart,0,2);credentials.SetColumnSpan(scanCloudStart,2);credentials.Controls.Add(scanCloudRepeats,0,3);credentials.SetColumnSpan(scanCloudRepeats,2);
             scanCloudStart.CheckedChanged+=delegate{UpdateScanOptions();SaveScanOptions();};scanCloudRepeats.CheckedChanged+=delegate{SaveScanOptions();};UpdateScanOptions();
         }
-        void SaveScanOptions(){if(busy||translating)return;settings.ScanCloudOnStart=scanCloudStart.Checked;settings.ScanCloudOnRepeats=scanCloudRepeats.Checked;SaveSettings();}
+        void SaveScanOptions(){if(busy)return;settings.ScanCloudOnStart=scanCloudStart.Checked;settings.ScanCloudOnRepeats=scanCloudRepeats.Checked;SaveSettings();}
         void UpdateScanOptions(){scanCloudStart.Enabled=!busy;scanCloudRepeats.Enabled=!busy&&scanCloudStart.Checked;scanCloudRepeats.Visible=true;}
         void TranslateScanOptions(){
             scanCloudStart.Text=T("Обновлять список файлов из облака при запуске","Refresh cloud file list when starting");
@@ -46,7 +46,7 @@ namespace DiskRescue {
             foreach(Control field in new Control[]{apiToken,remoteFolder,folder,idle,linkTimeout,requestInterval,linkConcurrency,downloadConcurrency}){
                 field.Dock=DockStyle.None;field.Anchor=AnchorStyles.Left|AnchorStyles.Right;field.Margin=new Padding(field.Margin.Left,0,field.Margin.Right,0);
             }
-            foreach(ComboBox field in new[]{method,mode}){
+            foreach(ComboBox field in new[]{mode}){
                 var panel=field.Parent;panel.Margin=new Padding(panel.Margin.Left,0,panel.Margin.Right,0);field.Dock=DockStyle.None;field.Anchor=AnchorStyles.Left|AnchorStyles.Right;
                 Action layout=delegate{field.SetBounds(0,0,panel.ClientSize.Width,field.PreferredHeight);field.Top=Math.Max(0,(panel.ClientSize.Height-field.Height)/2);};panel.SizeChanged+=delegate{layout();};field.FontChanged+=delegate{layout();};layout();
             }

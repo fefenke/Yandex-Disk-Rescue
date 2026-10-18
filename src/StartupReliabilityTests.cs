@@ -114,11 +114,11 @@ namespace DiskRescue {
             string data=Path.Combine(root,"api-only-shell");Directory.CreateDirectory(data);File.WriteAllText(Path.Combine(data,"settings.json"),"{\"UseApi\":false,\"RestartClient\":false}");
             using(var form=new MainForm(data)){
                 var flags=BindingFlags.Instance|BindingFlags.NonPublic;
-                var method=(System.Windows.Forms.ComboBox)typeof(MainForm).GetField("method",flags).GetValue(form);
+                var method=typeof(MainForm).GetField("method",flags);
                 var settings=(Settings)typeof(MainForm).GetField("settings",flags).GetValue(form);
-                Assert(settings.UseApi&&method.Items.Count==1&&method.SelectedIndex==0,"Retired client mode remains selectable or old settings disabled API.");
+                Assert(settings.UseApi&&method==null,"Retired client mode remains selectable or old settings disabled API.");
                 typeof(MainForm).GetField("ru",flags).SetValue(form,false);typeof(MainForm).GetMethod("Translate",flags).Invoke(form,null);
-                Assert(settings.UseApi&&method.Items.Count==1&&method.SelectedIndex==0,"Language switch restored retired client mode.");
+                Assert(settings.UseApi&&method==null,"Language switch restored retired client mode.");
             }
         }
         public static void Compatibility(string root){

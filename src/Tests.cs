@@ -96,15 +96,9 @@ namespace DiskRescue {
                 using(HistoryStore store=new HistoryStore(data,root))Assert(store.Records.Count==2,"History reload failed.");
                 Assert(FileRules.Category("x.HEIC")=="photos"&&FileRules.Category("x.mov")=="videos"&&FileRules.Category("x.pdf")=="documents"&&FileRules.Category("x.iso")=="archives"&&FileRules.Category("x.flac")=="audio"&&FileRules.Category("x.exe")=="other","File categories failed.");
                 Assert(Prerequisites.FrameworkSupported(461308)&&Prerequisites.FrameworkSupported(533509)&&!Prerequisites.FrameworkSupported(460798),"Framework prerequisite threshold failed.");
-                Assert(!YandexCloudNative.Probe(a).Supported,"Local file incorrectly marked cloud-only.");
-                Engine engine=new Engine(data);engine.Run(new Settings{Folder=root,RestartClient=false},RunMode.Remaining);
-                Assert(engine.Latest.Finished&&engine.Latest.Phase=="completed"&&engine.Latest.Available>=2,"Local engine run failed.");
-                Assert(File.Exists(Path.Combine(engine.Latest.Report,"folders.csv")),"Folder report missing.");
-                Assert(engine.Latest.ProgressChecked==engine.Latest.Processed&&engine.Latest.ProgressTotal==engine.Latest.Selected,"Native counters do not describe the current pass.");
-                string before=File.ReadAllText(a);engine.Run(new Settings{Folder=root,RestartClient=false},RunMode.All);Assert(File.ReadAllText(a)==before,"Recheck changed local content.");
-                string missing=Path.Combine(root,"missing");engine.Run(new Settings{Folder=missing},RunMode.Remaining);Assert(engine.Latest.Phase=="error","Missing folder was not reported.");
+                ApiOnlyTests.Run(root);
                 ApiTests.Run(root);
-                File.WriteAllText(result,"PASS: safe copy preservation and recovery, MD5/SHA256 priority, missing-hash evidence, version failure ledger, manual retry and deduplication, single-payload range maps and process-kill recovery; segmented range downloads, shared connection budget, per-stream idle timeouts and queue exclusion, retained segment resume, torn merge and changed-version recovery, unsupported/invalid ranges, corruption and Stop; native checks plus independent 7-link / 20-download pipeline, separate timeout budgets, queue exclusion, cancellation and history, API authentication, path safety, resume/MD5 integrity, retry filters, defaults and encrypted token storage.",Encoding.UTF8);
+                File.WriteAllText(result,"PASS: safe copy preservation and recovery, MD5/SHA256 priority, missing-hash evidence, version failure ledger, manual retry and deduplication, single-payload range maps and process-kill recovery; segmented range downloads, shared connection budget, per-stream idle timeouts and queue exclusion, retained segment resume, torn merge and changed-version recovery, unsupported/invalid ranges, corruption and Stop; API-only facade and legacy compatibility plus independent 7-link / 20-download and 30-link / 30-download pipelines, separate timeout budgets, queue exclusion, cancellation and history, API authentication, path safety, resume/MD5 integrity, retry filters, defaults and encrypted token storage.",Encoding.UTF8);
                 return 0;
             }catch(Exception ex){File.WriteAllText(result,"FAIL: "+ex.ToString(),Encoding.UTF8);return 1;}
         }

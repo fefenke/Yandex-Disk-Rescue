@@ -18,6 +18,5 @@ namespace DiskRescue {
             tip.SetToolTip(streamsPerFile,T("1–8 потоков на один крупный файл, по умолчанию 4. Значение 1 отключает разделение новых файлов. Все потоки учитываются в общем лимите соединений скачивания. Ожидание очереди не расходует таймаут.","1–8 streams per large file; default 4. Set 1 to disable splitting new files. All streams count toward the shared download connection limit. Queue time does not consume the idle timeout."));
             tip.SetToolTip(multiStreamThreshold,T("Крупные файлы от этого размера делятся на части. 64–4096 МБ, по умолчанию 256. Данные частей сохраняются при обрывах и проверяются по MD5 после сборки.","Files at or above this size are split into ranges. 64–4096 MB; default 256. Parts survive interruptions and the assembled file is checked against MD5."));
         }
-        void SetStreamsVisible(bool api){if(streamsPerFile==null)return;streamsCaption.Visible=streamsPerFile.Visible=thresholdCaption.Visible=multiStreamThreshold.Visible=api;streamsPerFile.Enabled=multiStreamThreshold.Enabled=api&&!busy;}
     }
 }
