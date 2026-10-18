@@ -38,7 +38,31 @@ namespace DiskRescue {
         static Snapshot Pass(string data,string folder,Api api,bool fail,bool cached=false){
             Snapshot last=null;new ApiEngine(data,s=>last=s,api,new Download{Api=api,Fail=fail}).Run(new Settings{UseApi=true,ApiToken="test-secret",ApiFolder=folder,UseCachedApiList=cached,ApiRequestIntervalMs=25,StreamsPerFile=1},RunMode.Remaining);return last;
         }
-        public static void Run(string root){TreeConflicts(root);Refresh(root);PartialRefresh(root);InterruptedRefresh(root);Ambiguous(root);LegacyAndUntrusted(root);RetainedState(root);PhysicalDirectory(root);}
+        public static void Run(string root){TreeConflicts(root);Refresh(root);PartialRefresh(root);InterruptedRefresh(root);Ambiguous(root);LegacyAndUntrusted(root);RetainedState(root);PhysicalDirectory(root);CachedResolution(root);}
+        public static void CachedResolution(string root){
+            foreach(bool locked in new[]{false,true}){
+                string folder=Path.Combine(root,"cached-resolution-"+locked),data=folder+"-data";Directory.CreateDirectory(folder);
+                string ambiguous=Path.Combine(folder,"a.bin.ydr-part");File.WriteAllText(ambiguous,"personal");
+                var first=new Api();first.Files.Add("disk:/A.bin","UPPR");first.Files.Add("disk:/a.bin","lowr");
+                Assert(Pass(data,folder,first,false).Catalog.All(f=>f.Status=="failed"),"Ambiguous fixture unexpectedly downloaded files.");
+                // The user resolves the conflict by moving their bytes aside.
+                string retained=Path.Combine(folder,"retained-personal");File.Move(ambiguous,retained);
+                string cache=Directory.GetFiles(Path.Combine(data,"api-inventory"),"inventory.json",SearchOption.AllDirectories).Single();
+                var next=new Api();next.Files.Add("disk:/A.bin","UPPR");next.Files.Add("disk:/a.bin","lowr");Snapshot last;
+                if(locked){
+                    using(var hold=new FileStream(cache,FileMode.Open,FileAccess.Read,FileShare.Read))last=Pass(data,folder,next,false,true);
+                    Assert(last.Phase=="error"&&next.Links.Count==0,"A cached pass downloaded before persisting new destination ownership.");
+                }else{
+                    last=Pass(data,folder,next,false,true);Assert(last.Downloaded==2,"Resolved cached files were not downloaded.");
+                    var third=new Api();third.Files.Add("disk:/A.bin","UPPR");third.Files.Add("disk:/a.bin","lowr");last=Pass(data,folder,third,false,true);
+                    Assert(last.Phase=="completed"&&last.Available==2&&third.Links.Count==0,"A cached pass forgot resolved destination ownership and blocked completed files.");
+                    Assert(File.ReadAllText(Path.Combine(folder,"A.bin"))=="UPPR"&&last.Catalog.Any(f=>File.ReadAllText(f.LocalPath)=="lowr"),"Case-sensitive file contents changed.");
+                    using(var hold=new FileStream(cache,FileMode.Open,FileAccess.Read,FileShare.Read))last=Pass(data,folder,third,false,true);
+                    Assert(last.Phase=="completed"&&last.Available==2,"An unchanged cached pass unnecessarily rewrote destination assignments.");
+                }
+                Assert(File.ReadAllText(retained)=="personal","Resolving the cached conflict damaged retained bytes.");
+            }
+        }
         public static void PhysicalDirectory(string root){
             string folder=Path.Combine(root,"directory-at-map"),data=folder+"-data";Directory.CreateDirectory(Path.Combine(folder,"a.bin.ydr-map"));
             string personal=Path.Combine(folder,"a.bin.ydr-map","personal.txt");File.WriteAllText(personal,"keep");

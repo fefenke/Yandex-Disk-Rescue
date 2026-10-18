@@ -1,1 +1,1 @@
-PASS: 2324 synthetic reports/settings files from two final-suite roots contain no test-secret, sensitive-credential or signed-link lease markers.
+PASS: 2372 synthetic reports/settings files from two final-review suite roots contain no test-secret, sensitive-credential or signed-link lease markers.

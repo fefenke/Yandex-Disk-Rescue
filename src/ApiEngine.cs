@@ -147,9 +147,16 @@ namespace DiskRescue {
             AssignDestinations();
             SaveInventory(cachePath,account,root,true,folders,null,0);
         }
-        void AssignDestinations(){
+        bool AssignDestinations(){
             DestinationPaths.Assign(files,settings.ApiFolder,savedDestinations);
-            foreach(DiskFile file in files)if(String.IsNullOrEmpty(file.DestinationError))savedDestinations[file.Path]=file.Destination;
+            bool changed=false;
+            foreach(DiskFile file in files)if(String.IsNullOrEmpty(file.DestinationError)){
+                string previous;
+                if(!savedDestinations.TryGetValue(file.Path,out previous)||!String.Equals(previous,file.Destination,StringComparison.Ordinal)){
+                    savedDestinations[file.Path]=file.Destination;changed=true;
+                }
+            }
+            return changed;
         }
         internal static void AssignDestinations(List<DiskFile> files,string root){
             DestinationPaths.Assign(files,root,DestinationPaths.Saved(files,root));
@@ -180,7 +187,14 @@ namespace DiskRescue {
                 if(cache.ScanErrors>0&&(cache.Version<3||cache.FailedFolders==null||cache.FailedFolders.Count==0)){Event("Rebuilding an incomplete legacy API list; local downloads and history are retained.");Scan(remote,path,account,null);return;}
                 inventoryCheckpoint=cache;
                 foreach(DiskFile file in cache.Files){stop.Token.ThrowIfCancellationRequested();if(file==null||String.IsNullOrEmpty(file.Path)||file.Length<0)throw new IOException("Saved API list is invalid. Refresh the list.");file.Status="pending";file.Message="";file.Local=false;file.DownloadedBytes=null;if(remotePaths.Add(file.Path))files.Add(file);}
-                scanErrors=cache.ScanErrors;if(!cache.Complete||(cache.FailedFolders!=null&&cache.FailedFolders.Count>0)||(cache.PendingFolders!=null&&cache.PendingFolders.Count>0)||!String.IsNullOrEmpty(cache.ActiveFolder)){Event("Resuming API scan from saved position: "+files.Count+" files already found.");Scan(remote,path,account,cache);}AssignDestinations();Event("Using saved API list: "+files.Count+" files. New or changed cloud files require refreshing the list.");if(scanErrors>0)Event("Saved list is incomplete: "+scanErrors+" listing errors.");return;
+                scanErrors=cache.ScanErrors;if(!cache.Complete||(cache.FailedFolders!=null&&cache.FailedFolders.Count>0)||(cache.PendingFolders!=null&&cache.PendingFolders.Count>0)||!String.IsNullOrEmpty(cache.ActiveFolder)){Event("Resuming API scan from saved position: "+files.Count+" files already found.");Scan(remote,path,account,cache);}
+                if(AssignDestinations()){
+                    // Resolved conflicts or a new destination root can establish
+                    // ownership without scanning. Persist it before writing bytes.
+                    stop.Token.ThrowIfCancellationRequested();InventoryCache checkpoint=inventoryCheckpoint;
+                    SaveInventory(path,account,remote,checkpoint.Complete,new Stack<string>((checkpoint.PendingFolders??new List<string>()).AsEnumerable().Reverse()),checkpoint.ActiveFolder,checkpoint.NextOffset);
+                }
+                Event("Using saved API list: "+files.Count+" files. New or changed cloud files require refreshing the list.");if(scanErrors>0)Event("Saved list is incomplete: "+scanErrors+" listing errors.");return;
             }
             if(settings.UseCachedApiList)Event("No saved API list for this account and folder. Scanning first.");
             if(File.Exists(path)){
