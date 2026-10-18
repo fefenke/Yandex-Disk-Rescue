@@ -4,7 +4,6 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 namespace DiskRescue {
@@ -37,6 +36,9 @@ namespace DiskRescue {
         readonly Color ink = Color.FromArgb(30,38,59), muted = Color.FromArgb(110,120,143), accent = Color.FromArgb(89,101,233);
         readonly string dataFolder, settingsPath;
         Settings settings;
+        bool settingsReady,settingsRecovered;
+        string settingsLoadWarning,settingsSaveWarning;
+        Label settingsNotice;
         Engine engine;
         Task work;
         bool ru, busy, closeWhenStopped;
@@ -68,7 +70,8 @@ namespace DiskRescue {
         ToolTip tip = new ToolTip();
         public MainForm(string data) {
             dataFolder=data; settingsPath=Path.Combine(data,"settings.json"); Directory.CreateDirectory(data);
-            try { settings = File.Exists(settingsPath) ? new JavaScriptSerializer().Deserialize<Settings>(File.ReadAllText(settingsPath)) : new Settings(); } catch { settings=new Settings(); }
+            SettingsLoadResult loaded=SettingsStore.Load(settingsPath);settings=loaded.Value;
+            settingsLoadWarning=loaded.Warning;settingsRecovered=loaded.RecoveredFromBackup;
             settings=settings??new Settings();settings.ApplyTransferDefaults();settings.UseApi=true;
             settings.SupportUrl=new Settings().SupportUrl;
             settings.GitHubReleasesUrl=new Settings().GitHubReleasesUrl;
@@ -78,6 +81,7 @@ namespace DiskRescue {
             AutoScaleMode=AutoScaleMode.Dpi;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             Build(); BuildShell(); CenterSettingsFields(); Translate(); engine=new Engine(dataFolder);SetupUpdates();
+            settingsReady=true;RefreshSettingsNotice();
             timer.Interval=400; timer.Tick += delegate { Render(engine.Latest); };
             FormClosing += delegate(object sender, FormClosingEventArgs args) {
                 if (busy) { args.Cancel=true; closeWhenStopped=true; if(sessionStop!=null)sessionStop.Cancel(); engine.Stop(); start.Enabled=false; phase.Text=T("Останавливаем запросы перед выходом…","Stopping requests before exit…"); }
@@ -216,7 +220,7 @@ namespace DiskRescue {
             tabs.TabPages[3].Text=T("Файлы и папки","Files and folders");dashboard.Translate(ru);tabs.TabPages[0].Text=T("Категории","Categories");tabs.TabPages[1].Text=T("Журнал","Activity log");
             categories.Columns.Clear();foreach(string c in new string[]{T("Тип","Type"),T("Всего","Total"),T("Скачаны","Downloaded total"),T("Скачано за текущий проход","Downloaded this pass"),T("Осталось","Remaining"),T("Нет ответа / сбой загрузки","Timeout / download failure"),T("Ошибки синхронизации","Sync errors")})categories.Columns.Add(c,c);
             categories.Columns[0].FillWeight=145;categories.Columns[3].FillWeight=155;categories.Columns[5].FillWeight=110;categories.Columns[6].FillWeight=145;categories.ColumnHeadersDefaultCellStyle.WrapMode=DataGridViewTriState.True;categories.ColumnHeadersHeightSizeMode=DataGridViewColumnHeadersHeightSizeMode.EnableResizing;categories.ColumnHeadersHeight=48;
-            TranslateStreams();footer.Text="";ApplyMethod();TranslateShell();
+            TranslateStreams();footer.Text="";ApplyMethod();TranslateShell();RefreshSettingsNotice();
         }
                 void ApplyMethod(){
             bool api=settings.UseApi;credentials.Visible=api;tokenHelp.Visible=api;methodReadout.Text=Convert.ToString(method.SelectedItem);setupGrid.RowStyles[2].Height=api?120:0;pageGrid.RowStyles[2].Height=api?407:241;linkTimeout.Visible=linkTimeoutCaption.Visible=api;linkTimeout.Enabled=api&&!busy;
@@ -245,7 +249,25 @@ namespace DiskRescue {
                 if(d.ShowDialog(this)==DialogResult.OK){folder.Text=d.SelectedPath;if(settings.UseApi)settings.ApiFolder=d.SelectedPath;else settings.Folder=d.SelectedPath;SaveSettings();}
             }
         }
-        void SaveSettings() { try { File.WriteAllText(settingsPath,new JavaScriptSerializer().Serialize(settings)); } catch { } }
+        bool SaveSettings() {
+            if(!settingsReady)return false;
+            try{SettingsStore.Save(settingsPath,settings);settingsSaveWarning=null;settingsLoadWarning=null;RefreshSettingsNotice();return true;}
+            catch(UnauthorizedAccessException){settingsSaveWarning="permission";}
+            catch(IOException){settingsSaveWarning="io";}
+            catch(Exception){settingsSaveWarning="other";}
+            RefreshSettingsNotice();return false;
+        }
+        void RefreshSettingsNotice(){
+            if(settingsNotice==null)return;
+            string message="";
+            if(settingsSaveWarning=="permission")message=T("Настройки не сохранены. Проверьте права записи и атрибут «Только чтение».","Settings not saved. Check write permissions and the read-only attribute.");
+            else if(settingsSaveWarning=="io")message=T("Настройки не сохранены. Проверьте свободное место и не занят ли файл другой программой.","Settings not saved. Check free disk space and whether another program has locked the file.");
+            else if(settingsSaveWarning!=null)message=T("Настройки не сохранены. Повторите изменение после устранения ошибки.","Settings not saved. Retry the change after resolving the error.");
+            else if(settingsLoadWarning!=null)message=settingsRecovered?T("Настройки восстановлены из резервной копии. Основной файл пока не изменён.","Settings recovered from the backup. The primary file has not been changed."):T("Не удалось прочитать настройки. Используются значения по умолчанию; исходные файлы сохранены.","Settings could not be read. Defaults are in use; original files have been retained.");
+            settingsNotice.Text=message;settingsNotice.Visible=message.Length>0;
+            TableLayoutPanel parent=settingsNotice.Parent as TableLayoutPanel;
+            if(parent!=null)parent.RowStyles[parent.GetRow(settingsNotice)].Height=message.Length>0?48:0;
+        }
         void StartStop(object sender,EventArgs args) {
             if(busy){if(sessionStop!=null)sessionStop.Cancel();engine.Stop();start.Enabled=false;phase.Text=T("Завершаем и отменяем текущие запросы…","Finishing and cancelling current requests…");return;}
             if(settings.UseApi&&String.IsNullOrWhiteSpace(apiToken.Text)){MessageBox.Show(this,T("Укажите OAuth-токен.","Enter an OAuth token."),Text);return;}
@@ -258,7 +280,7 @@ namespace DiskRescue {
                 if(MessageBox.Show(this,message,Text,MessageBoxButtons.YesNo,MessageBoxIcon.Information)==DialogResult.Yes)System.Diagnostics.Process.Start(environment.ClientInstalled?environment.ClientPath:"https://disk.yandex.ru/download");
                 return;
             }
-            if(settings.UseApi){settings.ScanCloudOnStart=scanCloudStart.Checked;settings.ScanCloudOnRepeats=scanCloudRepeats.Checked;settings.ApiFolder=Path.GetFullPath(folder.Text);settings.ApiToken=apiToken.Text.Trim();try{settings.RemoteFolder=ApiEngine.NormalizeRemote(remoteFolder.Text);TokenVault.Save(dataFolder,settings.ApiToken);}catch(Exception){MessageBox.Show(this,T("Проверьте облачный путь и доступ к хранилищу токена.","Check the cloud path and token storage permissions."),Text);return;}}else settings.Folder=Path.GetFullPath(folder.Text);settings.Concurrency=5;settings.IdleSeconds=(int)idle.Value;settings.LinkTimeoutSeconds=(int)linkTimeout.Value;settings.ApiLinkConcurrency=(int)linkConcurrency.Value;settings.ApiDownloadConcurrency=(int)downloadConcurrency.Value;settings.ApiRequestIntervalMs=(int)requestInterval.Value;settings.RepeatProblemFiles=repeatProblems.Checked;settings.RestartClient=true;SaveSettings();
+            if(settings.UseApi){settings.ScanCloudOnStart=scanCloudStart.Checked;settings.ScanCloudOnRepeats=scanCloudRepeats.Checked;settings.ApiFolder=Path.GetFullPath(folder.Text);settings.ApiToken=apiToken.Text.Trim();try{settings.RemoteFolder=ApiEngine.NormalizeRemote(remoteFolder.Text);TokenVault.Save(dataFolder,settings.ApiToken);}catch(Exception){MessageBox.Show(this,T("Проверьте облачный путь и доступ к хранилищу токена.","Check the cloud path and token storage permissions."),Text);return;}}else settings.Folder=Path.GetFullPath(folder.Text);settings.Concurrency=5;settings.IdleSeconds=(int)idle.Value;settings.LinkTimeoutSeconds=(int)linkTimeout.Value;settings.ApiLinkConcurrency=(int)linkConcurrency.Value;settings.ApiDownloadConcurrency=(int)downloadConcurrency.Value;settings.ApiRequestIntervalMs=(int)requestInterval.Value;settings.RepeatProblemFiles=repeatProblems.Checked;settings.RestartClient=true;if(!SaveSettings())return;
 
             integrityPass=mode.SelectedIndex==4;busy=true;SetBusy(true);phase.Text=T("Подготовка…","Preparing…");progress.Style=ProgressBarStyle.Marquee;timer.Start();
             RunMode runMode=integrityPass?RunMode.IntegrityFailures:new[]{RunMode.All,RunMode.Remaining,RunMode.DownloadErrors,RunMode.PartialFiles}[mode.SelectedIndex];

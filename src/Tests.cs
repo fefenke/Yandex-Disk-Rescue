@@ -10,6 +10,7 @@ namespace DiskRescue {
             string root=Path.Combine(Path.GetTempPath(),"disk-rescue-tests-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
             string result=Path.Combine(Path.GetDirectoryName(typeof(Tests).Assembly.Location),"self-test-results.txt");
             try{
+                SettingsStoreTests.Run(root);
                 PassTransitionTests.Run(root);
                 ScanControlsTests.Run(root);
                 InventoryCompletenessTests.Run(root);
