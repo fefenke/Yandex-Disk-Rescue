@@ -4,7 +4,8 @@ using System.Windows.Forms;
 namespace DiskRescue {
     internal static class ScanSessionPolicy {
         public static bool UseCachedList(Settings settings,bool automaticPass){return !(settings.ScanCloudOnStart&&(!automaticPass||settings.ScanCloudOnRepeats));}
-        public static RunMode NextMode(RunMode initial,bool refreshing){return initial==RunMode.PartialFiles?RunMode.PartialFiles:initial==RunMode.DownloadErrors?(refreshing?RunMode.ErrorsAndNew:RunMode.DownloadErrors):RunMode.Remaining;}
+        public static RunMode NextMode(RunMode initial,bool refreshing){return initial==RunMode.All?RunMode.Remaining:initial;}
+        public static bool ShouldRepeat(RunMode mode,Snapshot result,bool repeat,bool stopped){return mode!=RunMode.IntegrityFailures&&PassHistory.ShouldRepeat(result,repeat,stopped)&&!(result.Phase=="completed"&&result.Selected==0&&result.ScanErrors==0);}
     }
     public sealed partial class MainForm {
         CheckBox scanCloudStart,scanCloudRepeats;

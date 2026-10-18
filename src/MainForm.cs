@@ -306,7 +306,7 @@ namespace DiskRescue {
                     Snapshot result=engine.Latest;
                     if(result.Finished){PassResult row=PassResult.From(result,started,settings.UseApi,runMode);row.IdleSeconds=settings.IdleSeconds;row.LinkTimeoutSeconds=settings.UseApi?settings.LinkTimeoutSeconds:0;row.ApiLinkConcurrency=settings.UseApi?settings.ApiLinkConcurrency:0;row.ApiDownloadConcurrency=settings.UseApi?settings.ApiDownloadConcurrency:0;row.ApiRequestIntervalMs=settings.UseApi?settings.ApiRequestIntervalMs:0;PassHistory.Append(Path.Combine(dataFolder,"passes.jsonl"),row);passRows.Add(row);if(passRows.Count>PassHistory.MaximumEntries)passRows.RemoveRange(0,passRows.Count-PassHistory.MaximumEntries);RenderPasses();}
                     Render(result);
-                    if(runMode==RunMode.IntegrityFailures||!PassHistory.ShouldRepeat(result,repeat,sessionStop.IsCancellationRequested)||(result.Phase=="completed"&&result.Selected==0&&result.ScanErrors==0))break;
+                    if(!ScanSessionPolicy.ShouldRepeat(runMode,result,repeat,sessionStop.IsCancellationRequested))break;
                     automaticPass=true;if(result.Phase=="completed")runMode=ScanSessionPolicy.NextMode(initialMode,!ScanSessionPolicy.UseCachedList(settings,true));
                     passTransition.Prepare(result);
                     waitingForRetry=true;
@@ -321,7 +321,7 @@ namespace DiskRescue {
             passes.Columns[0].FillWeight=160;passes.Columns[1].FillWeight=200;passes.ColumnHeadersHeight=55;
             foreach(PassResult row in passRows.AsEnumerable().Reverse())passes.Rows.Add(row.StartedUtc.ToLocalTime().ToString("dd.MM HH:mm:ss"),row.Method+(row.ApiLinkConcurrency>0?" "+row.ApiLinkConcurrency+"+"+row.ApiDownloadConcurrency:"")+" / "+PassModeName(row.Mode),Phase(row.Outcome),row.IdleSeconds>0?row.IdleSeconds.ToString():"—",(row.Seconds/60).ToString("0.0"),row.Processed,row.Downloaded,row.Available,row.Remaining,row.ZeroDownload,row.Errors);
         }
-        string PassModeName(string modeName){switch(modeName){case"Remaining":return T("Всё недокачанное","All remaining");case"PartialFiles":return T("Неполные файлы","Partial files");case"DownloadErrors":return T("Ошибки загрузки","Download errors");case"ErrorsAndNew":return T("Ошибки и новые файлы","Errors and new files");case"IntegrityFailures":return T("Ошибки проверки","Checksum failures");case"Continue":return T("Продолжить","Resume");case"All":return T("Все файлы","All files");case"CloudErrors":return T("Ошибки","Errors");case"ZeroDownload":return T("Нет ответа / сбой загрузки","Timeout / download failures");case"ErrorsAndZero":return T("Ошибки + незавершённые","Errors + incomplete");case"NewFiles":return T("Новые / изменённые","New / changed");case"ProblemFiles":return T("Автоповтор проблемных","Automatic retry");default:return modeName;}}
+        string PassModeName(string modeName){switch(modeName){case"Remaining":return T("Всё недокачанное","All remaining");case"PartialFiles":return T("Неполные файлы","Partial files");case"DownloadErrors":return T("Ошибки загрузки","Download errors");case"IntegrityFailures":return T("Ошибки проверки","Checksum failures");case"All":return T("Все файлы","All files");default:return T("Ранее существовавший режим","Legacy pass mode");}}
         void SetBusy(bool value) {
             if(settingsCard!=null)settingsCard.Enabled=!value;
             repeatProblems.Enabled=!value;if(streamsPerFile!=null)streamsPerFile.Enabled=multiStreamThreshold.Enabled=!value&&settings.UseApi;

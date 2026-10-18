@@ -51,10 +51,10 @@ namespace DiskRescue {
             var next=type.GetMethod("NextMode");Assert((RunMode)next.Invoke(null,new object[]{RunMode.All,false})==RunMode.Remaining,"Full hashes would run again on every automatic pass.");
             Assert((RunMode)next.Invoke(null,new object[]{RunMode.PartialFiles,true})==RunMode.PartialFiles,"Partial-only mode would start new files.");
             var f=new DiskFile{Path="disk:/new",Modified="v2",Length=4};
-            Assert(FileRules.Select(f,null,RunMode.ErrorsAndNew),"Refreshed automatic passes skip new files.");f.Status="integrity_failed";Assert(!FileRules.Select(f,null,RunMode.ErrorsAndNew),"Cloud refresh bypasses checksum-failure protection.");
+            Assert(FileRules.Select(f,null,RunMode.Remaining),"Remaining skipped a new file.");f.Status="integrity_failed";Assert(!FileRules.Select(f,null,RunMode.Remaining),"Cloud refresh bypasses checksum-failure protection.");
             f.Status="pending";Assert(!FileRules.Select(f,null,RunMode.DownloadErrors),"Error-only first pass included a never-attempted file.");
-            var old=new HistoryRecord{path=f.Path,length=f.Length,modified="old-version",status="failed"};Assert(FileRules.Select(f,old,RunMode.DownloadErrors),"Refreshing cloud metadata hid a previously failed file.");
-            Assert((RunMode)next.Invoke(null,new object[]{RunMode.DownloadErrors,true})==RunMode.ErrorsAndNew,"Automatic cloud refresh does not include new files alongside errors.");
+            var old=new HistoryRecord{path=f.Path,length=f.Length,modified="old-version",status="failed"};Assert(!FileRules.Select(f,old,RunMode.DownloadErrors),"Refreshing selected an error from the previous cloud version.");
+            Assert((RunMode)next.Invoke(null,new object[]{RunMode.DownloadErrors,true})==RunMode.DownloadErrors,"Automatic cloud refresh expanded the selected mode.");
         }
     }
 }

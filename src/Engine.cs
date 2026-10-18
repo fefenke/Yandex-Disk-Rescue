@@ -22,7 +22,6 @@ namespace DiskRescue {
         HistoryStore history;
         string report = "", current = "";
         int processed, selected, skipped, scanErrors;
-        RunMode currentMode;
         bool queueReady;string browserRoot="";DateTime catalogTime=DateTime.MinValue;List<BrowserFile> catalog;
         public string DataFolder { get; private set; }
         public bool RecoveryRequired { get; private set; }
@@ -36,7 +35,7 @@ namespace DiskRescue {
             browserRoot=settings.Folder;catalog=null;
             if(settings.UseApi){apiEngine=new ApiEngine(DataFolder,delegate(Snapshot s){Latest=s;},null,null,apiPacer,linkCache);try{apiEngine.Run(settings,mode);}finally{apiEngine=null;}return;}
             if(RecoveryRequired){Latest=new Snapshot{Phase="error",Finished=true,RecoveryRequired=true,Error="Restart Yandex Disk and this application before starting another pass."};return;}
-            stopping = false; processed = selected = skipped = scanErrors = 0;currentMode=mode;queueReady=false;
+            stopping = false; processed = selected = skipped = scanErrors = 0;queueReady=false;
             inventory.Clear(); active.Clear(); events.Clear(); downloadedPaths.Clear(); cloudErrorPaths.Clear(); report="";elapsed.Restart(); lastPublish = DateTime.MinValue;
             string phase = "completed", error = "";
             Publish("preparing", "", false, true);
@@ -177,7 +176,7 @@ namespace DiskRescue {
             }
             s.Downloaded = downloadedPaths.Count; s.Available = s.Categories.Sum(c => c.Available); s.Deferred = s.Categories.Sum(c => c.Deferred); s.CloudErrors = s.Categories.Sum(c => c.CloudErrors); s.OtherErrors = inventory.Count(f => f.Status == "failed");
             s.CloudErrorsThisPass=cloudErrorPaths.Count;
-            if(queueReady){s.ProgressTotal=currentMode==RunMode.Continue?inventory.Count:selected;s.ProgressChecked=currentMode==RunMode.Continue?skipped+processed:processed;}
+            if(queueReady){s.ProgressTotal=selected;s.ProgressChecked=processed;}
             s.PerHour = s.Seconds > 0 ? processed * 3600.0 / s.Seconds : 0;
             s.RemainingSeconds = s.PerHour > 0 ? Math.Max(0, selected - processed) * 3600.0 / s.PerHour : 0;
             foreach (Job job in active) s.Files.Add(new ActiveFile { Path = job.File.Path, Category = job.File.Category, Bytes = job.Operation.ProgressBytes, Length = job.File.Length, State = job.Operation.CancelRequested ? "cancelling" : "downloading" });

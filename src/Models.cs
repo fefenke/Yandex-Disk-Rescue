@@ -8,7 +8,7 @@ using System.Threading;
 using System.Web.Script.Serialization;
 
 namespace DiskRescue {
-    public enum RunMode { Continue, All, CloudErrors, ZeroDownload, ErrorsAndZero, NewFiles, ProblemFiles, Remaining, PartialFiles, IntegrityFailures, ErrorsAndNew, DownloadErrors }
+    public enum RunMode { All=1, Remaining=7, PartialFiles=8, IntegrityFailures=9, DownloadErrors=11 }
     public sealed class Settings {
         public string Folder = "";
         public string Language = "ru";
@@ -121,17 +121,9 @@ namespace DiskRescue {
             if(status=="integrity_failed")return false;
             if (mode == RunMode.All) return true;
             if (mode == RunMode.Remaining) return !file.Local;
-            if (mode == RunMode.ErrorsAndNew) return !file.Local&&(!same||status=="cloud_error"||status=="failed"||status=="timeout");
-            if (mode == RunMode.DownloadErrors) return old!=null&&!file.Local&&(NormalizeStatus(old)=="cloud_error"||NormalizeStatus(old)=="failed"||NormalizeStatus(old)=="timeout");
+            if (mode == RunMode.DownloadErrors) return same&&!file.Local&&(status=="cloud_error"||status=="failed"||status=="timeout");
             if (mode == RunMode.PartialFiles) return !file.Local && HasPartialData(file.Destination);
-            if (mode == RunMode.ProblemFiles) return same && !file.Local && (status=="cloud_error"||status=="failed"||status=="timeout");
-            if (mode == RunMode.NewFiles) return !same;
-            if (mode == RunMode.ErrorsAndZero) return Select(file,old,RunMode.CloudErrors)||Select(file,old,RunMode.ZeroDownload);
-            if (mode == RunMode.CloudErrors) return same && status == "cloud_error";
-            if (mode == RunMode.ZeroDownload) return same && (status == "timeout" || status == "cancelled_user" || status == "failed") && !file.Local;
-            if(!same)return true;
-            if(Success(status))return !file.Local;
-            return status=="pending"||status=="cancelled_user";
+            return false;
         }
         public static bool HasPartialData(string destination){
             if(String.IsNullOrEmpty(destination))return false;
