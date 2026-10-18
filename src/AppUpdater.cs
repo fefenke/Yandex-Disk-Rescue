@@ -86,7 +86,8 @@ namespace DiskRescue {
                     // after response disposal without waiting indefinitely for it.
                     ObserveReadFailure(pending);throw new OperationCanceledException(cancellation);
                 }
-                cancellation.ThrowIfCancellationRequested();return await pending.ConfigureAwait(false);
+                if(cancellation.IsCancellationRequested){ObserveReadFailure(pending);cancellation.ThrowIfCancellationRequested();}
+                return await pending.ConfigureAwait(false);
             }
         }
         static void ObserveReadFailure(Task pending){

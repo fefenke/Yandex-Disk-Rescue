@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
@@ -47,6 +48,28 @@ namespace DiskRescue {
             try{Assert(task.Wait(3000),reason+" did not finish within 3 seconds.");throw new Exception(reason+" returned a package.");}
             catch(AggregateException ex){Assert(ex.GetBaseException() is OperationCanceledException,reason+" failed with "+ex.GetBaseException().GetType().Name);}
         }
+        public static void CancellationFaultRace(string root){
+            MethodInfo method=typeof(AppUpdater).GetMethod("ReadCancelled",BindingFlags.Static|BindingFlags.NonPublic);
+            Assert(method!=null,"Updater read cancellation boundary is missing.");
+            int unobserved=0;string marker="ydr-read-"+Guid.NewGuid().ToString("N");
+            EventHandler<UnobservedTaskExceptionEventArgs> handler=delegate(object sender,UnobservedTaskExceptionEventArgs args){
+                if(args.Exception.Flatten().InnerExceptions.Any(e=>e.Message==marker)){Interlocked.Increment(ref unobserved);args.SetObserved();}
+            };
+            TaskScheduler.UnobservedTaskException+=handler;
+            try{
+                using(var cancel=new CancellationTokenSource()){
+                    cancel.Cancel();
+                    for(int i=0;i<8;i++){
+                        Task<int> failed=Task.FromException<int>(new IOException(marker));
+                        Task<int> reading=(Task<int>)method.Invoke(null,new object[]{failed,cancel.Token});
+                        try{reading.GetAwaiter().GetResult();throw new Exception("Cancelled read succeeded.");}
+                        catch(OperationCanceledException){}
+                    }
+                }
+                for(int attempt=0;attempt<4;attempt++){GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();}
+                Assert(unobserved==0,"A read fault was left unobserved when cancellation won the race.");
+            }finally{TaskScheduler.UnobservedTaskException-=handler;}
+        }
         public static void DownloadReliability(string root){
             string temp=Path.Combine(root,"update-temp");Directory.CreateDirectory(temp);
             var release=new UpdateRelease{Url="https://download.example/update.zip",Digest="sha256:"+new string('0',64)};
@@ -90,7 +113,7 @@ namespace DiskRescue {
             }
         }
         internal static void Run(string root){
-            ReleaseChannel(root);DownloadReliability(root);UpdateControls(root);
+            ReleaseChannel(root);DownloadReliability(root);CancellationFaultRace(root);UpdateControls(root);
             using(System.Diagnostics.Process current=System.Diagnostics.Process.GetCurrentProcess()){
                 bool stopped=false;try{AppUpdater.WaitForParent(current.Id,current.MainModule.FileName,1);}catch(IOException){stopped=true;}Assert(stopped,"Updater did not wait for a running parent.");
                 bool mismatch=false;try{AppUpdater.WaitForParent(current.Id,"wrong-parent.exe",1);}catch(IOException){mismatch=true;}Assert(mismatch,"Updater accepted another parent executable.");
