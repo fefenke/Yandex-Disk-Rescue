@@ -1,0 +1,1 @@
+PASS: 2324 synthetic reports/settings files from two final-suite roots contain no test-secret, sensitive-credential or signed-link lease markers.

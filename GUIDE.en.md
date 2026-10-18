@@ -13,7 +13,7 @@ Requires Windows 10 1709+ or Windows 11 and .NET Framework 4.7.1+. Choose x64 fo
 3. Enter the OAuth token and destination, select a pass mode and press Start pass at the top.
 4. The guide button is always at the top. Transfer settings are locked during passes and automatic retries. Press Stop and wait before changing them.
 
-The data folder beside the executable holds settings, history, inventory, reports and an encrypted token. Each extracted app copy has its own history; a new copy does not automatically use another copy's data.
+The data folder beside the executable holds settings, history, inventory, reports and an encrypted token. If settings.json is damaged, the app tries settings.json.bak and displays a notice. A settings-save error is displayed separately and prevents starting with unsaved parameters; check write permissions and free space. Each extracted app copy has its own history; a new copy does not automatically use another copy's data.
 
 ## 3. API mode
 
@@ -53,10 +53,12 @@ Pass modes:
 
 - Check all files: verify local size and available cloud hash, then download missing or replacement files. Suitable local copies are not downloaded again. Automatic repeats switch to remaining files rather than rehashing every completed file again.
 - Download all remaining files: missing, partial and failed files; the usual continuation mode.
-- Download files with download errors: recorded timeouts, network and server errors. Automatic repeats that refresh the cloud also include newly discovered and changed files.
+- Download files with download errors: recorded timeouts, network and server errors. Only errors for the current cloud version qualify. New files, changed versions and user-cancelled attempts stay excluded, including after refresh. Use Download all remaining files for those files.
 - Resume partial files: only files with saved parts. Never starts new downloads, including after automatic cloud refresh.
 
-Download files with checksum mismatches in the pass mode selector runs a separate one-shot attempt. Ordinary modes and cloud refresh do not unblock a failed cloud version. Automatic repeats stop when no eligible files remain; this is not a continuous cloud-watching mode.
+- Download files with checksum mismatches: one pass per manual Start. You may start another manual pass for another attempt. This mode never starts the next automatic pass; ordinary bounded network retries within a job remain available.
+
+Ordinary modes and cloud refresh do not unblock a failed cloud version. Refresh keeps the selected mode; Check all files alone narrows to remaining files on automatic repeats. Automatic repeats stop when no eligible files remain; this is not a continuous cloud-watching mode.
 
 ## 6. Timeouts and retry queue
 
@@ -116,7 +118,7 @@ Size is checked first, followed by cloud MD5, or SHA-256 only when MD5 is absent
 
 Without either cloud hash, downloads remain allowed and are marked as size-only evidence. Local map SHA-256 protects saved extents but cannot prove equality with the cloud original.
 
-The existing file stays while a new temporary copy downloads and is checked. Before replacement, a wrong-size file moves to the former-files archive; a hash-mismatched file moves to the verification-error archive. Subfolders and unique names are retained. A new bad copy is also preserved in the error archive. Failure to preserve the old file prevents replacement.
+The existing file stays while a new temporary copy downloads and is checked. Before replacement, a wrong-size file moves to the former-files archive; a hash-mismatched file moves to the verification-error archive. Subfolders and unique names are retained. A new bad copy is also preserved in the error archive. Failure to preserve the old file prevents replacement. Verification of large copies can be stopped before the move intent is recorded. Once that intent is durable, the app first completes the recoverable operation; Stop can wait for that operation to finish.
 
 ## 12. Interface, history and errors
 
@@ -128,7 +130,7 @@ A link timeout means downloading has not started. A data timeout means no respon
 
 ## 13. Updates and privacy
 
-Automatic update checks run at startup and every 6 hours. They can be disabled; manual checks remain available. Installation is offered while idle and requires confirmation. The architecture-specific ZIP is checked against GitHub SHA-256. The app exits, replaces program files, retains data and restarts; failed replacement rolls back.
+Automatic update checks run at startup and every 6 hours. They can be disabled; manual checks remain available. Prereleases are excluded. Update downloads can be cancelled; read idle timeout is 30 seconds and total download timeout is 15 minutes. Installation is offered while idle and requires confirmation. The architecture-specific ZIP is checked against GitHub SHA-256. The app exits, replaces program files, retains data and restarts; failed replacement rolls back.
 
 For manual updates, close the app first. Preserve data and download parts, then replace application files from the whole ZIP. Do not overwrite the history of a running copy or import someone else's data. Windows DPAPI encrypts the saved token for your Windows account; requests use the token in memory.
 
@@ -140,7 +142,7 @@ Independent unofficial project. [Report an issue](https://github.com/fefenke/Yan
 A failed cloud version is blocked from automatic retries, including rescanning and full passes. Deleting its preserved artifact keeps it blocked and displays copy missing. Download files with checksum mismatches in the pass mode selector runs one explicit pass. Identical preserved bad copies are deduplicated. Changed cloud versions may download again; old artifacts remain. Keep data to retain these version records.
 
 
-If a cloud destination collides with another file?s temporary name, the affected download is skipped with a conflict error. The other final file is not used as scratch data; unrelated downloads continue.
+Local destination assignments survive cloud refreshes, including case-only name differences. Collisions with another file, a directory, a service artifact or ambiguous existing data fail the affected downloads. Saved bytes remain in place; unrelated downloads continue. Do not manually rename parts or maps to bypass a conflict.
 
 
 Check and install updates in Settings; there is no separate sidebar update button. You can update directly to the latest version while retaining data, without installing intermediate releases. Old history records tolerate missing fields; files are checked again when the evidence is insufficient for a fast check.
@@ -169,4 +171,4 @@ After checking the completed backup, revoke the used application's data access i
 
 [Project design](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/DESIGN-DECISIONS.md) · [Tests and limitations](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/TESTING.md).
 
-The official-client method is temporarily hidden following a partial recovery of Yandex Disk functionality. The developer may restore it if stalls return; watch for app updates.
+Downloads use the API exclusively. The Yandex Disk desktop client and Windows Cloud Files are unnecessary. Old Desktop pass records remain historical statistics; they cannot activate client execution and are not imported into API history. Keep the entire data folder when updating.

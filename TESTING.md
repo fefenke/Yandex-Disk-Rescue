@@ -2,7 +2,7 @@
 
 [Гайд](GUIDE.md) · [Решения](DESIGN-DECISIONS.md) · [GitHub Actions](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
 
-Локальные полные самопроверки x64/x86 для безопасных копий и карты прошли 16 октября 2026 года. Сценарий перечитывания незавершённой папки добавлен отдельно после этого: сначала воспроизведён пропуск нового файла, затем проверено исправление. Актуальный статус CI привязан к конкретному коммиту в Actions; прошлый успешный прогон не является результатом будущего коммита.
+Результаты стабилизации Windows от 18 октября 2026 года собраны в [итоговом отчёте](docs/testing/2026-10-18-windows-stabilization.md), включая точные границы локальной проверки и результаты x64/x86. Актуальный статус CI привязан к конкретному коммиту в Actions; прошлый успешный прогон не является результатом будущего коммита.
 
 ## Матрица
 
@@ -24,20 +24,30 @@
 | Токен и пути / Security boundaries | [ApiTests](src/ApiTests.cs), [SafeDownloadTests](src/SafeDownloadTests.cs) | OAuth не отправляется на download-хост; DPAPI; отсутствие plaintext в настройках; безопасные пути и конфликты имён |
 | Обновление / Updater | [UpdaterTests](src/UpdaterTests.cs) | Архитектура, контрольная сумма, допустимый состав ZIP и безопасная установка |
 | UI и история / UI and history | [Tests](src/Tests.cs), [PassTransitionTests](src/PassTransitionTests.cs) | Каталог, прогресс, настройки, статусы, переходы проходов и сохранение результатов |
+| Настройки и токен / Atomic settings | [SettingsStoreTests](src/SettingsStoreTests.cs) | Отказ замены, занятые/недоступные файлы, резервная копия, восстановление, уведомления UI и DPAPI |
+| Отмена сохранения / Preservation cancellation | [PreserverCancellationTests](src/PreserverCancellationTests.cs) | Отмена хеширования до intent; исходные байты и повторный запуск |
+| Назначения / Destination ownership | [DestinationPathsTests](src/DestinationPathsTests.cs) | Конфликты файла/папки/служебного пути, регистр, обновление и прерванный обход, сохранность частей |
+| Пять режимов / Five modes | [ModePolicyTests](src/ModePolicyTests.cs) | Версии ошибок, независимость обновления списка, однопроходный ручной повтор, аварийное сохранение истории |
+| Только API / API-only | [ApiOnlyTests](src/ApiOnlyTests.cs) | Старые настройки, отсутствие Cloud Files в prerequisites, отчёты, Stop до/во время Run, сохранность клиентской истории |
+| Runner | [runner-tests.ps1](tests/runner-tests.ps1) | Таймаут, завершение только своего процесса, сохранность соседнего процесса, устаревший отчёт и параметры сборки |
 
 ## Как воспроизвести
 
 Запускайте в отдельной копии исходников под Windows. Тесты используют временные синтетические данные и подменённые HTTP-ответы, а не личный аккаунт или токен. Проверки аварийного завершения запускают и завершают собственный дочерний процесс.
 
 ```powershell
-.\build.ps1 -Platform x64
-.\tests\run-tests.ps1
+.\build.ps1 -Platform x64 -OutputDirectory dist/verify-x64
+.\tests\run-tests.ps1 -OutputDirectory dist/verify-x64 -Platform x64
 
-.\build.ps1 -Platform x86
-.\tests\run-tests.ps1
+.\build.ps1 -Platform x86 -OutputDirectory dist/verify-x86
+.\tests\run-tests.ps1 -OutputDirectory dist/verify-x86 -Platform x86
+
+.\tests\runner-tests.ps1
 ```
 
-Для отдельной выходной папки сначала соберите её через `build.ps1 -OutputDirectory <папка>`, затем передайте ту же папку в `run-tests.ps1`. Итог — `self-test-results.txt` рядом с тестовым EXE. GitHub Actions запускает обе архитектуры и сохраняет этот отчёт отдельно от ZIP приложения. Исходники тестов опубликованы в `src`; они входят в сборку для режима `--self-test`.
+Runner запускает настоящий EXE выбранной сборки, поэтому x86-проверки выполняются в x86-процессе. При отсутствии EXE runner собирает указанную выходную папку и архитектуру. Лимит выполнения — 15 минут; при превышении выдаётся отдельная ошибка timeout и завершается только запущенный тестовый процесс. Параметр `-TimeoutSeconds` позволяет сократить лимит для синтетической проверки. Старый `self-test-results.txt` удаляется перед запуском, чтобы не принять прошлый результат за новый.
+
+Итог — `self-test-results.txt` рядом с тестовым EXE. GitHub Actions запускает обе архитектуры и сохраняет этот отчёт отдельно от ZIP приложения. Исходники тестов опубликованы в `src`; они входят в сборку для режима `--self-test`. DPAPI-проверки требуют обычной Windows-сессии с доступным пользовательским хранилищем ключей; ограниченная песочница может не предоставлять его.
 
 ## HDD и питание
 
@@ -47,7 +57,7 @@
 
 ## English
 
-The table links each verification aspect to its executable test source. Full local x64/x86 checks passed for the safe-copy/range-map implementation; interrupted-folder enumeration has a separate regression test. The current commit's CI status is visible in Actions. Network responses and credentials are synthetic. HDD testing killed a dedicated child process, not the user's running application. Physical power removal and arbitrary drive/controller durability were not tested. Reports describe their exact scope rather than certifying universal safety or completeness.
+The table links each verification aspect to its executable test source. The [Windows stabilization report](docs/testing/2026-10-18-windows-stabilization.md) records local x64/x86 results and limits. The runner enforces a 15-minute deadline, terminates only its own test process, rejects a missing/stale report and forwards output directory/architecture when a build is needed. Run `tests/runner-tests.ps1` for short synthetic timeout tests. DPAPI checks require a Windows user session with access to its key store. The current commit's CI status is visible in Actions. Network responses and credentials are synthetic. Physical power removal and every supported Windows version/DPI/real network combination have not been tested.
 
 ## Быстрый повторный запуск и размер из API
 
@@ -55,7 +65,7 @@ The table links each verification aspect to its executable test source. Full loc
 
 `history.latest` содержит последние записи истории и контрольную сумму. Он используется только при совпадении пути, длины и времени изменения исходного `history.jsonl`. При отсутствии или повреждении индекса программа читает исходный журнал. Начиная с 1.0.9 большой избыточный журнал безопасно сокращается после успешного прохода. После первого чтения старой истории индекс сохраняется при закрытии хранилища; следующий запуск может использовать его. Полный режим по-прежнему читает файлы для проверки хешей. Индекс содержит локальные сведения и не входит в публикуемые архивы.
 
-Проверка интерфейса 1.0.8 подтверждает, что старые настройки с выключенным API и смена языка не возвращают скрытый способ в список: доступен только API. Логика официального клиента с перезапуском сохранена в коде.
+Проверки интерфейса и фасада подтверждают, что старые настройки с выключенным API и смена языка сохраняют API-запуск. Выбор способа, клиентский движок, поиск/перезапуск клиента и probe удалены. Старые строки Desktop и счётчики отображаются как история; файлы клиентской истории не мигрируют в API.
 
 ## Перенос и ограничение накоплений 1.0.9
 

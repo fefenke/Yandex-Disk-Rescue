@@ -32,7 +32,7 @@ start "" "%rescueExe%"
 exit /b 0
 :unsupported
 echo Windows 10 version 1709 or later, or Windows 11, is required.
-echo Windows 7/8 cannot run this Cloud Files downloader.
+echo Windows 7/8 are not supported by this application.
 goto failure
 :missing_framework
 echo .NET Framework 4.7.1 or newer is required.

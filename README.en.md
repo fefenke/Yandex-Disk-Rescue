@@ -39,6 +39,20 @@ Extract the **entire** ZIP to a permanent folder and run **YandexDiskRescue.exe*
 4. Choose **Download all remaining files** and start a pass. Unchecked refresh options use the saved list; a missing list is fetched automatically.
 5. Enable **Refresh cloud file list when starting** to find new and changed cloud files. The nested option also refreshes before automatic repeats. Choose **Check all files** for full local hash verification.
 
+## Pass modes
+
+| Mode | Selected files |
+| --- | --- |
+| Check all files | Recheck completed copies and download missing files; automatic repeats narrow to remaining files |
+| Download all remaining files | New, missing, partial and failed files |
+| Download files with download errors | Errors for the current cloud version; excludes new files, changed versions and user-cancelled attempts |
+| Resume partial files | Only files with saved parts |
+| Download files with checksum mismatches | One pass per manual Start; another manual Start permits another attempt |
+
+Cloud refresh keeps the selected mode. Checksum-mismatch mode does not start a subsequent automatic pass; bounded network retries within a job remain available.
+
+Downloads use the API exclusively. Legacy client settings and Desktop statistics remain readable; the client engine has been removed. Keep data when updating. Settings-save failures are displayed separately; a damaged settings.json can be recovered from settings.json.bak. Update checks offer stable releases and update downloads can be cancelled.
+
 ## New in 1.1.2
 
 - Fixed incomplete cloud inventories: unreadable folders remain queued for another scan.

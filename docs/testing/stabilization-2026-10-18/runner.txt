@@ -1,0 +1,1 @@
+PASS: one-second runner timeout; only owned process terminated; unrelated same-executable process survives; success/failure; stale report rejection; x86/custom-output build argument forwarding.

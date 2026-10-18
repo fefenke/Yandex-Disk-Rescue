@@ -1,0 +1,22 @@
+﻿PASS: YandexDiskRescue-win-x64.zip; identical 10 file paths to 234fea2; no user data/test report.
+  assets/preview.png
+  assets/preview-api.png
+  assets/preview-api-en.png
+  assets/preview-en.png
+  LICENSE
+  README.en.md
+  README.md
+  Start Yandex Disk Rescue.cmd
+  YandexDiskRescue.exe
+  YandexDiskRescue.exe.config
+PASS: YandexDiskRescue-win-x86.zip; identical 10 file paths to 234fea2; no user data/test report.
+  assets/preview.png
+  assets/preview-api.png
+  assets/preview-api-en.png
+  assets/preview-en.png
+  LICENSE
+  README.en.md
+  README.md
+  Start Yandex Disk Rescue.cmd
+  YandexDiskRescue.exe
+  YandexDiskRescue.exe.config
