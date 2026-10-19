@@ -101,6 +101,7 @@ namespace DiskRescue {
             if(ReferenceEquals(last,files)&&root==destination)return;last=files;root=destination;HashSet<string> expanded=new HashSet<string>(folders.Values.Where(f=>f.Node!=null&&f.Node.IsExpanded).Select(f=>f.Path));
             Dictionary<string,Folder> old=folders;folders=new Dictionary<string,Folder>(StringComparer.Ordinal);Ensure("");
             foreach(BrowserFile file in files){int index=file.Path.LastIndexOf('/');Folder parent=Ensure(index<0?"":file.Path.Substring(0,index));parent.Files.Add(file);for(Folder f=parent;;){f.Total++;if(file.Ready)f.Ready++;if(f.Path=="")break;index=f.Path.LastIndexOf('/');f=folders[index<0?"":f.Path.Substring(0,index)];}}
+            tree.BeginUpdate();grid.SuspendLayout();
             try{
                 foreach(Folder removed in old.Values.Where(f=>!folders.ContainsKey(f.Path)))if(removed.Node!=null)removed.Node.Remove();
                 foreach(Folder f in folders.Values.OrderBy(f=>f.Path.Length)){
@@ -108,7 +109,8 @@ namespace DiskRescue {
                     else{TreeNodeCollection nodes=f.Path==""?tree.Nodes:folders[f.Path.LastIndexOf('/')<0?"":f.Path.Substring(0,f.Path.LastIndexOf('/'))].Node.Nodes;f.Node=new TreeNode(FolderName(f)){Tag=f,ImageKey="folder",SelectedImageKey="folder",ToolTipText=FolderName(f)+Environment.NewLine+FolderProgress(f)};int index=0;while(index<nodes.Count&&StringComparer.CurrentCultureIgnoreCase.Compare(nodes[index].Text,f.Node.Text)<0)index++;nodes.Insert(index,f.Node);if(expanded.Contains(f.Path)||f.Path=="")f.Node.Expand();}
                 }
                 Folder chosen;if(!folders.TryGetValue(selected,out chosen))chosen=folders[""];selected=chosen.Path;if(tree.SelectedNode!=chosen.Node)tree.SelectedNode=chosen.Node;
-            }finally{}ShowFiles();if(CountsChanged!=null)CountsChanged(files.Count,files.Count(f=>f.Ready));if(CatalogChanged!=null)CatalogChanged(files);
+                ShowFiles();
+            }finally{grid.ResumeLayout(true);tree.EndUpdate();}if(CountsChanged!=null)CountsChanged(files.Count,files.Count(f=>f.Ready));if(CatalogChanged!=null)CatalogChanged(files);
         }
         internal Action<string> FileOpener=path=>Process.Start(new ProcessStartInfo(path){UseShellExecute=true});
         internal void SelectFolder(string path){Folder f;if(folders.TryGetValue(path,out f)){selected=path;tree.SelectedNode=f.Node;ShowFiles();}}

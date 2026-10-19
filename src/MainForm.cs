@@ -148,7 +148,10 @@ namespace DiskRescue {
             for(int i=0;i<5;i++) {
                 RoundPanel card=Card(); card.Margin=new Padding(i==0?0:6,0,i==4?0:6,10); card.Padding=new Padding(16,8,16,8);
                 TableLayoutPanel rows=Table(1); rows.RowCount=2;rows.RowStyles.Add(new RowStyle(SizeType.Absolute,22)); rows.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-                metricTitle[i]=Label("",9,false); metricTitle[i].ForeColor=muted; metricValue[i]=Label("0",24,true);
+                metricTitle[i]=Label("",9,false); metricTitle[i].ForeColor=muted;
+                metricValue[i]=new MetricValueLabel {Text="0",AutoSize=false,Dock=DockStyle.Fill,Margin=Padding.Empty,Font=new Font("Segoe UI",24,FontStyle.Bold),BackColor=Color.Transparent,FontSizeProvider=MetricFontSize};
+                metricValue[i].TextChanged+=delegate { InvalidateMetrics(); };
+                metricValue[i].SizeChanged+=delegate { InvalidateMetrics(); };
                 metricValue[i].ForeColor=(i==1||i==2)?Color.FromArgb(24,142,117):i==4?Color.FromArgb(198,96,91):ink;
                 rows.Controls.Add(metricTitle[i],0,0); rows.Controls.Add(metricValue[i],0,1); card.Controls.Add(rows); metrics.Controls.Add(card,i,0);
             }
@@ -177,6 +180,23 @@ namespace DiskRescue {
             support.Click+=delegate { if(!String.IsNullOrEmpty(settings.SupportUrl))System.Diagnostics.Process.Start(settings.SupportUrl); };
             bottom.Controls.Add(footer,0,0);bottom.Controls.Add(support,1,0);page.Controls.Add(bottom,0,6);
             Render(new Snapshot());
+        }
+        void InvalidateMetrics() { foreach(Label value in metricValue)if(value!=null)value.Invalidate(); }
+        float MetricFontSize(Graphics graphics) {
+            for(float size=24;size>1;size-=0.5f) {
+                bool fits=true;
+                using(Font font=new Font("Segoe UI",size,FontStyle.Bold)) {
+                    foreach(Label value in metricValue) {
+                        if(value==null||value.ClientSize.Width<=0||value.ClientSize.Height<=0)continue;
+                        Size measured=TextRenderer.MeasureText(graphics,value.Text,font,new Size(Int32.MaxValue,Int32.MaxValue),MetricValueLabel.ValueFlags);
+                        if(measured.Width>value.ClientSize.Width||measured.Height>value.ClientSize.Height){fits=false;break;}
+                        MetricValueLabel animated=value as MetricValueLabel;
+                        if(animated!=null){Size shown=TextRenderer.MeasureText(graphics,animated.DisplayText,font,new Size(Int32.MaxValue,Int32.MaxValue),MetricValueLabel.ValueFlags);if(shown.Width>value.ClientSize.Width||shown.Height>value.ClientSize.Height){fits=false;break;}}
+                    }
+                }
+                if(fits)return size;
+            }
+            return 1;
         }
         DataGridView Grid() {
             DataGridView g=new BufferedGrid { Dock=DockStyle.Fill,ReadOnly=true,AllowUserToAddRows=false,AllowUserToDeleteRows=false,AllowUserToResizeRows=false,RowHeadersVisible=false,BackgroundColor=Color.White,BorderStyle=BorderStyle.None,CellBorderStyle=DataGridViewCellBorderStyle.SingleHorizontal,ColumnHeadersBorderStyle=DataGridViewHeaderBorderStyle.None,AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill,SelectionMode=DataGridViewSelectionMode.FullRowSelect,MultiSelect=false,EnableHeadersVisualStyles=false };
@@ -357,6 +377,12 @@ namespace DiskRescue {
             else{progress.Style=ProgressBarStyle.Continuous;progress.Maximum=Math.Max(1,s.ProgressTotal>0?s.ProgressTotal:s.Selected);progress.Value=Math.Min(progress.Maximum,s.ProgressTotal>0?s.ProgressChecked:s.Processed);}
             var visibleCategories=s.Categories.Where(c=>c.Total>0).ToList();
             if(categories.Rows.Count!=visibleCategories.Count){categories.Rows.Clear();foreach(CategoryStats c in visibleCategories)categories.Rows.Add(Category(c.Category),c.Total,c.Available,c.Downloaded,c.Remaining,c.ZeroDownload,c.CloudErrors);}else for(int i=0;i<visibleCategories.Count;i++){CategoryStats c=visibleCategories[i];object[] values={Category(c.Category),c.Total,c.Available,c.Downloaded,c.Remaining,c.ZeroDownload,c.CloudErrors};for(int j=0;j<values.Length;j++)if(!Object.Equals(categories.Rows[i].Cells[j].Value,values[j]))categories.Rows[i].Cells[j].Value=values[j];}
+            // Store the dependency in the progress cell so DataGridView invalidates
+            // it when totals change, including changes within the same rounded percent.
+            if(categories.Columns.Count>7)for(int i=0;i<visibleCategories.Count;i++){
+                CategoryStats c=visibleCategories[i];double ratio=c.Total>0?(double)c.Available/c.Total:0;
+                if(!Object.Equals(categories.Rows[i].Cells[7].Value,ratio))categories.Rows[i].Cells[7].Value=ratio;
+            }
             ((StableLog)log).UpdateEvents(s.Events);
             if(!busy)OfferUpdate();
             if(s.RecoveryRequired){start.Enabled=false;detail.Text=T("Отмена не подтверждена. Перезапустите это приложение перед новым проходом.","Cancellation not acknowledged. Restart this application before another pass.");}

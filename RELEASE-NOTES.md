@@ -1,3 +1,24 @@
+# YDR 1.2.1 — исправления интерфейса / interface fixes
+
+## Русский
+
+- Большие счётчики отображаются целиком в одну строку и выровнены по высоте. Размер шрифта подстраивается под ширину карточек.
+- Числа плавно обновляются за 200 мс без задержки расчётов загрузки. При открытии вкладки сразу показано актуальное значение.
+- Проценты и полосы готовности обновляются без клика, включая изменения внутри округлённого процента. Отрисовка ограничена областью ячейки.
+- Обновление дерева папок выполняется пакетом, а данные страницы подготавливаются перед её показом, чтобы уменьшить промежуточную перерисовку.
+- Добавлены проверки больших чисел, масштаба 100–200%, процентов и анимации. Настройки загрузки и таймауты не изменены.
+
+## English
+
+- Large counters fit on one line with aligned font sizes that adapt to card width.
+- Values animate over 200 ms without delaying download calculations. Opening a page shows current values immediately.
+- Completion percentages and bars update without clicks, including changes within a rounded percent. Custom drawing respects cell clipping.
+- Folder-tree changes are batched and page data is prepared before showing the page to reduce intermediate painting.
+- Added regression coverage for large counters, 100–200% DPI, progress and animation. Transfer settings and timeouts are unchanged.
+
+---
+
+
 # YDR 1.2.0 — стабилизация загрузки / download reliability
 
 > **Исправленные пакеты 1.2.0 от 19 октября:** обе галочки обновления облачного списка выключены по умолчанию и однократно выключаются в старых настройках. Последующий ручной выбор сохраняется; другие настройки не сбрасываются. Если списка ещё нет, он получается автоматически. Если уже установлена первоначальная 1.2.0, скачайте исправленный ZIP вручную и замените файлы приложения, сохранив data: номер версии не изменён.
