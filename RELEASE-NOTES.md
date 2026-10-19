@@ -17,7 +17,7 @@
 
 Windows 10 1709+ / Windows 11, .NET Framework 4.7.1+, отдельные ZIP x64 и x86. При обновлении сохраняйте data и папку скачиваний. Переход на .NET 10 в этот выпуск не входит.
 
-Проверено: полные офлайн-наборы x64/x86 и реальный аккаунт — загрузка, перезапуск, отсутствие повторного скачивания готового, MD5, остановка и продолжение. Во втором реальном тесте подтверждены 272 готовых файла с совпадающим MD5; оставшиеся серверные/сетевые ошибки сохраняются для повторов. Все версии Windows и конфигурации DPI отдельно не проверялись.
+Проверено: полные офлайн-наборы x64/x86 и реальный аккаунт — загрузка, перезапуск, отсутствие повторного скачивания готового, MD5, остановка и продолжение. По рабочей статистике пользователя, в реальном использовании успешно скачаны и проверены **23 315 файлов**. В отдельном тестовом прогоне подтверждены 272 готовых файла с совпадающим MD5; оставшиеся серверные/сетевые ошибки сохраняются для повторов. Все версии Windows и конфигурации DPI отдельно не проверялись.
 
 ## English
 
@@ -32,7 +32,7 @@ YDR keeps available files and progress so you can retry problem downloads. Yande
 
 Windows 10 1709+ / Windows 11, .NET Framework 4.7.1+, separate x64/x86 ZIPs. Keep data and downloaded files when updating. No .NET 10 migration in this release.
 
-Validated with full x64/x86 offline suites and a live account: download, restart, completed-file reuse, MD5, Stop and resume. The larger live test verified 272 completed files against MD5; remaining server/network failures remain retryable. Not every Windows version or DPI configuration was exercised.
+Validated with full x64/x86 offline suites and a live account: download, restart, completed-file reuse, MD5, Stop and resume. In regular use, **23,315 files were successfully downloaded and verified**, according to the user's working statistics. The separate live test verified 272 completed files against MD5; remaining server/network failures remain retryable. Not every Windows version or DPI configuration was exercised.
 
 ---
 

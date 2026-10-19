@@ -12,6 +12,8 @@ Local x64 stabilization build at `4e6649f`, before the 1.2.0 version/defaults up
 | Larger folder, resume Remaining | 255 additional downloads; 266 available, 87 remaining |
 | Larger folder, All | Six additional downloads; 272 available, 81 remaining; all 272 ready files `md5_verified`, zero hash mismatches |
 
+Separately, the user reports **23,315 successfully downloaded and verified files** in regular use, based on working application statistics. This operational total is not added to the isolated test counts above.
+
 The final remaining items were 64 `Download HTTP 500`, 14 mapped-download idle timeouts and three mapped-download read failures. These are recorded failures, not evidence of complete download success. The acceptance criterion is retaining successful files and progress, handling Stop and permitting further attempts for unavailable files. Downloading every unavailable cloud item is not an acceptance criterion and is not promised by this release.
 
 The live-test profile used 30-second network timeouts, disabled automatic repeats and disabled update checks, so manual runs could be inspected separately. That profile and its data are not packaged. Release defaults remain the recovery-oriented 3-second link/idle timeouts, automatic retries and update checks; fresh installations refresh the cloud list on manual Start, without rescanning on every automatic repeat.
