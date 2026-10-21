@@ -6,10 +6,10 @@
 ![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.2.2](https://img.shields.io/badge/1.2.2-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/latest)
+[![1.2.3](https://img.shields.io/badge/1.2.3-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/latest)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-[Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [1.2.2 changes](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
+[Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [1.2.3 changes](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
 
 A free Windows app that downloads available files from Yandex Disk, retains progress and retries failed transfers. Uses Yandex Disk API technology. An independent, unofficial project unaffiliated with Yandex.
 
@@ -53,9 +53,9 @@ Cloud refresh keeps the selected mode. Checksum-mismatch mode does not start a s
 
 Downloads use the API exclusively. Legacy client settings and Desktop statistics remain readable; the client engine has been removed. Keep data when updating. Settings-save failures are displayed separately; a damaged settings.json can be recovered from settings.json.bak. Update checks offer stable releases and update downloads can be cancelled.
 
-## New in 1.2.2
+## New in 1.2.3
 
-Fixed empty download placeholders being archived as previous files when the resume context changes. Added conservative cleanup of existing empty placeholders while preserving written data. Transfer settings and timeouts are unchanged.
+Fixed cleanup of empty archived placeholders created by another download profile. Cleanup checks the owning profile and its records while preserving written data. Transfer settings and timeouts are unchanged.
 
 ### Main changes in 1.2.0
 

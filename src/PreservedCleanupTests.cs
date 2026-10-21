@@ -64,5 +64,12 @@ namespace DiskRescue {
             new FilePreserver(data,folder,new string[0]);
             Assert(!File.Exists(old)&&!File.Exists(old+".map"),"Previously skipped modern empty archive survived cleanup upgrade.");
         }
+        public static void RunOtherContext(string root){
+            string folder=Path.Combine(root,"other-context-files"),parent=Path.Combine(root,"other-context-data"),oldData=Path.Combine(parent,"api-111111111111111111111111"),activeData=Path.Combine(parent,"api-222222222222222222222222");
+            string old=Fixture(folder,oldData,"old","modern"),state=Path.Combine(activeData,"preservation");Directory.CreateDirectory(state);
+            File.WriteAllText(Path.Combine(state,"Сохранённые прежние файлы.root"),Path.GetDirectoryName(old));
+            new FilePreserver(activeData,folder,new string[0]);
+            Assert(!File.Exists(old)&&!File.Exists(old+".map"),"An archive belonging to an inactive sibling context was never cleaned.");
+        }
     }
 }

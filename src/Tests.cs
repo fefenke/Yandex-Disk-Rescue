@@ -22,6 +22,7 @@ namespace DiskRescue {
                 PreservedCleanupTests.Run(root);
                 PreservedCleanupTests.RunCurrent(root);
                 PreservedCleanupTests.RunUpgrade(root);
+                PreservedCleanupTests.RunOtherContext(root);
                 ArchiveNameMigrationTests.Run(root);
                 PreservationRootCacheTests.Run(root);
                 PreparationStopTests.Run(root);

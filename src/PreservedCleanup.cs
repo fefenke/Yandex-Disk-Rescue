@@ -44,6 +44,25 @@ namespace DiskRescue {
         public static void Run(string state,string root,string context,string owner,CancellationToken token){
             CleanFiles(state,root,context,owner,token);
             CleanDirectories(state,root,owner,token);
+            CleanArchiveOwner(state,root,context,owner,token);
+        }
+        static void CleanArchiveOwner(string state,string root,string context,string owner,CancellationToken token){
+            try{
+                string title="Сохранённые прежние файлы.root",config=Path.Combine(state,title);DurablePartial.SafePath(config);
+                if(!File.Exists(config))return;string archive=File.ReadAllText(config);if(!Inside(archive,root))return;DurablePartial.SafePath(archive);
+                string marker=Path.Combine(archive,".ydr-owner");DurablePartial.SafePath(marker);if(!File.Exists(marker))return;
+                string archiveOwner=File.ReadAllText(marker);if(archiveOwner==owner)return;
+                string parent=Path.GetDirectoryName(Path.GetFullPath(context));DurablePartial.SafePath(parent);
+                foreach(string sibling in Directory.GetDirectories(parent,"api-*")){
+                    token.ThrowIfCancellationRequested();
+                    if(!Regex.IsMatch(Path.GetFileName(sibling),@"\Aapi-[0-9a-fA-F]{24}\z",RegexOptions.CultureInvariant))continue;
+                    DurablePartial.SafePath(sibling);string siblingState=Path.Combine(sibling,"preservation");DurablePartial.SafePath(siblingState);if(!Directory.Exists(siblingState))continue;
+                    string siblingConfig=Path.Combine(siblingState,title),ownerFile=Path.Combine(siblingState,"owner.id");DurablePartial.SafePath(siblingConfig);DurablePartial.SafePath(ownerFile);
+                    string siblingOwner=File.Exists(ownerFile)?File.ReadAllText(ownerFile).Trim():HistoryStore.IdentityKey(sibling);
+                    if(siblingOwner!=archiveOwner||!File.Exists(siblingConfig)||!String.Equals(Path.GetFullPath(File.ReadAllText(siblingConfig)),Path.GetFullPath(archive),StringComparison.OrdinalIgnoreCase))continue;
+                    CleanFiles(siblingState,root,sibling,siblingOwner,token);CleanDirectories(siblingState,root,siblingOwner,token);return;
+                }
+            }catch(IOException){}catch(UnauthorizedAccessException){}catch(ArgumentException){}catch(InvalidOperationException){}
         }
         static void CleanDirectories(string state,string root,string owner,CancellationToken token){
             string done=Path.Combine(state,"empty-archive-directories-v2.done"),filesDone=Path.Combine(state,"empty-sparse-v2.done"),gate=Path.Combine(state,"empty-sparse-105.lock");

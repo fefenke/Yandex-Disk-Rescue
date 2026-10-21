@@ -1,96 +1,15 @@
-# YDR 1.2.2 — пустые заготовки загрузки / empty download placeholders
+[Windows x64](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.2.3/YandexDiskRescue-win-x64.zip) | [Windows x86](https://github.com/fefenke/Yandex-Disk-Rescue/releases/download/v1.2.3/YandexDiskRescue-win-x86.zip)
+
+# YDR 1.2.3 — очистка остатков другого профиля / cleanup across profiles
 
 ## Русский
 
-- Исправлено появление пустых заготовок в «Сохранённых прежних файлах» при смене папки или контекста докачки. Удаляются только подтверждённо пустые sparse-файлы с корректной картой и без записанных блоков.
-- Добавлена однократная очистка таких остатков, созданных предыдущими версиями. Для архивов проверяются владелец и журнал программы; файлы с записанными данными, повреждёнными картами или неопределённым состоянием сохраняются.
-- Добавлены регрессионные тесты. Настройки загрузки, таймауты и поведение облака не изменены.
+- Исправлена очистка пустых заготовок в «Сохранённых прежних файлах», когда архив был создан другим профилем загрузки. В 1.2.2 такие остатки могли сохраняться при переключении между всем Диском и отдельной папкой.
+- Очистка находит профиль-владелец и проверяет его журнал. Удаляются только доказанно пустые sparse-заготовки с корректной картой и без записанных блоков. Файлы с данными или неопределённым состоянием сохраняются.
+- Добавлен регрессионный тест. Настройки, таймауты и облачные файлы не изменяются.
 
 ## English
 
-- Fixed empty download placeholders being archived as previous files when the resume context changes. Only sparse placeholders with a valid empty map and no allocated data ranges are discarded.
-- Added a one-time cleanup of these leftovers from previous versions. Archive ownership and application records are checked; written data, invalid maps and uncertain states are preserved.
-- Added regression tests. Transfer settings, timeouts and cloud behavior are unchanged.
-
----
-
-# YDR 1.2.1 — исправления интерфейса / interface fixes
-
-## Русский
-
-- Большие счётчики отображаются целиком в одну строку и выровнены по высоте. Размер шрифта подстраивается под ширину карточек.
-- Числа плавно обновляются за 200 мс без задержки расчётов загрузки. При открытии вкладки сразу показано актуальное значение.
-- Проценты и полосы готовности обновляются без клика, включая изменения внутри округлённого процента. Отрисовка ограничена областью ячейки.
-- Обновление дерева папок выполняется пакетом, а данные страницы подготавливаются перед её показом, чтобы уменьшить промежуточную перерисовку.
-- Добавлены проверки больших чисел, масштаба 100–200%, процентов и анимации. Настройки загрузки и таймауты не изменены.
-
-## English
-
-- Large counters fit on one line with aligned font sizes that adapt to card width.
-- Values animate over 200 ms without delaying download calculations. Opening a page shows current values immediately.
-- Completion percentages and bars update without clicks, including changes within a rounded percent. Custom drawing respects cell clipping.
-- Folder-tree changes are batched and page data is prepared before showing the page to reduce intermediate painting.
-- Added regression coverage for large counters, 100–200% DPI, progress and animation. Transfer settings and timeouts are unchanged.
-
----
-
-
-# YDR 1.2.0 — стабилизация загрузки / download reliability
-
-> **Исправленные пакеты 1.2.0 от 19 октября:** обе галочки обновления облачного списка выключены по умолчанию и однократно выключаются в старых настройках. Последующий ручной выбор сохраняется; другие настройки не сбрасываются. Если списка ещё нет, он получается автоматически. Если уже установлена первоначальная 1.2.0, скачайте исправленный ZIP вручную и замените файлы приложения, сохранив data: номер версии не изменён.
->
-> **Corrected 1.2.0 packages, October 19:** both cloud-list refresh options default to off and are turned off once in older settings. Later manual choices are retained; other settings are not reset. A missing inventory is fetched automatically. Existing users of the original 1.2.0 should download the corrected ZIP manually and replace app files while keeping data; the version number is unchanged.
-
-## Русский
-
-Программа сохраняет доступные файлы и прогресс, чтобы повторять проблемные загрузки. HTTP 500, недоступность и другие ошибки серверов Яндекса могут оставаться; успешный конец прохода не означает, что скачан каждый файл.
-
-- Только API: установленный клиент Яндекс Диска больше не требуется. Старые настройки и история Desktop остаются совместимыми; клиентская история не импортируется в API.
-- Пять режимов: проверка всех файлов, всё недокачанное, ошибки загрузки, неполные файлы и несовпадения хешей. Ошибки выбираются только для той же облачной версии. Проверка всех при автоповторе переходит к недокачанному; несовпадения хешей получают один проход на ручной запуск.
-- Назначения локальных путей сохраняются между сканированием, кешем и перезапусками; неоднозначные конфликты блокируются до записи. Существующие файлы и частичные данные защищены от случайного переназначения.
-- Настройки и DPAPI-токен сохраняются атомарно. Есть восстановление настроек из резервной копии и видимое сообщение при отказе записи. Токен не записывается в JSON настроек; не включайте свою папку data в публичные архивы.
-- Скачивание обновлений можно отменить. Предварительные выпуски не предлагаются; ожидания ограничены, неиспользованные временные пакеты очищаются.
-- Новая установка: «Скачать всё недокачанное», обе галочки обновления облачного списка выключены; автоповторы и проверка обновлений включены. Таймауты 3 + 3 секунды, параллелизм 7 ссылок / 20 загрузок, 4 потока для файлов от 256 МБ. Ранее сохранённые настройки не заменяются тестовым профилем.
-
-Windows 10 1709+ / Windows 11, .NET Framework 4.7.1+, отдельные ZIP x64 и x86. При обновлении сохраняйте data и папку скачиваний. Переход на .NET 10 в этот выпуск не входит.
-
-Проверено: полные офлайн-наборы x64/x86 и реальный аккаунт — загрузка, перезапуск, отсутствие повторного скачивания готового, MD5, остановка и продолжение. По рабочей статистике пользователя, в реальном использовании успешно скачаны и проверены **23 315 файлов**. В отдельном тестовом прогоне подтверждены 272 готовых файла с совпадающим MD5; оставшиеся серверные/сетевые ошибки сохраняются для повторов. Все версии Windows и конфигурации DPI отдельно не проверялись.
-
-## English
-
-YDR keeps available files and progress so you can retry problem downloads. Yandex HTTP 500 responses and other server failures may persist; a completed pass does not guarantee that every file was downloaded.
-
-- API-only downloads: the installed Yandex Disk client is no longer required. Legacy settings and Desktop pass history remain readable; client history is not imported into API history.
-- Five modes with independent cloud-list refresh. Download-error selection is version-specific; automatic repeats after Check all files process remaining files. Checksum-failure mode runs once per manual Start.
-- Persistent local destination ownership across scans, cached passes and restarts. Ambiguous conflicts are rejected before writes, protecting existing files and partial data.
-- Atomic settings and DPAPI token persistence, settings backup recovery and visible save failures. Tokens are excluded from settings JSON; keep your personal data folder out of public archives.
-- Cancellable update downloads, stable-release selection, bounded waits and unused-package cleanup.
-- Fresh-install defaults: Download all remaining files; both cloud-list refresh options disabled; automatic retries and update checks enabled. Timeouts 3 + 3 seconds, link/download concurrency 7/20, four streams from 256 MB. The temporary live-test profile is not shipped.
-
-Windows 10 1709+ / Windows 11, .NET Framework 4.7.1+, separate x64/x86 ZIPs. Keep data and downloaded files when updating. No .NET 10 migration in this release.
-
-Validated with full x64/x86 offline suites and a live account: download, restart, completed-file reuse, MD5, Stop and resume. In regular use, **23,315 files were successfully downloaded and verified**, according to the user's working statistics. The separate live test verified 272 completed files against MD5; remaining server/network failures remain retryable. Not every Windows version or DPI configuration was exercised.
-
----
-
-<details>
-<summary>1.1.2 — historical notes / прежний выпуск</summary>
-
-<details>
-<summary>Изменения 1.1.2 · RU / EN</summary>
-
-- Исправлено сохранение неполного облачного списка и повторное чтение непрочитанных папок.
-- Старые списки с ошибками восстанавливаются автоматически при первом запуске прохода после обновления. Готовые файлы и история сохраняются; полная проверка локальных хешей для этого не нужна.
-
----
-
-- Fixed incomplete cloud inventories and retries of unreadable folders.
-- Old inventories with scan errors rebuild automatically on the first Start after updating. Completed local files and history are retained; full local hash verification is not required for this repair.
-
-</details>
-
-Способ через официальный клиент временно скрыт после частичного восстановления работы Яндекс Диска; при возвращении зависаний его можно будет вернуть.
-
-The official-client method is temporarily hidden after a partial recovery of Yandex Disk functionality; it may return if stalls recur.
-
-</details>
+- Fixed cleanup of empty archived download placeholders created by another download profile. Version 1.2.2 could leave these behind after switching between the whole Disk and a subfolder.
+- Cleanup resolves the archive's owning profile and checks its records. Only sparse placeholders with valid empty maps and no allocated data ranges are removed; written data and uncertain states are preserved.
+- Added a regression test. Settings, timeouts and cloud files are unchanged.
