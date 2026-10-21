@@ -73,6 +73,7 @@ namespace DiskRescue {
             string intent=Path.Combine(state,"intent-"+Guid.NewGuid().ToString("N")+".json");DurablePartial.AtomicText(intent,json.Serialize(op));Apply(op);File.Delete(intent);f.PreservedPath=op.Blocked?op.Target:op.OldTarget;return !op.Blocked;
         }}
         public void PreservePartial(DiskFile f,string source,string sidecar){lock(sync){
+            if(PreservedCleanup.DiscardEmptyMapped(f,source,sidecar))return;
             if(!File.Exists(source)&&!System.IO.Directory.Exists(source)){if(!String.IsNullOrEmpty(sidecar)&&File.Exists(sidecar))PreservePartial(f,sidecar,null);return;}
             string target=ArchivePath(f,"Сохранённые прежние файлы","");Operation op=new Operation{LedgerPath=Path.Combine(state,"aux-"+Guid.NewGuid().ToString("N")+".json"),Version=CloudIntegrity.Version(f),Source=source,Target=target,Destination=f.Destination,Directory=System.IO.Directory.Exists(source)};
             if(!String.IsNullOrEmpty(sidecar)&&File.Exists(sidecar)){op.OldSource=sidecar;op.OldTarget=target+".map";}

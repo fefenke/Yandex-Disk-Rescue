@@ -1,3 +1,19 @@
+# YDR 1.2.2 — пустые заготовки загрузки / empty download placeholders
+
+## Русский
+
+- Исправлено появление пустых заготовок в «Сохранённых прежних файлах» при смене папки или контекста докачки. Удаляются только подтверждённо пустые sparse-файлы с корректной картой и без записанных блоков.
+- Добавлена однократная очистка таких остатков, созданных предыдущими версиями. Для архивов проверяются владелец и журнал программы; файлы с записанными данными, повреждёнными картами или неопределённым состоянием сохраняются.
+- Добавлены регрессионные тесты. Настройки загрузки, таймауты и поведение облака не изменены.
+
+## English
+
+- Fixed empty download placeholders being archived as previous files when the resume context changes. Only sparse placeholders with a valid empty map and no allocated data ranges are discarded.
+- Added a one-time cleanup of these leftovers from previous versions. Archive ownership and application records are checked; written data, invalid maps and uncertain states are preserved.
+- Added regression tests. Transfer settings, timeouts and cloud behavior are unchanged.
+
+---
+
 # YDR 1.2.1 — исправления интерфейса / interface fixes
 
 ## Русский

@@ -12,13 +12,14 @@ namespace DiskRescue {
             File.WriteAllText(Path.Combine(archive,".ydr-owner"),HistoryStore.IdentityKey(data));File.WriteAllText(Path.Combine(state,"Сохранённые прежние файлы.root"),archive);
             string version="disk:/"+name+".bin\nv1|"+SafeDownloadTests.Hash(SafeDownloadTests.Content,false)+"\n1048576\n";
             string source=Path.Combine(directory,name+".bin"),identity=(kind=="foreign"?data+"-other":data)+"\n"+version;
+            if(kind=="modern")identity="ydr-context:api-465C68E575D77DDE04F06B30\n"+version;
             RangeMap map=RangeMap.Open(source,identity,1048576,1,CancellationToken.None);
             if(kind=="confirmed")using(Stream output=map.Writer(0)){output.Write(new byte[]{1},0,1);}
             if(kind=="unconfirmed")using(FileStream output=File.OpenWrite(source+".ydr-download")){output.WriteByte(1);output.Flush(true);}
             string target=Path.Combine(archive,name+"_20261016_120000_0123456789.bin");File.Move(source+".ydr-download",target);File.Move(source+".ydr-map",target+".map");
             if(kind=="torn")File.AppendAllText(target+".map","{broken");
             if(kind=="ordinary"){File.Delete(target);File.WriteAllBytes(target,new byte[1048576]);}
-            if(kind!="no-ledger")File.WriteAllText(Path.Combine(state,"aux-"+name+".json"),new JavaScriptSerializer().Serialize(new{Version=version+SafeDownloadTests.Hash(SafeDownloadTests.Content,true),Blocked=false,Copies=new object[0]}));
+            if(kind!="no-ledger")File.WriteAllText(Path.Combine(state,"aux-"+name+".json"),new JavaScriptSerializer().Serialize(new{Version=kind=="modern"?version:version+SafeDownloadTests.Hash(SafeDownloadTests.Content,true),Blocked=false,Copies=new object[0]}));
             return target;
         }
         public static void Run(string root){
@@ -43,6 +44,25 @@ namespace DiskRescue {
             File.WriteAllText(Path.Combine(data,"preservation","empty-sparse-105.done"),"1\n");
             new FilePreserver(data,directory,new string[0]);Assert(!Directory.Exists(Path.Combine(archive,"empty"))&&File.ReadAllText(Path.Combine(keep,"personal.txt"))=="keep"&&File.Exists(Path.Combine(archive,".ydr-owner")),"Directory cleanup did not upgrade the previous marker safely.");
             Directory.CreateDirectory(nested);new FilePreserver(data,directory,new string[0]);Assert(Directory.Exists(nested),"Completed directory cleanup was repeated.");
+        }
+        public static void RunCurrent(string root){
+            string folder=Path.Combine(root,"current"),data=Path.Combine(root,"current-data"),state=Path.Combine(data,"preservation");Directory.CreateDirectory(folder);
+            var f=new DiskFile{Path="disk:/photo.bin",Destination=Path.Combine(folder,"photo.bin"),Length=1048576,Modified="v1",Md5=SafeDownloadTests.Hash(SafeDownloadTests.Content,false)};
+            string identity="ydr-context:api-465C68E575D77DDE04F06B30\n"+CloudIntegrity.Version(f);
+            RangeMap.Open(f.Destination,identity,f.Length,1,CancellationToken.None);
+            new FilePreserver(data,folder,new string[0]).PreservePartial(f,f.Destination+".ydr-download",f.Destination+".ydr-map");
+            Assert(!Directory.Exists(Path.Combine(folder,"Сохранённые прежние файлы")),"An empty mapped placeholder was archived as a previous file.");
+            Assert(!RangeMap.Exists(f.Destination),"Empty placeholder was not removed.");
+            RangeMap map=RangeMap.Open(f.Destination,identity,f.Length,1,CancellationToken.None);
+            using(FileStream output=File.OpenWrite(f.Destination+".ydr-download")){output.WriteByte(7);output.Flush(true);}
+            new FilePreserver(data,folder,new string[0]).PreservePartial(f,f.Destination+".ydr-download",f.Destination+".ydr-map");
+            Assert(Directory.GetFiles(Path.Combine(folder,"Сохранённые прежние файлы"),"*.map",SearchOption.AllDirectories).Length==1,"Unconfirmed written data was discarded.");
+        }
+        public static void RunUpgrade(string root){
+            string folder=Path.Combine(root,"upgrade"),data=Path.Combine(root,"upgrade-data"),state=Path.Combine(data,"preservation");
+            string old=Fixture(folder,data,"old","modern");File.WriteAllText(Path.Combine(state,"empty-sparse-105.done"),"1\n");File.WriteAllText(Path.Combine(state,"empty-archive-directories.done"),"1\n");
+            new FilePreserver(data,folder,new string[0]);
+            Assert(!File.Exists(old)&&!File.Exists(old+".map"),"Previously skipped modern empty archive survived cleanup upgrade.");
         }
     }
 }
