@@ -62,13 +62,35 @@ namespace DiskRescue {
         static string Text(IDictionary<string,object> o,string key){object v;return o.TryGetValue(key,out v)?Convert.ToString(v):"";}
         static long RequiredSize(IDictionary<string,object> entry){object value;if(!entry.TryGetValue("size",out value)||!(value is int||value is long))throw new IOException("Missing or invalid cloud file size.");long length=Convert.ToInt64(value);if(length<0)throw new IOException("Invalid cloud file size.");return length;}
         void Event(string message){events.Add(DateTime.Now.ToString("HH:mm:ss")+"  "+message);if(events.Count>160)events.RemoveAt(0);}
-        public static string NormalizeRemote(string path){path=(path??"").Trim().Replace('\\','/');if(path=="")return "disk:/";if(!path.StartsWith("disk:/",StringComparison.Ordinal))path="disk:/"+path.TrimStart('/');if(path.Split('/').Any(x=>x==".."||x=="."))throw new ArgumentException("Invalid cloud folder path.");return path;}
-        public static string Validation(Settings s){if(String.IsNullOrWhiteSpace(s.ApiToken))return "token";if(String.IsNullOrWhiteSpace(s.ApiFolder))return "destination";return "";}
+        public static bool IsPublicUrl(string path){
+            string p=(path??"").Trim();
+            return p.StartsWith("https://",StringComparison.OrdinalIgnoreCase)||p.StartsWith("http://",StringComparison.OrdinalIgnoreCase);
+        }
+        public static string NormalizeRemote(string path){
+            if(IsPublicUrl(path))return path.Trim();
+            path=(path??"").Trim().Replace('\\','/');
+            if(path=="")return "disk:/";
+            if(!path.StartsWith("disk:/",StringComparison.Ordinal))path="disk:/"+path.TrimStart('/');
+            if(path.Split('/').Any(x=>x==".."||x=="."))throw new ArgumentException("Invalid cloud folder path.");
+            return path;
+        }
+        public static string Validation(Settings s){
+            if(!IsPublicUrl(s.RemoteFolder)&&String.IsNullOrWhiteSpace(s.ApiToken))return "token";
+            if(String.IsNullOrWhiteSpace(s.ApiFolder))return "destination";
+            return "";
+        }
         static string Suffix(string value){using(SHA256 sha=SHA256.Create())return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(value))).Replace("-","").Substring(0,8);}
-        public static string LocalPath(string root,string remote){
-            if(!remote.StartsWith("disk:/",StringComparison.Ordinal))throw new IOException("Unsupported remote path.");
-            List<string> parts=new List<string>();
-            foreach(string original in remote.Substring(6).Split('/')){
+        public static string LocalPath(string root, string remote){
+            string rel;
+            if (remote.StartsWith("disk:/", StringComparison.Ordinal))
+                rel = remote.Substring(6);
+            else if (remote.StartsWith("/", StringComparison.Ordinal))
+                rel = remote.Substring(1);
+            else
+                throw new IOException("Unsupported remote path.");
+
+            List<string> parts = new List<string>();
+            foreach (string original in rel.Split('/')){
                 if(original==""||original=="."||original=="..")throw new IOException("Unsafe remote path.");
                 string safe=new string(original.Select(c=>Array.IndexOf(Path.GetInvalidFileNameChars(),c)>=0?'_':c).ToArray()).TrimEnd(' ','.');
                 string stem=safe.Split('.')[0].ToUpperInvariant();
@@ -80,6 +102,30 @@ namespace DiskRescue {
             string path=Path.GetFullPath(Path.Combine(fullRoot,Path.Combine(parts.ToArray())));
             if(!path.StartsWith(fullRoot,StringComparison.OrdinalIgnoreCase))throw new IOException("Destination outside download folder.");
             return path;
+        }
+        string ResourceListRoute(string folder,int offset){
+            if(IsPublicUrl(inventoryRoot)){
+                string r="/public/resources?public_key="+Uri.EscapeDataString(inventoryRoot)+"&limit=1000&offset="+offset;
+                if(!IsPublicUrl(folder)&&folder!="/")r+="&path="+Uri.EscapeDataString(folder);
+                return r;
+            }
+            return "/resources?path="+Uri.EscapeDataString(folder)+"&limit=1000&offset="+offset;
+        }
+        string ResourceMetaRoute(string path){
+            if(IsPublicUrl(inventoryRoot)){
+                string r="/public/resources?public_key="+Uri.EscapeDataString(inventoryRoot)+"&fields=path,type,size,modified,md5,sha256,name";
+                if(!IsPublicUrl(path)&&path!="/")r+="&path="+Uri.EscapeDataString(path);
+                return r;
+            }
+            return "/resources?path="+Uri.EscapeDataString(path)+"&fields=path,type,size,modified,md5,sha256";
+        }
+        string ResourceDownloadRoute(string path){
+            if(IsPublicUrl(inventoryRoot)){
+                string r="/public/resources/download?public_key="+Uri.EscapeDataString(inventoryRoot);
+                if(!IsPublicUrl(path)&&path!="/")r+="&path="+Uri.EscapeDataString(path);
+                return r;
+            }
+            return "/resources/download?path="+Uri.EscapeDataString(path);
         }
         Task<Dictionary<string,object>> Json(string route,CancellationToken cancellation,int timeoutSeconds=0){
             // An immediately admitted request must not inherit a UI synchronization
@@ -93,7 +139,7 @@ namespace DiskRescue {
             cancellation=requestTimeout.Token;
             try{
             using(HttpRequestMessage request=new HttpRequestMessage(HttpMethod.Get,Endpoint+route)){
-                request.Headers.Authorization=new AuthenticationHeaderValue("OAuth",settings.ApiToken);
+                if(!route.StartsWith("/public/",StringComparison.Ordinal)&&!String.IsNullOrWhiteSpace(settings.ApiToken))request.Headers.Authorization=new AuthenticationHeaderValue("OAuth",settings.ApiToken);
                 using(HttpResponseMessage response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,cancellation).ConfigureAwait(false)){
                     using(CancellationTokenRegistration abort=cancellation.Register(delegate{response.Dispose();})){
                     if(!response.IsSuccessStatusCode){double retryAfter=ApiPacer.RetryAfterSeconds(response);apiPacer.Failure((int)response.StatusCode,retryAfter,ticket);throw new ApiException((int)response.StatusCode,retryAfter);}
@@ -131,7 +177,7 @@ namespace DiskRescue {
                 bool completed=false;for(int offset=0;;offset+=1000){
                     SaveInventory(cachePath,account,root,false,folders,folder,offset);
                     current=folder;Snapshot("scanning", "",false);
-                    Dictionary<string,object> resource;try{resource=Listing("/resources?path="+Uri.EscapeDataString(folder)+"&limit=1000&offset="+offset);}catch(ApiException ex){if(ex.Code==401||ex.Code==403)throw;Event(folder+"  ·  Listing HTTP "+ex.Code);break;}catch(OperationCanceledException){if(stop.IsCancellationRequested)throw;Event(folder+"  ·  Listing timeout.");break;}
+                    Dictionary<string,object> resource;try{resource=Listing(ResourceListRoute(folder,offset));}catch(ApiException ex){if(ex.Code==401||ex.Code==403)throw;Event(folder+"  ·  Listing HTTP "+ex.Code);break;}catch(OperationCanceledException){if(stop.IsCancellationRequested)throw;Event(folder+"  ·  Listing timeout.");break;}
                     if(Text(resource,"type")=="file"){Add(resource);completed=true;break;}
                     object raw;Dictionary<string,object> embedded=resource.TryGetValue("_embedded",out raw)?raw as Dictionary<string,object>:null;
                     if(embedded==null)throw new IOException("Missing directory listing in API response.");
@@ -208,7 +254,34 @@ namespace DiskRescue {
             Event("Saved API list: "+files.Count+" files.");
         }
         static string CloudModified(string modified,string md5,string sha){return modified+"|"+md5+(String.IsNullOrEmpty(md5)&&!String.IsNullOrEmpty(sha)?"|sha256:"+sha:"");}
-        void Add(Dictionary<string,object> entry){string path=Text(entry,"path");if(!remotePaths.Add(path))return;string destination;if(!savedDestinations.TryGetValue(path,out destination))destination=LocalPath(settings.ApiFolder,path);files.Add(new DiskFile{Path=path,Destination=destination,Folder=Path.GetDirectoryName(destination),Length=RequiredSize(entry),SizeKnown=true,Md5=Text(entry,"md5"),Sha256=Text(entry,"sha256"),Modified=CloudModified(Text(entry,"modified"),Text(entry,"md5"),Text(entry,"sha256")),Category=FileRules.Category(path)});}
+        void Add(Dictionary<string, object> entry)
+        {
+            string path = Text(entry, "path");
+            if (String.IsNullOrEmpty(path))
+            {
+                string name = Text(entry, "name");
+                path = String.IsNullOrEmpty(name) ? "/file" : "/" + name.TrimStart('/');
+            }
+            if (!remotePaths.Add(path))
+                return;
+
+            string destination;
+            if (!savedDestinations.TryGetValue(path, out destination))
+                destination = LocalPath(settings.ApiFolder, path);
+
+            files.Add(new DiskFile
+            {
+                Path = path,
+                Destination = destination,
+                Folder = Path.GetDirectoryName(destination),
+                Length = RequiredSize(entry),
+                SizeKnown = true,
+                Md5 = Text(entry, "md5"),
+                Sha256 = Text(entry, "sha256"),
+                Modified = CloudModified(Text(entry, "modified"), Text(entry, "md5"), Text(entry, "sha256")),
+                Category = FileRules.Category(path)
+            });
+        }
         bool CanRecoverArchived(DiskFile file){
             if(!String.IsNullOrEmpty(file.DestinationError)||ArtifactCollision(file)||preserver.Blocked(file))return false;
             try{preserver.CheckDestination(file.Destination);return true;}catch(IOException){return false;}
@@ -251,10 +324,12 @@ namespace DiskRescue {
                         SegmentPlan existing=ReadSegmentPlan(job.File);
                         job.Bytes=existing==null?(File.Exists(partial)?Math.Min(new FileInfo(partial).Length,job.File.Length):0):existing.Offset+SegmentBytes(job.File,existing);
                         checkingMetadata=true;
-                        var remote=await Json("/resources?path="+Uri.EscapeDataString(job.File.Path)+"&fields=path,type,size,modified,md5,sha256",stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
+                        var remote = await Json(ResourceMetaRoute(job.File.Path), stop.Token, settings.LinkTimeoutSeconds).ConfigureAwait(false);
                         string digest=Text(remote,"md5"),sha=Text(remote,"sha256"),modified=Text(remote,"modified");CloudIntegrity.Validate(digest,32);CloudIntegrity.Validate(sha,64);
                         long remoteSize=RequiredSize(remote);
-                        if(Text(remote,"type")!="file"||Text(remote,"path")!=job.File.Path||remoteSize<0||String.IsNullOrEmpty(modified)||(CloudIntegrity.HasHash(job.File)&&String.IsNullOrEmpty(digest)&&String.IsNullOrEmpty(sha)))throw new IOException("Cloud metadata cannot safely identify the file version.");
+                        bool samePath = IsPublicUrl(inventoryRoot) || Text(remote, "path") == job.File.Path;
+                        if (Text(remote, "type") != "file" || !samePath || remoteSize < 0 || String.IsNullOrEmpty(modified) || (CloudIntegrity.HasHash(job.File) && String.IsNullOrEmpty(digest) && String.IsNullOrEmpty(sha)))
+                            throw new IOException("Cloud metadata cannot safely identify the file version.");
                         stop.Token.ThrowIfCancellationRequested();
                         if(!job.File.SizeKnown||job.File.Length!=remoteSize||job.File.Modified!=CloudModified(modified,digest,sha)||job.File.Sha256!=sha)Interlocked.Exchange(ref refreshedInventory,1);
                         job.File.SizeKnown=true;job.File.Length=remoteSize;job.File.Md5=digest;job.File.Sha256=sha;job.File.Modified=CloudModified(modified,digest,sha);
@@ -285,7 +360,7 @@ namespace DiskRescue {
                 string cacheKey=history.DirectoryPath+"\n"+job.File.Path;
                 job.LinkLease=linkCache.Get(cacheKey,SegmentIdentity(job.File));
                 if(job.LinkLease!=null)return new LinkResult{Link=job.LinkLease.Link};
-                Dictionary<string,object> link=await Json("/resources/download?path="+Uri.EscapeDataString(job.File.Path),stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
+                Dictionary<string, object> link = await Json(ResourceDownloadRoute(job.File.Path), stop.Token, settings.LinkTimeoutSeconds).ConfigureAwait(false);
                 Uri uri;if(!Uri.TryCreate(Text(link,"href"),UriKind.Absolute,out uri)||uri.Scheme!="https"||!String.IsNullOrEmpty(uri.UserInfo))throw new IOException("Invalid HTTPS download link.");
                 job.LinkLease=linkCache.Offer(cacheKey,SegmentIdentity(job.File),uri);
                 return new LinkResult{Link=uri};
@@ -343,9 +418,21 @@ namespace DiskRescue {
                 // Automatic redirects are disabled so authorization never crosses hosts.
                 client=new HttpClient(apiHandler??new HttpClientHandler{AllowAutoRedirect=false}){Timeout=Timeout.InfiniteTimeSpan};
                 downloadClient=new HttpClient(fileHandler??new HttpClientHandler{AllowAutoRedirect=true}){Timeout=Timeout.InfiniteTimeSpan};
-                Snapshot("preparing","",false);Dictionary<string,object> disk=Listing("");object raw;Dictionary<string,object> user=disk.TryGetValue("user",out raw)?raw as Dictionary<string,object>:null;
-                string account=user==null?"":Text(user,"uid");if(account=="")throw new IOException("API did not return an account identifier.");
-                string remote=NormalizeRemote(settings.RemoteFolder);
+                string remote = NormalizeRemote(settings.RemoteFolder);
+                string account;
+                Snapshot("preparing", "", false);
+                if (IsPublicUrl(remote)){
+                    account = "public_" + Suffix(remote);
+                }else{
+                    var diskInfo = Listing("");
+                    object userObj;
+                    var userMap = diskInfo.TryGetValue("user", out userObj)
+                        ? userObj as Dictionary<string, object>
+                        : null;
+                    account = userMap == null ? "" : Text(userMap, "uid");
+                    if (string.IsNullOrEmpty(account))
+                        throw new IOException("API did not return an account identifier.");
+                }
                 history=new HistoryStore(data,destination,account+"|"+remote+"|"+destination.ToUpperInvariant(),stop.Token);
                 report=Path.Combine(history.DirectoryPath,"reports",DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss")+"_"+Guid.NewGuid().ToString("N").Substring(0,6));
                 Inventory(account,remote);

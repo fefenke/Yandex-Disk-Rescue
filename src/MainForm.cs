@@ -275,7 +275,7 @@ namespace DiskRescue {
         }
         void StartStop(object sender,EventArgs args) {
             if(busy){if(sessionStop!=null)sessionStop.Cancel();engine.Stop();start.Enabled=false;phase.Text=T("Завершаем и отменяем текущие запросы…","Finishing and cancelling current requests…");return;}
-            if(String.IsNullOrWhiteSpace(apiToken.Text)){MessageBox.Show(this,T("Укажите OAuth-токен.","Enter an OAuth token."),Text);return;}
+            if(!ApiEngine.IsPublicUrl(remoteFolder.Text)&&String.IsNullOrWhiteSpace(apiToken.Text)){MessageBox.Show(this, T("Укажите OAuth-токен.", "Enter an OAuth token."), Text);return;}
             if(String.IsNullOrWhiteSpace(folder.Text)){MessageBox.Show(this,T("Укажите папку для сохранения.","Choose a download folder."),Text);return;}
             if(!Directory.Exists(folder.Text)){MessageBox.Show(this,T("Укажите существующую локальную папку.","Choose an existing local folder."),Text);return;}
             PrerequisiteStatus environment=Prerequisites.Check();
