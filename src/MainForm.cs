@@ -51,6 +51,8 @@ namespace DiskRescue {
         readonly System.Collections.Generic.List<PassResult> passRows=new System.Collections.Generic.List<PassResult>();
         TextBox folder;
         ComboBox mode;
+        SourceTabs sourceMode;
+        bool changingSource;
         TextBox apiToken, remoteFolder;
         Label apiCaption, remoteCaption;
         TableLayoutPanel setupGrid, pageGrid, credentials;
@@ -71,7 +73,7 @@ namespace DiskRescue {
             dataFolder=data; settingsPath=Path.Combine(data,"settings.json"); Directory.CreateDirectory(data);
             SettingsLoadResult loaded=SettingsStore.Load(settingsPath);settings=loaded.Value;
             settingsLoadWarning=loaded.Warning;settingsRecovered=loaded.RecoveredFromBackup;
-            settings=settings??new Settings();settings.ApplyTransferDefaults();settings.ApplyCloudRefreshDefaults();settings.UseApi=true;
+            settings=settings??new Settings();settings.ApplyTransferDefaults();settings.ApplyCloudRefreshDefaults();settings.ApplySourceDefaults();settings.UseApi=true;
             settings.SupportUrl=new Settings().SupportUrl;
             settings.GitHubReleasesUrl=new Settings().GitHubReleasesUrl;
             ru=settings.Language!="en";
@@ -83,6 +85,7 @@ namespace DiskRescue {
             settingsReady=true;RefreshSettingsNotice();
             timer.Interval=400; timer.Tick += delegate { Render(engine.Latest); };
             FormClosing += delegate(object sender, FormClosingEventArgs args) {
+                if(!busy){settings.SaveSourceFields(folder.Text,remoteFolder.Text);SaveSettings();}
                 if (busy) { args.Cancel=true; closeWhenStopped=true; if(sessionStop!=null)sessionStop.Cancel(); engine.Stop(); start.Enabled=false; phase.Text=T("Останавливаем запросы перед выходом…","Stopping requests before exit…"); }
             };
         }
@@ -111,16 +114,21 @@ namespace DiskRescue {
             config.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); config.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,210)); config.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,170));
             config.RowStyles.Add(new RowStyle(SizeType.Absolute,21));config.RowStyles.Add(new RowStyle(SizeType.Absolute,36));config.RowStyles.Add(new RowStyle(SizeType.Absolute,60));config.RowStyles.Add(new RowStyle(SizeType.Absolute,21)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,36)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,22)); config.RowStyles.Add(new RowStyle(SizeType.Absolute,40));config.RowStyles.Add(new RowStyle(SizeType.Absolute,36));
             tokenHelp=new LinkLabel{Text="OAuth ↗",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft};
-            tokenHelp.LinkClicked+=delegate{System.Diagnostics.Process.Start("https://yandex.ru/dev/disk/poligon/");};config.Controls.Add(tokenHelp,0,0);config.SetColumnSpan(tokenHelp,3);config.RowStyles[1].Height=0;
-            credentials=Table(2);credentials.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,60));credentials.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,40));credentials.RowStyles.Add(new RowStyle(SizeType.Absolute,22));credentials.RowStyles.Add(new RowStyle(SizeType.Absolute,32));credentials.RowStyles.Add(new RowStyle(SizeType.Absolute,22));credentials.RowStyles.Add(new RowStyle(SizeType.Absolute,32));config.Controls.Add(credentials,0,2);config.SetColumnSpan(credentials,3);
-            apiCaption=Label("",9,true);remoteCaption=Label("",9,true);credentials.Controls.Add(apiCaption,0,0);credentials.Controls.Add(remoteCaption,1,0);
+            tokenHelp.LinkClicked+=delegate{System.Diagnostics.Process.Start("https://yandex.ru/dev/disk/poligon/");};BuildSourceHeader(config);
+            sourceMode=new SourceTabs{Dock=DockStyle.Fill,Margin=new Padding(0,0,10,6)};sourceMode.SelectedIndex=settings.Source==DownloadSource.PublicLink?1:0;config.Controls.Add(sourceMode,0,1);config.SetColumnSpan(sourceMode,3);config.RowStyles[1].Height=48;
+            credentials=Table(2);credentials.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));credentials.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,0));foreach(int height in new[]{26,34,28,26,34,26,32})credentials.RowStyles.Add(new RowStyle(SizeType.Absolute,height));config.Controls.Add(credentials,0,2);config.SetColumnSpan(credentials,3);
+            apiCaption=Label("",9,true);remoteCaption=Label("",9,true);var tokenCaptionRow=new Panel{Dock=DockStyle.Fill,Margin=Padding.Empty};tokenCaptionRow.Controls.Add(apiCaption);tokenHelp.Dock=DockStyle.Right;tokenHelp.Width=190;tokenCaptionRow.Controls.Add(tokenHelp);credentials.Controls.Add(tokenCaptionRow,0,3);credentials.SetColumnSpan(tokenCaptionRow,2);credentials.Controls.Add(remoteCaption,0,0);credentials.SetColumnSpan(remoteCaption,2);
             apiToken=new TextBox{Dock=DockStyle.Fill,UseSystemPasswordChar=true,Text=TokenVault.Load(dataFolder),Margin=new Padding(0,3,10,0)};
             ContextMenuStrip tokenMenu=new ContextMenuStrip();tokenMenu.Items.Add("Очистить токен / Clear token",null,delegate{if(busy)return;apiToken.Clear();settings.ApiToken="";try{TokenVault.Save(dataFolder,"");}catch{MessageBox.Show(this,T("Не удалось очистить сохранённый токен.","Could not clear the saved token."),Text);}});apiToken.ContextMenuStrip=tokenMenu;
-            remoteFolder=new TextBox{Dock=DockStyle.Fill,Text=settings.RemoteFolder,Margin=new Padding(0,3,0,0)};
-            credentials.Controls.Add(apiToken,0,1);credentials.Controls.Add(remoteFolder,1,1);
+            remoteFolder=new TextBox{Dock=DockStyle.Fill,Text=settings.SourcePath,Margin=new Padding(0,3,0,0)};
+            var tokenFrame=new SourceInputFrame(apiToken){Dock=DockStyle.Fill,Margin=new Padding(0,2,0,3)};var remoteFrame=new SourceInputFrame(remoteFolder){Dock=DockStyle.Fill,Margin=new Padding(0,2,0,3)};credentials.Controls.Add(tokenFrame,0,4);credentials.SetColumnSpan(tokenFrame,2);credentials.Controls.Add(remoteFrame,0,1);credentials.SetColumnSpan(remoteFrame,2);
+            BuildAuthArea(tokenCaptionRow,tokenFrame);
+            sourceHint=Label("",9,false);credentials.Controls.Add(sourceHint,0,2);credentials.SetColumnSpan(sourceHint,2);remoteFolder.TextChanged+=delegate{UpdateSourceHint();};
             BuildScanOptions();
+            BuildSourceCard(config);
             folderCaption=Label("",9,true); config.Controls.Add(folderCaption,0,3); config.SetColumnSpan(folderCaption,2);
-            folder=new TextBox { Dock=DockStyle.Fill, Text=settings.ApiFolder, BorderStyle=BorderStyle.FixedSingle, Font=new Font("Segoe UI",11), Margin=new Padding(0,4,10,0) }; config.Controls.Add(folder,0,4); config.SetColumnSpan(folder,2);
+            folder=new TextBox { Text=settings.DownloadFolder, Font=new Font("Segoe UI",11) };var folderFrame=new SourceInputFrame(folder){Height=36,Anchor=AnchorStyles.Left|AnchorStyles.Right,Margin=new Padding(0,0,10,0)};config.Controls.Add(folderFrame,0,4);config.SetColumnSpan(folderFrame,2);
+            sourceMode.SelectedIndexChanged+=ChangeSource;
             browse=new FlatButton { Dock=DockStyle.Fill, Fill=Color.FromArgb(234,237,247), ForeColor=ink, Margin=new Padding(0,0,0,2) }; browse.Click += ChooseFolder; config.Controls.Add(browse,2,4);
             modeCaption=Label("",9,true); config.Controls.Add(modeCaption,0,5);
             linkTimeoutCaption=Label("",9,true);config.Controls.Add(linkTimeoutCaption,1,5);idleCaption=Label("",9,true);config.Controls.Add(idleCaption,2,5);
@@ -171,7 +179,7 @@ namespace DiskRescue {
             TabPage cat=new TabPage();cat.BackColor=Color.White;cat.Controls.Add(categories);tabs.TabPages.Add(cat);
             TabPage events=new TabPage();events.BackColor=Color.White;events.Controls.Add(log);tabs.TabPages.Add(events);
             passes=Grid();TabPage passTab=new TabPage();passTab.BackColor=Color.White;passTab.Controls.Add(passes);tabs.TabPages.Add(passTab);passRows.AddRange(PassHistory.Load(Path.Combine(dataFolder,"passes.jsonl")));
-            dashboard=new FileDashboard();TabPage fileTab=new TabPage();fileTab.BackColor=Color.White;fileTab.Controls.Add(dashboard);tabs.TabPages.Add(fileTab);tabs.SelectedIndexChanged+=delegate{if(tabs.SelectedIndex==3){if(engine!=null&&busy&&engine.Latest.Catalog!=null)dashboard.Live(engine.Latest.Catalog,settings.ApiFolder);else dashboard.LoadSaved(dataFolder,folder.Text,remoteFolder.Text);}};
+            dashboard=new FileDashboard();TabPage fileTab=new TabPage();fileTab.BackColor=Color.White;fileTab.Controls.Add(dashboard);tabs.TabPages.Add(fileTab);tabs.SelectedIndexChanged+=delegate{if(tabs.SelectedIndex==3){if(engine!=null&&busy&&engine.Latest.Catalog!=null)dashboard.Live(engine.Latest.Catalog,settings.DownloadFolder);else dashboard.LoadSaved(dataFolder,folder.Text,remoteFolder.Text);}};
             body.Controls.Add(tabs);page.Controls.Add(body,0,5);
             TableLayoutPanel bottom=Table(2);bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,190));
             bottom.RowCount=1;bottom.RowStyles.Add(new RowStyle(SizeType.Percent,100));
@@ -229,11 +237,44 @@ namespace DiskRescue {
             TranslateStreams();footer.Text="";ApplyApiLayout();TranslateShell();RefreshSettingsNotice();
         }
         void ApplyApiLayout(){
-            setupGrid.RowStyles[2].Height=120;pageGrid.RowStyles[2].Height=371;
+            setupGrid.RowStyles[2].Height=120;pageGrid.RowStyles[2].Height=386;
             setupGrid.RowStyles[7].Height=26;setupGrid.RowStyles[8].Height=32;setupGrid.SetColumnSpan(mode.Parent,1);
-            TableLayoutPanel preferences=settingsCard==null?null:settingsCard.Parent as TableLayoutPanel;if(preferences!=null)preferences.RowStyles[1].Height=384;
+            TableLayoutPanel preferences=settingsCard==null?null:settingsCard.Parent as TableLayoutPanel;if(preferences!=null)preferences.RowStyles[1].Height=399;
             folderCaption.Text=T("Папка для сохранения · структура облачных папок сохраняется","Download folder · preserves cloud folder structure");
             metricTitle[4].Text=T("Ошибки за проход","Errors this pass");categories.Columns[6].HeaderText=T("Ошибки сервера","Server errors");guideTitle.Text=T("Перед запуском · API","Before you start · API");guideText.Text=T("Выберите локальную папку и режим. Галочки обновления облака определяют, когда искать новые и изменённые файлы. Если сохранённого списка нет, он будет получен автоматически.","Choose a local folder and a pass mode. Cloud refresh options control discovery of new and changed files. A missing saved list is fetched automatically.");
+            ApplySourceLayout();
+        }
+        void ChangeSource(object sender,EventArgs args){
+            if(changingSource||busy||sourceMode.SelectedIndex<0)return;
+            var preferences=settingsCard==null?null:settingsCard.Parent;
+            SuspendLayout();if(preferences!=null)preferences.SuspendLayout();setupGrid.SuspendLayout();sourceCard.SuspendLayout();credentials.SuspendLayout();changingSource=true;
+            try{
+                settings.SaveSourceFields(folder.Text,remoteFolder.Text);
+                settings.Source=sourceMode.SelectedIndex==1?DownloadSource.PublicLink:DownloadSource.Account;
+                folder.Text=settings.DownloadFolder;remoteFolder.Text=settings.SourcePath;ApplySourceLayout();
+            }finally{changingSource=false;credentials.ResumeLayout(false);sourceCard.ResumeLayout(false);setupGrid.ResumeLayout(true);if(preferences!=null)preferences.ResumeLayout(true);ResumeLayout(true);}
+            UpdateSourceHint();RequestSourceSave();
+            if(engine!=null)engine=new Engine(dataFolder);
+            if(dashboard!=null)dashboard.Live(new System.Collections.Generic.List<BrowserFile>(),folder.Text);
+        }
+        void ApplySourceLayout(){
+            bool isPublic=settings.Source==DownloadSource.PublicLink;
+            bool wasChanging=changingSource;changingSource=true;try{sourceMode.SetLabels(T("Мой Яндекс Диск","My Yandex Disk"),T("Публичная ссылка","Public link"));sourceMode.SelectedIndex=isPublic?1:0;}finally{changingSource=wasChanging;}
+            apiToken.Visible=apiCaption.Visible=tokenHelp.Visible=!isPublic;
+            apiToken.Parent.Visible=!isPublic;
+            apiCaption.Parent.Visible=!isPublic;
+            sourceAuthFields.Visible=!isPublic;publicWarning.Visible=isPublic;
+            publicWarning.Text=T("Публичная ссылка даёт доступ к файлам любому получателю. Не публикуйте личные файлы ради скачивания и не передавайте ссылки или OAuth-токены сторонним сервисам.","A public link gives anyone who receives it access to the files. Do not publish private files just to download them, or share links or OAuth tokens with third-party services.");
+            if(setupGrid.RowStyles[0].Height!=50)setupGrid.RowStyles[0].Height=50;
+            if(setupGrid.RowStyles[1].Height!=50)setupGrid.RowStyles[1].Height=50;
+            if(setupGrid.RowStyles[2].Height!=240)setupGrid.RowStyles[2].Height=240;
+            var preferences=settingsCard==null?null:settingsCard.Parent as TableLayoutPanel;
+            float height=setupGrid.RowStyles.Cast<RowStyle>().Sum(row=>row.Height)+42;
+            if(preferences!=null&&preferences.RowStyles[1].Height!=height)preferences.RowStyles[1].Height=height;
+            sourceTitle.Text=T("Источник файлов","File source");sourceHelpButton.AccessibleName=T("Справка об источниках файлов","Help about file sources");
+            apiCaption.Text=T("OAuth-токен","OAuth token");remoteCaption.Text=isPublic?T("Публичная ссылка на файл или папку","Public link to a file or folder"):T("Папка на Диске","Folder on Disk");
+            folderCaption.Text=isPublic?T("Папка публичных загрузок · выбирается отдельно","Public downloads folder · chosen independently"):T("Папка загрузок аккаунта · выбирается отдельно","Account downloads folder · chosen independently");
+            UpdateSourceHint();
         }
         void ShowGuide(){
             using(Form window=new Form{Text=T("Как пользоваться Yandex Disk Rescue","Yandex Disk Rescue guide"),Size=new Size(820,760),MinimumSize=new Size(640,500),StartPosition=FormStartPosition.CenterParent,Font=Font,BackColor=BackColor}){
@@ -251,12 +292,13 @@ namespace DiskRescue {
         void ChooseFolder(object sender,EventArgs args) {
             using(FolderBrowserDialog d=new FolderBrowserDialog()) {
                 d.Description=T("Выберите папку для сохранения файлов","Choose a download folder");d.SelectedPath=folder.Text;
-                if(d.ShowDialog(this)==DialogResult.OK){folder.Text=d.SelectedPath;settings.ApiFolder=d.SelectedPath;SaveSettings();}
+                if(d.ShowDialog(this)==DialogResult.OK){folder.Text=d.SelectedPath;settings.SaveSourceFields(folder.Text,remoteFolder.Text);SaveSettings();}
             }
         }
         bool SaveSettings() {
             if(!settingsReady)return false;
-            try{SettingsStore.Save(settingsPath,settings);settingsSaveWarning=null;settingsLoadWarning=null;RefreshSettingsNotice();return true;}
+            sourceSaveTimer.Stop();System.Threading.Interlocked.Increment(ref sourceSaveVersion);
+            try{lock(settingsWriteGate){SettingsStore.Save(settingsPath,settings);}settingsSaveWarning=null;settingsLoadWarning=null;RefreshSettingsNotice();return true;}
             catch(UnauthorizedAccessException){settingsSaveWarning="permission";}
             catch(IOException){settingsSaveWarning="io";}
             catch(Exception){settingsSaveWarning="other";}
@@ -275,12 +317,14 @@ namespace DiskRescue {
         }
         void StartStop(object sender,EventArgs args) {
             if(busy){if(sessionStop!=null)sessionStop.Cancel();engine.Stop();start.Enabled=false;phase.Text=T("Завершаем и отменяем текущие запросы…","Finishing and cancelling current requests…");return;}
-            if(String.IsNullOrWhiteSpace(apiToken.Text)){MessageBox.Show(this,T("Укажите OAuth-токен.","Enter an OAuth token."),Text);return;}
+            if(settings.Source==DownloadSource.PublicLink&&!ApiEngine.IsPublicUrl(remoteFolder.Text)){MessageBox.Show(this,T("Укажите публичную HTTPS-ссылку Яндекс Диска: /d/… или /i/… .","Enter a public HTTPS Yandex Disk link: /d/… or /i/… ."),Text);return;}
+            if(settings.Source==DownloadSource.Account&&String.IsNullOrWhiteSpace(apiToken.Text)){MessageBox.Show(this, T("Укажите OAuth-токен.", "Enter an OAuth token."), Text);return;}
+            if(settings.Source==DownloadSource.Account&&(remoteFolder.Text??"").Contains("://")){MessageBox.Show(this,T("Для ссылки выберите режим «По публичной ссылке».","Choose Public link mode to download a sharing link."),Text);return;}
             if(String.IsNullOrWhiteSpace(folder.Text)){MessageBox.Show(this,T("Укажите папку для сохранения.","Choose a download folder."),Text);return;}
             if(!Directory.Exists(folder.Text)){MessageBox.Show(this,T("Укажите существующую локальную папку.","Choose an existing local folder."),Text);return;}
             PrerequisiteStatus environment=Prerequisites.Check();
             if(!environment.PlatformReady){MessageBox.Show(this,T("Требуются Windows 10 1709+ / Windows 11 (x64/x86 build) и .NET Framework 4.7.1+.","Windows 10 1709+ / Windows 11 (x64/x86 build) and .NET Framework 4.7.1+ are required."),Text);return;}
-            settings.ScanCloudOnStart=scanCloudStart.Checked;settings.ScanCloudOnRepeats=scanCloudRepeats.Checked;settings.ApiFolder=Path.GetFullPath(folder.Text);settings.ApiToken=apiToken.Text.Trim();try{settings.RemoteFolder=ApiEngine.NormalizeRemote(remoteFolder.Text);TokenVault.Save(dataFolder,settings.ApiToken);}catch(Exception){MessageBox.Show(this,T("Проверьте облачный путь и доступ к хранилищу токена.","Check the cloud path and token storage permissions."),Text);return;}settings.IdleSeconds=(int)idle.Value;settings.LinkTimeoutSeconds=(int)linkTimeout.Value;settings.ApiLinkConcurrency=(int)linkConcurrency.Value;settings.ApiDownloadConcurrency=(int)downloadConcurrency.Value;settings.ApiRequestIntervalMs=(int)requestInterval.Value;settings.RepeatProblemFiles=repeatProblems.Checked;if(!SaveSettings())return;
+            settings.ScanCloudOnStart=scanCloudStart.Checked;settings.ScanCloudOnRepeats=scanCloudRepeats.Checked;try{settings.SaveSourceFields(Path.GetFullPath(folder.Text),ApiEngine.NormalizeRemote(remoteFolder.Text));if(settings.Source==DownloadSource.Account){settings.ApiToken=apiToken.Text.Trim();TokenVault.Save(dataFolder,settings.ApiToken);}}catch(Exception){MessageBox.Show(this,T("Проверьте источник, папку и доступ к хранилищу токена.","Check the source, download folder and token storage permissions."),Text);return;}settings.IdleSeconds=(int)idle.Value;settings.LinkTimeoutSeconds=(int)linkTimeout.Value;settings.ApiLinkConcurrency=(int)linkConcurrency.Value;settings.ApiDownloadConcurrency=(int)downloadConcurrency.Value;settings.ApiRequestIntervalMs=(int)requestInterval.Value;settings.RepeatProblemFiles=repeatProblems.Checked;if(!SaveSettings())return;
 
             integrityPass=mode.SelectedIndex==4;busy=true;SetBusy(true);phase.Text=T("Подготовка…","Preparing…");progress.Style=ProgressBarStyle.Marquee;timer.Start();
             RunMode runMode=integrityPass?RunMode.IntegrityFailures:new[]{RunMode.All,RunMode.Remaining,RunMode.DownloadErrors,RunMode.PartialFiles}[mode.SelectedIndex];
@@ -326,6 +370,7 @@ namespace DiskRescue {
             if(settingsCard!=null)settingsCard.Enabled=!value;
             repeatProblems.Enabled=!value;if(streamsPerFile!=null)streamsPerFile.Enabled=multiStreamThreshold.Enabled=!value;
             folder.ReadOnly=value;apiToken.ReadOnly=remoteFolder.ReadOnly=value;browse.Enabled=mode.Enabled=idle.Enabled=!value;linkTimeout.Enabled=!value;
+            sourceMode.Enabled=!value;
             requestInterval.Enabled=linkConcurrency.Enabled=downloadConcurrency.Enabled=!value;
             UpdateScanOptions();mode.Visible=!value;modeReadout.Visible=value;modeReadout.Text=busy&&integrityPass?T("Файлы с несовпавшим хешем","Files with checksum mismatches"):Convert.ToString(mode.SelectedItem);if(value)modeReadout.BringToFront();
             start.Enabled=!renderingFailed;start.Fill=value?Color.FromArgb(217,94,108):accent;start.Text=value?T("Остановить","Stop"):T("Начать проход","Start pass");start.Invalidate();
@@ -349,7 +394,7 @@ namespace DiskRescue {
         void RenderCore(Snapshot s) {
             if(!busy&&s.Phase=="idle"&&s.Total==0&&idleView!=null)s=idleView;
             RenderShell(s);
-            if(dashboard!=null&&(section==1||dashboard.Detached)&&s.Catalog!=null&&(s.Phase=="running"||s.Phase=="completed"||s.Phase=="stopped")&&(s.Catalog.Count>0||s.Phase=="completed"))dashboard.Live(s.Catalog,settings.ApiFolder);
+            if(dashboard!=null&&(section==1||dashboard.Detached)&&s.Catalog!=null&&(s.Phase=="running"||s.Phase=="completed"||s.Phase=="stopped")&&(s.Catalog.Count>0||s.Phase=="completed"))dashboard.Live(s.Catalog,settings.DownloadFolder);
             if(waitingForRetry){
                 int remaining=passTransition==null?0:(int)Math.Max(0,Math.Ceiling((passTransition.ReadyUtc-DateTime.UtcNow).TotalSeconds));
                 phase.Text=remaining>0?String.Format(T("Временная ошибка · следующий проход через {0} с","Temporary error · next pass in {0} s"),remaining):T("Подготовка к следующему проходу…","Preparing the next pass…");
@@ -386,7 +431,7 @@ namespace DiskRescue {
             ((StableLog)log).UpdateEvents(s.Events);
             if(!busy)OfferUpdate();
             if(s.RecoveryRequired){start.Enabled=false;detail.Text=T("Отмена не подтверждена. Перезапустите это приложение перед новым проходом.","Cancellation not acknowledged. Restart this application before another pass.");}
-            if(s.ScanErrors>0)footer.Text=String.Format(T("Недоступных папок/файлов при сканировании: {0}. Подробности в журнале.","Scan access errors: {0}. See the activity log."),s.ScanErrors);
+            if(s.ScanErrors>0){footer.Text=String.Format(T("Недоступных папок/файлов при сканировании: {0}. Подробности в журнале.","Scan access errors: {0}. See the activity log."),s.ScanErrors);if(s.Finished&&s.Phase=="completed")phase.Text=T("Проход завершён · список файлов неполный","Pass finished · file list is incomplete");}
         }
         public void PreviewDashboard(){PreviewDashboard(false);}
         public void PreviewDashboard(bool english){

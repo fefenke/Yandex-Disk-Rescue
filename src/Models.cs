@@ -9,6 +9,7 @@ using System.Web.Script.Serialization;
 
 namespace DiskRescue {
     public enum RunMode { All=1, Remaining=7, PartialFiles=8, IntegrityFailures=9, DownloadErrors=11 }
+    public enum DownloadSource { Account, PublicLink }
     public sealed class Settings {
         public string Folder = "";
         public string Language = "ru";
@@ -36,6 +37,20 @@ namespace DiskRescue {
 
         public bool AutoCheckUpdates = true;
         public string ApiFolder = "", RemoteFolder = "disk:/";
+        public DownloadSource Source;
+        public string PublicFolder="",PublicUrl="";
+        public int SourceSettingsVersion;
+        [ScriptIgnore] public string DownloadFolder { get { return Source==DownloadSource.PublicLink?PublicFolder:ApiFolder; } }
+        [ScriptIgnore] public string SourcePath { get { return Source==DownloadSource.PublicLink?PublicUrl:RemoteFolder; } }
+        public void SaveSourceFields(string destination,string remote){if(Source==DownloadSource.PublicLink){PublicFolder=destination;PublicUrl=remote;}else{ApiFolder=destination;RemoteFolder=remote;}}
+        public void ApplySourceDefaults(){
+            if(SourceSettingsVersion>=1)return;
+            // Preserve settings saved by the first public-link PR without assigning
+            // its public destination to a previously unused account profile.
+            if(Source==DownloadSource.Account&&ApiEngine.IsPublicUrl(RemoteFolder)){PublicUrl=RemoteFolder;PublicFolder=ApiFolder;RemoteFolder="disk:/";ApiFolder="";Source=DownloadSource.PublicLink;}
+            SourceSettingsVersion=1;
+        }
+        public Settings ForRun(){Settings copy=(Settings)MemberwiseClone();copy.ApiFolder=DownloadFolder;copy.RemoteFolder=SourcePath;if(Source==DownloadSource.PublicLink)copy.ApiToken="";return copy;}
         [ScriptIgnore] public string ApiToken = "";
         public string GitHubReleasesUrl = "https://github.com/fefenke/Yandex-Disk-Rescue/releases", SupportUrl = "https://yoomoney.ru/fundraise/1KS67440FP0.261012";
         public void ApplyTransferDefaults() {
@@ -60,6 +75,8 @@ namespace DiskRescue {
         public bool SizeKnown;
         public bool ResumeEligible;
         internal string DestinationError="";
+        public string ApiPath;
+        public bool PublicRoot;
     }
     public sealed class ActiveFile {
         public string Path, Category, State;

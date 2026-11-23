@@ -16,7 +16,7 @@ namespace DiskRescue {
     }
     public static class BrowserCatalog {
         public static List<BrowserFile> Capture(IEnumerable<DiskFile> files,string root){
-            return files.Select(f=>new BrowserFile{Path=f.Path.StartsWith("disk:/",StringComparison.Ordinal)?f.Path.Substring(6):f.Path.Substring(Math.Min(f.Path.Length,root.TrimEnd('\\').Length)).TrimStart('\\').Replace('\\','/'),LocalPath=String.IsNullOrEmpty(f.Destination)?f.Path:f.Destination,Length=f.Length,Bytes=f.DownloadedBytes??0,Status=f.Status,Verification=f.Verification,PreservedPath=f.PreservedPath}).ToList();
+            return files.Select(f=>new BrowserFile{Path=f.Path.StartsWith("disk:/",StringComparison.Ordinal)?f.Path.Substring(6):f.Path.StartsWith("/",StringComparison.Ordinal)?f.Path.Substring(1):f.Path.Substring(Math.Min(f.Path.Length,root.TrimEnd('\\').Length)).TrimStart('\\').Replace('\\','/'),LocalPath=String.IsNullOrEmpty(f.Destination)?f.Path:f.Destination,Length=f.Length,Bytes=f.DownloadedBytes??0,Status=f.Status,Verification=f.Verification,PreservedPath=f.PreservedPath}).ToList();
         }
         public static List<BrowserFile> Load(string data,bool api,string root,string remote){
             List<DiskFile> files=new List<DiskFile>();string historyPath;

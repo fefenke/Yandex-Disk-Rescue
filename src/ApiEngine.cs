@@ -62,13 +62,45 @@ namespace DiskRescue {
         static string Text(IDictionary<string,object> o,string key){object v;return o.TryGetValue(key,out v)?Convert.ToString(v):"";}
         static long RequiredSize(IDictionary<string,object> entry){object value;if(!entry.TryGetValue("size",out value)||!(value is int||value is long))throw new IOException("Missing or invalid cloud file size.");long length=Convert.ToInt64(value);if(length<0)throw new IOException("Invalid cloud file size.");return length;}
         void Event(string message){events.Add(DateTime.Now.ToString("HH:mm:ss")+"  "+message);if(events.Count>160)events.RemoveAt(0);}
-        public static string NormalizeRemote(string path){path=(path??"").Trim().Replace('\\','/');if(path=="")return "disk:/";if(!path.StartsWith("disk:/",StringComparison.Ordinal))path="disk:/"+path.TrimStart('/');if(path.Split('/').Any(x=>x==".."||x=="."))throw new ArgumentException("Invalid cloud folder path.");return path;}
-        public static string Validation(Settings s){if(String.IsNullOrWhiteSpace(s.ApiToken))return "token";if(String.IsNullOrWhiteSpace(s.ApiFolder))return "destination";return "";}
+        public static bool IsPublicUrl(string path){
+            string p=(path??"").Trim();
+            Uri uri;
+            if(p.Any(c=>Char.IsWhiteSpace(c)||Char.IsControl(c)||c=='\\')||!Uri.TryCreate(p,UriKind.Absolute,out uri)||uri.Scheme!="https"||!uri.IsDefaultPort||uri.UserInfo!=""||uri.Fragment!="")return false;
+            if(uri.Host!="disk.yandex.ru"&&uri.Host!="disk.360.yandex.ru"&&uri.Host!="yadi.sk")return false;
+            int pathStart=p.IndexOf('/',8);if(pathStart<0||p.Substring(pathStart).Split('?')[0]!=uri.AbsolutePath)return false;
+            string[] parts=uri.AbsolutePath.Split('/');
+            if(parts.Length!=3||(parts[1]!="d"&&parts[1]!="i")||parts[2].Length==0||parts[2].Any(c=>!(c>='a'&&c<='z'||c>='A'&&c<='Z'||c>='0'&&c<='9'||c=='_'||c=='-')))return false;
+            foreach(string item in uri.Query.TrimStart('?').Split('&')){string key=Uri.UnescapeDataString(item.Split('=')[0]);if(key.Equals("oauth_token",StringComparison.OrdinalIgnoreCase)||key.Equals("access_token",StringComparison.OrdinalIgnoreCase)||key.Equals("token",StringComparison.OrdinalIgnoreCase)||key.Equals("authorization",StringComparison.OrdinalIgnoreCase))return false;}
+            return true;
+        }
+        public static string NormalizeRemote(string path){
+            if(IsPublicUrl(path))return path.Trim();
+            if((path??"").Contains("://"))throw new ArgumentException("Unsupported public link. Use an HTTPS Yandex Disk sharing link.");
+            path=(path??"").Trim().Replace('\\','/');
+            if(path=="")return "disk:/";
+            if(!path.StartsWith("disk:/",StringComparison.Ordinal))path="disk:/"+path.TrimStart('/');
+            if(path.Split('/').Any(x=>x==".."||x=="."))throw new ArgumentException("Invalid cloud folder path.");
+            return path;
+        }
+        public static string Validation(Settings s){
+            if(s.Source!=DownloadSource.Account&&s.Source!=DownloadSource.PublicLink)return "source";
+            if(s.Source==DownloadSource.PublicLink){if(!IsPublicUrl(s.PublicUrl))return "public_link";}
+            else {if(String.IsNullOrWhiteSpace(s.ApiToken))return "token";if((s.RemoteFolder??"").Contains("://"))return "cloud_path";}
+            if(String.IsNullOrWhiteSpace(s.DownloadFolder))return "destination";
+            return "";
+        }
         static string Suffix(string value){using(SHA256 sha=SHA256.Create())return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(value))).Replace("-","").Substring(0,8);}
-        public static string LocalPath(string root,string remote){
-            if(!remote.StartsWith("disk:/",StringComparison.Ordinal))throw new IOException("Unsupported remote path.");
-            List<string> parts=new List<string>();
-            foreach(string original in remote.Substring(6).Split('/')){
+        public static string LocalPath(string root, string remote){
+            string rel;
+            if (remote.StartsWith("disk:/", StringComparison.Ordinal))
+                rel = remote.Substring(6);
+            else if (remote.StartsWith("/", StringComparison.Ordinal))
+                rel = remote.Substring(1);
+            else
+                throw new IOException("Unsupported remote path.");
+
+            List<string> parts = new List<string>();
+            foreach (string original in rel.Split('/')){
                 if(original==""||original=="."||original=="..")throw new IOException("Unsafe remote path.");
                 string safe=new string(original.Select(c=>Array.IndexOf(Path.GetInvalidFileNameChars(),c)>=0?'_':c).ToArray()).TrimEnd(' ','.');
                 string stem=safe.Split('.')[0].ToUpperInvariant();
@@ -80,6 +112,30 @@ namespace DiskRescue {
             string path=Path.GetFullPath(Path.Combine(fullRoot,Path.Combine(parts.ToArray())));
             if(!path.StartsWith(fullRoot,StringComparison.OrdinalIgnoreCase))throw new IOException("Destination outside download folder.");
             return path;
+        }
+        string ResourceListRoute(string folder,int offset){
+            if(settings.Source==DownloadSource.PublicLink){
+                string r="/public/resources?public_key="+Uri.EscapeDataString(inventoryRoot)+"&limit=1000&offset="+offset;
+                if(!IsPublicUrl(folder)&&folder!="/")r+="&path="+Uri.EscapeDataString(folder);
+                return r;
+            }
+            return "/resources?path="+Uri.EscapeDataString(folder)+"&limit=1000&offset="+offset;
+        }
+        string ResourceMetaRoute(string path){
+            if(settings.Source==DownloadSource.PublicLink){
+                string r="/public/resources?public_key="+Uri.EscapeDataString(inventoryRoot)+"&fields=path,type,size,modified,md5,sha256,name";
+                if(!IsPublicUrl(path)&&path!="/")r+="&path="+Uri.EscapeDataString(path);
+                return r;
+            }
+            return "/resources?path="+Uri.EscapeDataString(path)+"&fields=path,type,size,modified,md5,sha256";
+        }
+        string ResourceDownloadRoute(string path){
+            if(settings.Source==DownloadSource.PublicLink){
+                string r="/public/resources/download?public_key="+Uri.EscapeDataString(inventoryRoot);
+                if(!IsPublicUrl(path)&&path!="/")r+="&path="+Uri.EscapeDataString(path);
+                return r;
+            }
+            return "/resources/download?path="+Uri.EscapeDataString(path);
         }
         Task<Dictionary<string,object>> Json(string route,CancellationToken cancellation,int timeoutSeconds=0){
             // An immediately admitted request must not inherit a UI synchronization
@@ -93,7 +149,8 @@ namespace DiskRescue {
             cancellation=requestTimeout.Token;
             try{
             using(HttpRequestMessage request=new HttpRequestMessage(HttpMethod.Get,Endpoint+route)){
-                request.Headers.Authorization=new AuthenticationHeaderValue("OAuth",settings.ApiToken);
+                if(settings.Source==DownloadSource.PublicLink&&!route.StartsWith("/public/",StringComparison.Ordinal))throw new IOException("Public source cannot use a private API route.");
+                if(settings.Source==DownloadSource.Account&&!route.StartsWith("/public/",StringComparison.Ordinal)&&!String.IsNullOrWhiteSpace(settings.ApiToken))request.Headers.Authorization=new AuthenticationHeaderValue("OAuth",settings.ApiToken);
                 using(HttpResponseMessage response=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,cancellation).ConfigureAwait(false)){
                     using(CancellationTokenRegistration abort=cancellation.Register(delegate{response.Dispose();})){
                     if(!response.IsSuccessStatusCode){double retryAfter=ApiPacer.RetryAfterSeconds(response);apiPacer.Failure((int)response.StatusCode,retryAfter,ticket);throw new ApiException((int)response.StatusCode,retryAfter);}
@@ -131,12 +188,12 @@ namespace DiskRescue {
                 bool completed=false;for(int offset=0;;offset+=1000){
                     SaveInventory(cachePath,account,root,false,folders,folder,offset);
                     current=folder;Snapshot("scanning", "",false);
-                    Dictionary<string,object> resource;try{resource=Listing("/resources?path="+Uri.EscapeDataString(folder)+"&limit=1000&offset="+offset);}catch(ApiException ex){if(ex.Code==401||ex.Code==403)throw;Event(folder+"  ·  Listing HTTP "+ex.Code);break;}catch(OperationCanceledException){if(stop.IsCancellationRequested)throw;Event(folder+"  ·  Listing timeout.");break;}
-                    if(Text(resource,"type")=="file"){Add(resource);completed=true;break;}
+                    Dictionary<string,object> resource;try{resource=Listing(ResourceListRoute(folder,offset));}catch(ApiException ex){if(ex.Code==401||ex.Code==403)throw;Event(folder+"  ·  Listing HTTP "+ex.Code);break;}catch(OperationCanceledException){if(stop.IsCancellationRequested)throw;Event(folder+"  ·  Listing timeout.");break;}
+                    if(Text(resource,"type")=="file"){Add(resource,settings.Source==DownloadSource.PublicLink&&folder==root);completed=true;break;}
                     object raw;Dictionary<string,object> embedded=resource.TryGetValue("_embedded",out raw)?raw as Dictionary<string,object>:null;
                     if(embedded==null)throw new IOException("Missing directory listing in API response.");
                     IEnumerable entries=embedded.TryGetValue("items",out raw)?raw as IEnumerable:null;if(entries==null)throw new IOException("Missing API items.");
-                    int count=0;foreach(object item in entries){Dictionary<string,object> entry=item as Dictionary<string,object>;if(entry==null)throw new IOException("Invalid API item.");count++;if(Text(entry,"type")=="dir")folders.Push(Text(entry,"path"));else if(Text(entry,"type")=="file")Add(entry);}
+                    int count=0;foreach(object item in entries){Dictionary<string,object> entry=item as Dictionary<string,object>;if(entry==null)throw new IOException("Invalid API item.");count++;if(settings.Source==DownloadSource.PublicLink)ValidatePublicChild(folder,Text(entry,"path"));if(Text(entry,"type")=="dir")folders.Push(Text(entry,"path"));else if(Text(entry,"type")=="file")Add(entry);else throw new IOException("Unknown resource type in API listing.");}
                     if(count<1000){completed=true;failedFolders.Remove(folder);scanErrors=failedFolders.Count;}
                     SaveInventory(cachePath,account,root,false,folders,completed?null:folder,completed?0:offset+1000);
                     if(completed)break;
@@ -146,6 +203,7 @@ namespace DiskRescue {
             }
             AssignDestinations();
             SaveInventory(cachePath,account,root,true,folders,null,0);
+            if(settings.Source==DownloadSource.PublicLink&&files.Count==0&&scanErrors>0)throw new IOException("Public resource could not be fully listed. Saved data retained.");
         }
         bool AssignDestinations(){
             DestinationPaths.Assign(files,settings.ApiFolder,savedDestinations);
@@ -162,7 +220,7 @@ namespace DiskRescue {
             DestinationPaths.Assign(files,root,DestinationPaths.Saved(files,root));
         }
         public sealed class InventoryCache {
-            public int Version=3, ScanErrors,NextOffset;
+            public int Version=4, ScanErrors,NextOffset;
             public bool Complete=true;
             public string ActiveFolder;
             public List<string> PendingFolders;
@@ -182,8 +240,10 @@ namespace DiskRescue {
             JavaScriptSerializer json=new JavaScriptSerializer{MaxJsonLength=128*1024*1024};
             if(settings.UseCachedApiList&&File.Exists(path)){
                 InventoryCache cache;try{stop.Token.ThrowIfCancellationRequested();string saved=File.ReadAllText(path,Encoding.UTF8);stop.Token.ThrowIfCancellationRequested();cache=json.Deserialize<InventoryCache>(saved);stop.Token.ThrowIfCancellationRequested();}catch(OperationCanceledException){throw;}catch{throw new IOException("Saved API list is unreadable. Choose Refresh list from Disk.");}
-                if(cache==null||(cache.Version!=1&&cache.Version!=2&&cache.Version!=3)||cache.Account!=account||cache.Root!=remote||cache.Files==null||cache.NextOffset<0)throw new IOException("Saved API list does not match the selected account and cloud folder.");
+                if(cache==null||(cache.Version<1||cache.Version>4)||cache.Account!=account||cache.Root!=remote||cache.Files==null||cache.NextOffset<0)throw new IOException("Saved API list does not match the selected account and cloud folder.");
+                if(settings.Source==DownloadSource.Account||cache.Version>=4)foreach(DiskFile file in cache.Files)ValidateStoredResource(file);
                 savedDestinations=DestinationPaths.Saved(cache,settings.ApiFolder);
+                if(settings.Source==DownloadSource.PublicLink&&cache.Version<4){Event("Rebuilding public resource identities; existing files and partials are retained.");Scan(remote,path,account,null);return;}
                 if(cache.ScanErrors>0&&(cache.Version<3||cache.FailedFolders==null||cache.FailedFolders.Count==0)){Event("Rebuilding an incomplete legacy API list; local downloads and history are retained.");Scan(remote,path,account,null);return;}
                 inventoryCheckpoint=cache;
                 foreach(DiskFile file in cache.Files){stop.Token.ThrowIfCancellationRequested();if(file==null||String.IsNullOrEmpty(file.Path)||file.Length<0)throw new IOException("Saved API list is invalid. Refresh the list.");file.Status="pending";file.Message="";file.Local=false;file.DownloadedBytes=null;if(remotePaths.Add(file.Path))files.Add(file);}
@@ -200,7 +260,7 @@ namespace DiskRescue {
             if(File.Exists(path)){
                 // Refresh replaces checkpoints while scanning. Capture previous
                 // assignments first so new case variants cannot steal old paths.
-                try{stop.Token.ThrowIfCancellationRequested();InventoryCache previous=json.Deserialize<InventoryCache>(File.ReadAllText(path,Encoding.UTF8));if(previous!=null&&(previous.Version==1||previous.Version==2||previous.Version==3)&&previous.Account==account&&previous.Root==remote&&previous.Files!=null)savedDestinations=DestinationPaths.Saved(previous,settings.ApiFolder);}
+                try{stop.Token.ThrowIfCancellationRequested();InventoryCache previous=json.Deserialize<InventoryCache>(File.ReadAllText(path,Encoding.UTF8));if(previous!=null&&previous.Version>=1&&previous.Version<=4&&previous.Account==account&&previous.Root==remote&&previous.Files!=null)savedDestinations=DestinationPaths.Saved(previous,settings.ApiFolder);}
                 catch(OperationCanceledException){throw;}
                 catch(Exception){Event("Previous destination assignments are unreadable; ambiguous existing paths will be retained without downloading.");}
             }
@@ -208,7 +268,35 @@ namespace DiskRescue {
             Event("Saved API list: "+files.Count+" files.");
         }
         static string CloudModified(string modified,string md5,string sha){return modified+"|"+md5+(String.IsNullOrEmpty(md5)&&!String.IsNullOrEmpty(sha)?"|sha256:"+sha:"");}
-        void Add(Dictionary<string,object> entry){string path=Text(entry,"path");if(!remotePaths.Add(path))return;string destination;if(!savedDestinations.TryGetValue(path,out destination))destination=LocalPath(settings.ApiFolder,path);files.Add(new DiskFile{Path=path,Destination=destination,Folder=Path.GetDirectoryName(destination),Length=RequiredSize(entry),SizeKnown=true,Md5=Text(entry,"md5"),Sha256=Text(entry,"sha256"),Modified=CloudModified(Text(entry,"modified"),Text(entry,"md5"),Text(entry,"sha256")),Category=FileRules.Category(path)});}
+        void Add(Dictionary<string, object> entry,bool publicRoot=false)
+        {
+            string path = Text(entry, "path");
+            string apiPath=path;
+            if(publicRoot){string name=Text(entry,"name");if(!String.IsNullOrEmpty(path)&&path!="/")throw new IOException("Invalid public root path.");ValidatePublicName(name);path="/"+name;apiPath="/";}
+            else if(settings.Source==DownloadSource.Account&&!path.StartsWith("disk:/",StringComparison.Ordinal))throw new IOException("Invalid account resource path.");
+            CloudIntegrity.Validate(Text(entry,"md5"),32);CloudIntegrity.Validate(Text(entry,"sha256"),64);
+            if(settings.Source==DownloadSource.PublicLink&&String.IsNullOrWhiteSpace(Text(entry,"modified")))throw new IOException("Missing public file version metadata.");
+            if (!remotePaths.Add(path))
+                return;
+
+            string destination;
+            if (!savedDestinations.TryGetValue(path, out destination))
+                destination = LocalPath(settings.ApiFolder, path);
+
+            files.Add(new DiskFile
+            {
+                Path = path,
+                ApiPath=apiPath,PublicRoot=publicRoot,
+                Destination = destination,
+                Folder = Path.GetDirectoryName(destination),
+                Length = RequiredSize(entry),
+                SizeKnown = true,
+                Md5 = Text(entry, "md5"),
+                Sha256 = Text(entry, "sha256"),
+                Modified = CloudModified(Text(entry, "modified"), Text(entry, "md5"), Text(entry, "sha256")),
+                Category = FileRules.Category(path)
+            });
+        }
         bool CanRecoverArchived(DiskFile file){
             if(!String.IsNullOrEmpty(file.DestinationError)||ArtifactCollision(file)||preserver.Blocked(file))return false;
             try{preserver.CheckDestination(file.Destination);return true;}catch(IOException){return false;}
@@ -251,10 +339,12 @@ namespace DiskRescue {
                         SegmentPlan existing=ReadSegmentPlan(job.File);
                         job.Bytes=existing==null?(File.Exists(partial)?Math.Min(new FileInfo(partial).Length,job.File.Length):0):existing.Offset+SegmentBytes(job.File,existing);
                         checkingMetadata=true;
-                        var remote=await Json("/resources?path="+Uri.EscapeDataString(job.File.Path)+"&fields=path,type,size,modified,md5,sha256",stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
+                        var remote = await Json(ResourceMetaRoute(ApiResourcePath(job.File)), stop.Token, settings.LinkTimeoutSeconds).ConfigureAwait(false);
                         string digest=Text(remote,"md5"),sha=Text(remote,"sha256"),modified=Text(remote,"modified");CloudIntegrity.Validate(digest,32);CloudIntegrity.Validate(sha,64);
                         long remoteSize=RequiredSize(remote);
-                        if(Text(remote,"type")!="file"||Text(remote,"path")!=job.File.Path||remoteSize<0||String.IsNullOrEmpty(modified)||(CloudIntegrity.HasHash(job.File)&&String.IsNullOrEmpty(digest)&&String.IsNullOrEmpty(sha)))throw new IOException("Cloud metadata cannot safely identify the file version.");
+                        bool samePath = SameResource(job.File,remote);
+                        if (Text(remote, "type") != "file" || !samePath || remoteSize < 0 || String.IsNullOrEmpty(modified) || (CloudIntegrity.HasHash(job.File) && String.IsNullOrEmpty(digest) && String.IsNullOrEmpty(sha)))
+                            throw new IOException("Cloud metadata cannot safely identify the file version.");
                         stop.Token.ThrowIfCancellationRequested();
                         if(!job.File.SizeKnown||job.File.Length!=remoteSize||job.File.Modified!=CloudModified(modified,digest,sha)||job.File.Sha256!=sha)Interlocked.Exchange(ref refreshedInventory,1);
                         job.File.SizeKnown=true;job.File.Length=remoteSize;job.File.Md5=digest;job.File.Sha256=sha;job.File.Modified=CloudModified(modified,digest,sha);
@@ -285,7 +375,7 @@ namespace DiskRescue {
                 string cacheKey=history.DirectoryPath+"\n"+job.File.Path;
                 job.LinkLease=linkCache.Get(cacheKey,SegmentIdentity(job.File));
                 if(job.LinkLease!=null)return new LinkResult{Link=job.LinkLease.Link};
-                Dictionary<string,object> link=await Json("/resources/download?path="+Uri.EscapeDataString(job.File.Path),stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
+                Dictionary<string, object> link = await Json(ResourceDownloadRoute(ApiResourcePath(job.File)), stop.Token, settings.LinkTimeoutSeconds).ConfigureAwait(false);
                 Uri uri;if(!Uri.TryCreate(Text(link,"href"),UriKind.Absolute,out uri)||uri.Scheme!="https"||!String.IsNullOrEmpty(uri.UserInfo))throw new IOException("Invalid HTTPS download link.");
                 job.LinkLease=linkCache.Offer(cacheKey,SegmentIdentity(job.File),uri);
                 return new LinkResult{Link=uri};
@@ -328,7 +418,7 @@ namespace DiskRescue {
             }
         }
         public void Run(Settings options,RunMode mode){
-            settings=options;runMode=mode;clock.Start();string phase="completed",error="";
+            settings=options.ForRun();runMode=mode;clock.Start();string phase="completed",error="";
             apiPacer.Configure(settings.ApiRequestIntervalMs);
             try{
                 string missing=Validation(settings);if(missing!="")throw new IOException("Missing required API field: "+missing);
@@ -336,16 +426,28 @@ namespace DiskRescue {
                 int downloadConcurrency=Math.Max(1,Math.Min(30,settings.ApiDownloadConcurrency));
                 downloadSlots=new DownloadSlotQueue(downloadConcurrency);
                 int waitingCapacity=Math.Max(ReadyLinkCapacity,linkConcurrency);
-                string destination=Path.GetFullPath(settings.ApiFolder);settings.ApiFolder=destination;Directory.CreateDirectory(destination);
+                string destination=Path.GetFullPath(settings.ApiFolder);settings.ApiFolder=destination;SafeDestination(destination);SafeDestination(Path.GetFullPath(data));Directory.CreateDirectory(destination);
                 if(File.GetAttributes(destination).HasFlag(FileAttributes.ReparsePoint))throw new IOException("Choose an ordinary local download folder, not a cloud placeholder or link.");
                 ServicePointManager.SecurityProtocol|=SecurityProtocolType.Tls12;
                 ServicePointManager.DefaultConnectionLimit=Math.Max(linkConcurrency+downloadConcurrency,Math.Max(40,ServicePointManager.DefaultConnectionLimit));
                 // Automatic redirects are disabled so authorization never crosses hosts.
                 client=new HttpClient(apiHandler??new HttpClientHandler{AllowAutoRedirect=false}){Timeout=Timeout.InfiniteTimeSpan};
                 downloadClient=new HttpClient(fileHandler??new HttpClientHandler{AllowAutoRedirect=true}){Timeout=Timeout.InfiniteTimeSpan};
-                Snapshot("preparing","",false);Dictionary<string,object> disk=Listing("");object raw;Dictionary<string,object> user=disk.TryGetValue("user",out raw)?raw as Dictionary<string,object>:null;
-                string account=user==null?"":Text(user,"uid");if(account=="")throw new IOException("API did not return an account identifier.");
-                string remote=NormalizeRemote(settings.RemoteFolder);
+                string remote = NormalizeRemote(settings.RemoteFolder);
+                string account;
+                Snapshot("preparing", "", false);
+                if (settings.Source==DownloadSource.PublicLink){
+                    account = "public_" + Suffix(remote);
+                }else{
+                    var diskInfo = Listing("");
+                    object userObj;
+                    var userMap = diskInfo.TryGetValue("user", out userObj)
+                        ? userObj as Dictionary<string, object>
+                        : null;
+                    account = userMap == null ? "" : Text(userMap, "uid");
+                    if (string.IsNullOrEmpty(account))
+                        throw new IOException("API did not return an account identifier.");
+                }
                 history=new HistoryStore(data,destination,account+"|"+remote+"|"+destination.ToUpperInvariant(),stop.Token);
                 report=Path.Combine(history.DirectoryPath,"reports",DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss")+"_"+Guid.NewGuid().ToString("N").Substring(0,6));
                 Inventory(account,remote);
@@ -388,10 +490,10 @@ namespace DiskRescue {
                 }
 
             }catch(OperationCanceledException){retryableError=!stop.IsCancellationRequested;phase=stop.IsCancellationRequested?"stopped":"error";error=stop.IsCancellationRequested?"":"API listing request timed out.";}
-            catch(ApiException ex){retryableError=ex.Code>=500||ex.Code==429||ex.Code==408;phase="error";error=ex.Code==401?"OAuth token is invalid or expired.":ex.Code==403?"Token has no access to these files.":"Yandex API returned HTTP "+ex.Code;Event(error);}
+            catch(ApiException ex){retryableError=ex.Code>=500||ex.Code==429||ex.Code==408;phase="error";error=settings.Source==DownloadSource.PublicLink?"Public resource is unavailable. Yandex API returned HTTP "+ex.Code:ex.Code==401?"OAuth token is invalid or expired.":ex.Code==403?"Token has no access to these files.":"Yandex API returned HTTP "+ex.Code;Event(error);}
             catch(Exception ex){retryableError=ex is HttpRequestException||ex is System.Net.WebException;phase=stop.IsCancellationRequested?"stopped":"error";error=stop.IsCancellationRequested?"":ex is IOException||ex is ArgumentException?ex.Message:"API request failed or timed out.";Event(error);}
             finally{
-                bool cleanCompletion=phase=="completed"&&!stop.IsCancellationRequested;
+                bool cleanCompletion=phase=="completed"&&scanErrors==0&&!stop.IsCancellationRequested;
                 stop.Cancel();foreach(Job job in jobs.ToArray())try{Result r=job.Task!=null?job.Task.GetAwaiter().GetResult():job.LinkTask!=null?job.LinkTask.GetAwaiter().GetResult().Completed:null;if(r==null)r=new Result{Status="cancelled_user",Message="Stopped before download started.",Bytes=job.Bytes};RecordResult(job,r);}catch{}jobs.Clear();
                 if(refreshedInventory!=0&&!String.IsNullOrEmpty(inventoryPath))try{InventoryCache checkpoint=inventoryCheckpoint;if(checkpoint==null)throw new IOException("Missing inventory checkpoint.");SaveInventory(inventoryPath,inventoryAccount,inventoryRoot,checkpoint.Complete,new Stack<string>((checkpoint.PendingFolders??new List<string>()).AsEnumerable().Reverse()),checkpoint.ActiveFolder,checkpoint.NextOffset);}catch(Exception cacheError){retryableError=false;phase="error";error="Could not save refreshed cloud metadata: "+cacheError.GetType().Name;}
                 clock.Stop();Snapshot(phase,error,true);if(history!=null){try{if(phase!="stopped"||queueReady)Reports.Write(report,settings.ApiFolder,files,latest);}catch(Exception reportError){retryableError=false;string reportMessage="Could not save reports: "+reportError.GetType().Name;Event(reportMessage);Snapshot("error",String.IsNullOrEmpty(error)?reportMessage:error+"\n"+reportMessage,true);}history.Close(cleanCompletion);}if(client!=null)client.Dispose();if(downloadClient!=null)downloadClient.Dispose();stop.Dispose();
