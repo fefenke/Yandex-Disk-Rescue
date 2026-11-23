@@ -153,10 +153,10 @@ namespace DiskRescue {
             string folder=Path.Combine(root,"api-downloads"),data=Path.Combine(root,"api-history");Directory.CreateDirectory(folder);
             Settings s=new Settings{UseApi=true,UseCachedApiList=false,ApiFolder=folder,ApiToken="test-secret",IdleSeconds=5};
             Assert(ApiEngine.Validation(new Settings{UseApi=true})=="token","Missing token accepted.");Assert(ApiEngine.Validation(new Settings{UseApi=true,ApiToken="x"})=="destination","Missing destination accepted.");
-            Assert(ApiEngine.IsPublicUrl("https://yandex.ru")&&!ApiEngine.IsPublicUrl("disk:/"),"Public URL detection failed.");
-            Assert(ApiEngine.NormalizeRemote(" https://yandex.ru ")=="https://yandex.ru","Public URL normalization failed.");
-            Assert(ApiEngine.Validation(new Settings{UseApi=true,RemoteFolder="https://yandex.ru"})=="destination","Public URL still required a token.");
-            Assert(ApiEngine.Validation(new Settings{UseApi=true,RemoteFolder="https://yandex.ru",ApiFolder=folder})=="","Valid public URL settings rejected.");
+            Assert(ApiEngine.IsPublicUrl("https://disk.yandex.ru/d/test")&&!ApiEngine.IsPublicUrl("disk:/"),"Public URL detection failed.");
+            Assert(ApiEngine.NormalizeRemote(" https://disk.yandex.ru/d/test ")=="https://disk.yandex.ru/d/test","Public URL normalization failed.");
+            Assert(ApiEngine.Validation(new Settings{UseApi=true,Source=DownloadSource.PublicLink,PublicUrl="https://disk.yandex.ru/d/test"})=="destination","Public URL still required a token.");
+            Assert(ApiEngine.Validation(new Settings{UseApi=true,Source=DownloadSource.PublicLink,PublicUrl="https://disk.yandex.ru/d/test",PublicFolder=folder})=="","Valid public URL settings rejected.");
             Assert(ApiEngine.LocalPath(folder,"/sub/file.txt")==Path.Combine(folder,"sub","file.txt"),"Public relative path mapping failed.");
             Assert(!new JavaScriptSerializer().Serialize(s).Contains("test-secret"),"Token serialized in settings.");
             DiskFile retryFile=new DiskFile{Path="disk:/retry.jpg",Modified="v",Length=10,DownloadedBytes=0};HistoryRecord retryRecord=new HistoryRecord{path=retryFile.Path,modified="v",length=10,status="cloud_error"};

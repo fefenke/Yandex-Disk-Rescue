@@ -1,4 +1,4 @@
-# Yandex Disk Rescue 1.1.2 — guide
+# Yandex Disk Rescue — guide
 
 ## 1. Scope and requirements
 
@@ -10,12 +10,20 @@ Requires Windows 10 1709+ or Windows 11 and .NET Framework 4.7.1+. Choose x64 fo
 
 1. Download the architecture-specific ZIP and extract the entire archive to a permanent writable folder.
 2. Run YandexDiskRescue.exe. Start Yandex Disk Rescue.cmd is an optional launcher that checks Windows/.NET and explains incompatible environments. Settings opens first.
-3. Enter the OAuth token and destination, select a pass mode and press Start pass at the top.
+3. Choose account access with OAuth or a public link without a token. Select a destination independently for each source, then a pass mode and Start pass at the top.
 4. The guide button is always at the top. Transfer settings are locked during passes and automatic retries. Press Stop and wait before changing them.
 
 The data folder beside the executable holds settings, history, inventory, reports and an encrypted token. If settings.json is damaged, the app tries settings.json.bak and displays a notice. A settings-save error is displayed separately and prevents starting with unsaved parameters; check write permissions and free space. Each extracted app copy has its own history; a new copy does not automatically use another copy's data.
 
 ## 3. API mode
+
+Settings has two independent sources: **My Yandex Disk** and **Public link**. Public mode does not require OAuth or modify the stored token. Each source remembers its own destination; you may manually choose the same folder. History and partial downloads remain tied to the particular resource and destination.
+
+In public mode, paste an HTTPS `/d/KEY` or `/i/KEY` sharing link on `disk.yandex.ru`, `disk.360.yandex.ru` or `yadi.sk`, pointing to the published resource itself. Authentication, passwords and additional paths in the link are unsupported. Nested folders are discovered automatically. Choose a destination and start a pass. Expired download URLs are refreshed through the public API without OAuth. Unavailable resources and incomplete scans produce an error or an explicit incomplete-list warning. Owner restrictions and Yandex limits still apply.
+
+**Public access warning.** Anyone receiving an open sharing link can download and retain a copy. Do not publish private files just to download them: use account mode for your own data. Do not send links or OAuth tokens to untrusted services. Revoking a link cannot remove copies already downloaded by others.
+
+The following instructions describe account mode.
 
 **API downloads do not require a Yandex 360 subscription.** A Yandex account and OAuth token are sufficient.
 
@@ -155,7 +163,7 @@ After updating, the app removes proven-empty service placeholders and empty subf
 
 The Photos view and ordinary folders can contain the same media. Independently downloading both without reconciliation can duplicate data and traffic. This project uses ordinary folders as one inventory source. On the official Yandex Disk website, copy only the photos missing from ordinary folders into a chosen folder, then refresh the app inventory. Retain originals until the backup is checked. Copies from unlimited storage count against your storage quota: see [Yandex help](https://yandex.ru/support/yandex-360/customers/disk/web/ru/media-upload.html?lang=ru).
 
-Additional schemes involving third-party sites, session cookies or public links would expand access to private data. This does not mean every possible unlimited-storage implementation is inherently unsafe. Public links are unnecessary here: anyone receiving an accessible link may read, download and retain its contents. Avoid untrusted recovery sites, revoke unwanted public sharing, and remember that revocation cannot delete copies already obtained by others.
+Additional schemes involving third-party sites, session cookies or public links would expand access to private data. This does not mean every possible unlimited-storage implementation is inherently unsafe. Public links are unnecessary in account mode: anyone receiving an accessible link may read, download and retain its contents. Avoid untrusted recovery sites, revoke unwanted public sharing, and remember that revocation cannot delete copies already obtained by others.
 
 ## Interrupted scans and cloud changes
 

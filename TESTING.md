@@ -8,6 +8,7 @@
 
 | Направление / Aspect | Где проверяется | Что проверяется |
 |---|---|---|
+| Публичные ссылки / Public links | [PublicLinkTests](src/PublicLinkTests.cs) | Два источника и независимые папки, миграция настроек, строгие URL, корневые файлы, вложенность, пагинация, обновление href, идентичность, Range/resume, сохранение конфликтов и size_only |
 | Целостность / Integrity | [SafeDownloadTests](src/SafeDownloadTests.cs) | Размер, приоритет MD5, SHA-256 без MD5, отсутствие хешей |
 | Сохранение копий / Preservation | [SafeDownloadTests](src/SafeDownloadTests.cs) | Прежний файл остаётся до окончания загрузки; архивы; recovery между перемещениями |
 | Ошибочные версии / Failure ledger | [SafeDownloadTests](src/SafeDownloadTests.cs) | Пересканирование, удалённая копия, ручной повтор, дедупликация, новая облачная версия |

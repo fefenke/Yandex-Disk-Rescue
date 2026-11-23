@@ -6,14 +6,14 @@
 ![Yandex Disk Rescue](https://raw.githubusercontent.com/fefenke/Yandex-Disk-Rescue/main/assets/readme-cover.svg)
 
 [![Build](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml/badge.svg)](https://github.com/fefenke/Yandex-Disk-Rescue/actions/workflows/build.yml)
-[![1.2.3](https://img.shields.io/badge/1.2.3-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/latest)
+[![1.2.4](https://img.shields.io/badge/1.2.4-release-5965E9)](https://github.com/fefenke/Yandex-Disk-Rescue/releases/latest)
 [![MIT](https://img.shields.io/badge/license-MIT-208B74)](LICENSE)
 
-[Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [1.2.3 changes](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
+[Русский](README.md) · **English** · [Full guide](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/GUIDE.en.md) · [1.2.4 changes](https://github.com/fefenke/Yandex-Disk-Rescue/blob/main/RELEASE-NOTES.md)
 
 A free Windows app that downloads available files from Yandex Disk, retains progress and retries failed transfers. Uses Yandex Disk API technology. An independent, unofficial project unaffiliated with Yandex.
 
-**API downloads do not require a Yandex 360 subscription.** A Yandex account and OAuth token are needed.
+**API downloads do not require a Yandex 360 subscription.** Choose account access with OAuth or a public sharing link without a token.
 
 > [!IMPORTANT]
 > Only the regular **Files** section is supported. For photos stored only in unlimited auto-upload, use the Yandex Disk website to copy missing items into an ordinary folder, then refresh the app inventory. See the guide for quota and privacy details. The app cannot repair unavailable cloud originals or guarantee every download.
@@ -34,10 +34,18 @@ Extract the **entire** ZIP to a permanent folder and run **YandexDiskRescue.exe*
 ## Getting started
 
 1. Open Settings. Downloads use the API; the Yandex Disk desktop client is unnecessary.
-2. Follow the app's OAuth link, sign into the intended account, obtain a token and enter it.
-3. Choose an ordinary local destination. `disk:/` means the regular Disk section; `disk:/Photos` selects one folder.
+2. Choose **My Yandex Disk** and enter an OAuth token and cloud folder, or **Public link** and paste a file/folder sharing link without a token.
+3. Choose an ordinary local destination independently for each source. In account mode, `disk:/` means the regular Disk section; `disk:/Photos` selects one folder.
 4. Choose **Download all remaining files** and start a pass. Unchecked refresh options use the saved list; a missing list is fetched automatically.
 5. Enable **Refresh cloud file list when starting** to find new and changed cloud files. The nested option also refreshes before automatic repeats. Choose **Check all files** for full local hash verification.
+
+### Public sharing links
+
+Supported HTTPS forms are `https://disk.yandex.ru/d/KEY` and `/i/KEY`, including these forms on `disk.360.yandex.ru` and `yadi.sk`. Use the published resource's own link. Password-protected/authenticated links, fragments and additional path segments are unsupported. Ordinary query parameters are retained; OAuth credential parameters are rejected.
+
+Files retain their names and folders retain their hierarchy. Public mode remembers its own destination and never copies the account destination. You can manually choose the same folder: conflicting copies are preserved, while history and resume state remain isolated by source. Different versions are not combined. Expired download URLs are refreshed through the public API without OAuth.
+
+An unavailable root link stops with an error. Partial scans are explicitly shown as incomplete; saved inventories can be resumed or refreshed. Missing hashes are honestly labelled `size_only`. The app does not bypass Yandex sharing restrictions or download limits.
 
 ## Pass modes
 
@@ -53,7 +61,13 @@ Cloud refresh keeps the selected mode. Checksum-mismatch mode does not start a s
 
 Downloads use the API exclusively. Legacy client settings and Desktop statistics remain readable; the client engine has been removed. Keep data when updating. Settings-save failures are displayed separately; a damaged settings.json can be recovered from settings.json.bak. Update checks offer stable releases and update downloads can be cancelled.
 
-## New in 1.2.3
+## New in 1.2.4
+
+- Two sources: My Yandex Disk with OAuth and Public link without a token. Each remembers its own destination independently.
+- Public files and nested folders, expired-link refresh and safe resume with resource identity and checksum checks.
+- Stable source tabs, rounded fields, help and a public-access warning. Source settings save in the background without blocking tab changes.
+
+### Changes in 1.2.3
 
 Fixed cleanup of empty archived placeholders created by another download profile. Cleanup checks the owning profile and its records while preserving written data. Transfer settings and timeouts are unchanged.
 
@@ -109,4 +123,4 @@ Build: `powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 -Package -
 
 Separate link/download queues keep other files moving when a server stalls. Network idle timeouts exclude local writes; connections, streams, pacing and timeouts can be adjusted for the network and HDD. More streams are not always faster. Preserved copies, extent maps and cloud checksums address different failure modes. See [design decisions](DESIGN-DECISIONS.md) and the [test matrix](TESTING.md).
 
-API downloads do not require public links. Do not publish private data or paste links/tokens into untrusted sites: recipients may copy or share the content. The source is open; downloads/history run locally, with Yandex requests and GitHub update checks. No project-operated relay receives your files. Windows DPAPI protects the saved token for the current Windows user, not downloaded files or reports. It does not defeat malware running as that user. After backup, revoke the application's access in [Yandex ID](https://id.yandex.ru/security), then clear the local token; local deletion alone does not revoke remote access.
+Account downloads do not require public links. Do not publish private data or paste links/tokens into untrusted sites: recipients may copy or share the content. The source is open; downloads/history run locally, with Yandex requests and GitHub update checks. No project-operated relay receives your files. Windows DPAPI protects the saved token for the current Windows user, not downloaded files or reports. It does not defeat malware running as that user. After backup, revoke the application's access in [Yandex ID](https://id.yandex.ru/security), then clear the local token; local deletion alone does not revoke remote access.

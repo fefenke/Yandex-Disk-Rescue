@@ -71,7 +71,7 @@ namespace DiskRescue {
             try{
                 section=index;
                 // Populate a hidden page before exposing its child controls.
-                if(index==1){if(engine!=null&&engine.Latest.Catalog!=null&&(engine.Latest.Phase=="running"||engine.Latest.Phase=="completed"||engine.Latest.Phase=="stopped"))dashboard.Live(engine.Latest.Catalog,settings.ApiFolder);else dashboard.LoadSaved(dataFolder,folder.Text,remoteFolder.Text);}
+                if(index==1){if(engine!=null&&engine.Latest.Catalog!=null&&(engine.Latest.Phase=="running"||engine.Latest.Phase=="completed"||engine.Latest.Phase=="stopped"))dashboard.Live(engine.Latest.Catalog,settings.DownloadFolder);else dashboard.LoadSaved(dataFolder,folder.Text,remoteFolder.Text);}
                 shellPages[index].BringToFront();
                 for(int i=0;i<shellPages.Length;i++){
                     shellPages[i].Visible=i==index;

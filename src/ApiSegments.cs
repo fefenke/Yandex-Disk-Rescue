@@ -62,11 +62,11 @@ namespace DiskRescue {
             // All old-link readers and writers have finished. Refresh once for
             // the whole file, without holding a download connection slot.
             try{
-                var remote=await Json("/resources?path="+Uri.EscapeDataString(job.File.Path)+"&fields=path,type,size,modified,md5,sha256",stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
+                var remote=await Json(ResourceMetaRoute(ApiResourcePath(job.File)),stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
                 string md5=Text(remote,"md5"),sha=Text(remote,"sha256");CloudIntegrity.Validate(md5,32);CloudIntegrity.Validate(sha,64);
-                DiskFile fresh=new DiskFile{Path=Text(remote,"path"),Length=RequiredSize(remote),Md5=md5,Sha256=sha,Modified=CloudModified(Text(remote,"modified"),md5,sha)};
-                if(Text(remote,"type")!="file"||String.IsNullOrEmpty(Text(remote,"modified"))||CloudIntegrity.Version(fresh)!=CloudIntegrity.Version(job.File))return new Result{Status="failed",Message="Cloud version changed; saved ranges retained for the next pass.",Bytes=job.Bytes};
-                var response=await Json("/resources/download?path="+Uri.EscapeDataString(job.File.Path),stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
+                DiskFile fresh=new DiskFile{Path=job.File.Path,Length=RequiredSize(remote),Md5=md5,Sha256=sha,Modified=CloudModified(Text(remote,"modified"),md5,sha)};
+                if(!SameResource(job.File,remote)||Text(remote,"type")!="file"||String.IsNullOrEmpty(Text(remote,"modified"))||CloudIntegrity.Version(fresh)!=CloudIntegrity.Version(job.File))return new Result{Status="failed",Message="Cloud version changed; saved ranges retained for the next pass.",Bytes=job.Bytes};
+                var response=await Json(ResourceDownloadRoute(ApiResourcePath(job.File)),stop.Token,settings.LinkTimeoutSeconds).ConfigureAwait(false);
                 Uri uri;if(!Uri.TryCreate(Text(response,"href"),UriKind.Absolute,out uri)||uri.Scheme!="https"||!String.IsNullOrEmpty(uri.UserInfo))throw new IOException("Invalid HTTPS download link.");
                 job.LinkLease=linkCache.Offer(history.DirectoryPath+"\n"+job.File.Path,SegmentIdentity(job.File),uri);job.Link=uri;job.LinkConfirmed=0;job.LinkRejected=0;
                 return await DownloadCurrentLink(job).ConfigureAwait(false);

@@ -102,6 +102,7 @@ namespace DiskRescue {
                 Assert(Prerequisites.FrameworkSupported(461308)&&Prerequisites.FrameworkSupported(533509)&&!Prerequisites.FrameworkSupported(460798),"Framework prerequisite threshold failed.");
                 ApiOnlyTests.Run(root);
                 ApiTests.Run(root);
+                PublicLinkTests.Run(root);
                 File.WriteAllText(result,"PASS: safe copy preservation and recovery, MD5/SHA256 priority, missing-hash evidence, version failure ledger, manual retry and deduplication, single-payload range maps and process-kill recovery; segmented range downloads, shared connection budget, per-stream idle timeouts and queue exclusion, retained segment resume, torn merge and changed-version recovery, unsupported/invalid ranges, corruption and Stop; API-only facade and legacy compatibility plus independent 7-link / 20-download and 30-link / 30-download pipelines, separate timeout budgets, queue exclusion, cancellation and history, API authentication, path safety, resume/MD5 integrity, retry filters, defaults and encrypted token storage.",Encoding.UTF8);
                 return 0;
             }catch(Exception ex){File.WriteAllText(result,"FAIL: "+ex.ToString(),Encoding.UTF8);return 1;}

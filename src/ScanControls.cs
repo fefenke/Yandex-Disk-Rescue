@@ -25,7 +25,7 @@ namespace DiskRescue {
         void BuildScanOptions(){
             scanCloudStart=new CheckBox{Dock=DockStyle.Fill,Margin=Padding.Empty,Checked=settings.ScanCloudOnStart,TextAlign=ContentAlignment.MiddleLeft};
             scanCloudRepeats=new CheckBox{Dock=DockStyle.Fill,Margin=new Padding(24,0,0,0),Checked=settings.ScanCloudOnRepeats,TextAlign=ContentAlignment.MiddleLeft};
-            credentials.Controls.Add(scanCloudStart,0,2);credentials.SetColumnSpan(scanCloudStart,2);credentials.Controls.Add(scanCloudRepeats,0,3);credentials.SetColumnSpan(scanCloudRepeats,2);
+            credentials.Controls.Add(scanCloudStart,0,5);credentials.SetColumnSpan(scanCloudStart,2);credentials.Controls.Add(scanCloudRepeats,0,6);credentials.SetColumnSpan(scanCloudRepeats,2);
             scanCloudStart.CheckedChanged+=delegate{UpdateScanOptions();SaveScanOptions();};scanCloudRepeats.CheckedChanged+=delegate{SaveScanOptions();};UpdateScanOptions();
         }
         void SaveScanOptions(){if(busy)return;settings.ScanCloudOnStart=scanCloudStart.Checked;settings.ScanCloudOnRepeats=scanCloudRepeats.Checked;SaveSettings();}
@@ -39,6 +39,7 @@ namespace DiskRescue {
         void CenterSettingsFields(){
             SetSettingsTypography(setupGrid);repeatProblems.Font=new Font("Segoe UI",10);
             foreach(int row in new[]{0,3,5,7})setupGrid.RowStyles[row].Height=26;
+            setupGrid.RowStyles[0].Height=36;
             setupGrid.RowStyles[4].Height=56;
             credentials.RowStyles[0].Height=26;credentials.RowStyles[2].Height=26;
             folder.Font=new Font("Segoe UI",10);mode.ItemHeight=mode.Font.Height;
@@ -55,7 +56,7 @@ namespace DiskRescue {
             intervalPanel.RowCount=1;intervalPanel.RowStyles.Clear();intervalPanel.RowStyles.Add(new RowStyle(SizeType.Percent,100));
             language.Dock=DockStyle.Top;language.Height=start.Height;language.Margin=new Padding(4,start.Margin.Top,0,start.Margin.Bottom);
         }
-        void SetSettingsTypography(Control parent){foreach(Control child in parent.Controls){var label=child as Label;if(label!=null&&label.Font.Bold){label.Font=new Font("Segoe UI",10,FontStyle.Bold);label.Margin=Padding.Empty;}SetSettingsTypography(child);}}
+        void SetSettingsTypography(Control parent){foreach(Control child in parent.Controls){var label=child as Label;if(label!=null&&label.Font.Bold&&label!=sourceTitle){label.Font=new Font("Segoe UI",10,FontStyle.Bold);label.Margin=Padding.Empty;}SetSettingsTypography(child);}}
         void CenterFlowRow(FlowLayoutPanel panel){
             bool arranging=false;panel.Layout+=delegate{if(arranging)return;arranging=true;try{foreach(Control control in panel.Controls){int top=Math.Max(0,(panel.ClientSize.Height-panel.Padding.Vertical-control.Height)/2);Padding margin=control.Margin;if(margin.Top!=top||margin.Bottom!=0)control.Margin=new Padding(margin.Left,top,margin.Right,0);}}finally{arranging=false;}};
         }
